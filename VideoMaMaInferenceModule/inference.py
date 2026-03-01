@@ -12,7 +12,11 @@ from PIL import Image
 from typing import List, Union, Optional
 from pathlib import Path
 
-# Add current directory to path to ensure relative imports work if run directly
+# Add current directory to path so that pipeline.py's intra-package imports
+# (e.g. "from pipeline import ...") resolve when this module is imported from
+# outside the VideoMaMaInferenceModule directory.  This is a workaround for the
+# module's original structure — a cleaner fix would convert to proper relative
+# imports throughout.
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.append(current_dir)

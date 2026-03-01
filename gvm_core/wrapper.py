@@ -24,6 +24,11 @@ from .gvm.models.unet_spatio_temporal_condition import UNetSpatioTemporalConditi
 
 
 def seed_all(seed: int = 0):
+    """Seed all random number generators for reproducibility.
+
+    WARNING: This mutates global state — Python's random, numpy's RNG,
+    and all PyTorch CUDA RNGs. Called from GVMProcessor.__init__.
+    """
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
