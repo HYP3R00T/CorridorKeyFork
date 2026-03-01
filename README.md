@@ -31,7 +31,7 @@ Naturally, I have not tested everything. If you encounter errors, please conside
 
 This project was designed and built on a Linux workstation (Puget Systems PC) equipped with an NVIDIA RTX Pro 6000 with 96GB of VRAM. This project is not yet optimized for sub 24 gig VRAM systems, but with the help of the community, maybe we can make that happen.
 
-*   **CorridorKey:** Running inference natively at 2048x2048 requires approximately **22.7 GB of VRAM**. You will need at least a 24GB GPU (such as a 3090, 4090, or the upcoming 5090). It is highly recommended to run this on a secondary GPU that is not driving your OS/displays, or on a rented cloud instance (like Runpod or Google Colab) to avoid Out-Of-Memory errors.
+*   **CorridorKey:** Running inference natively at 2048x2048 requires approximately **22.7 GB of VRAM**. You will need at least a 24GB GPU (such as a 3090, 4090, 5090, etc). It is highly recommended to run this on a secondary GPU that is not driving your OS/displays, or on a rented cloud instance (like Runpod or Google Colab) to avoid Out-Of-Memory errors.
 *   **GVM (Optional):** Requires approximately **80 GB of VRAM** and utilizes massive Stable Video Diffusion models.
 *   **VideoMaMa (Optional):** Natively requires a massive chunk of VRAM as well (originally 80GB+). While the community has tweaked the architecture to run at less than 24GB, those extreme memory optimizations have not yet been fully implemented in this repository.
 
@@ -112,11 +112,13 @@ If enough people find this project interesting I'll get the training program and
 
 For developers looking for more details on the specifics of what is happening in the CorridorKey engine, check out the README in the `/CorridorKeyModule` folder. We also have a dedicated handover document outlining the pipeline architecture for AI assistants in `/docs/LLM_HANDOVER.md`.
 
-## CorridoKey Licensing and Permissions
+## CorridorKey Licensing and Permissions
 
-Use this tool for whatever you'd like. You may not repackage this tool and sell it, and any variations or improvements of this tool that are released must remain free and open source as well. You may not offer inference with this model as a paid API service. If you run a commercial software package or inference service and wish to incoporate this tool into your software, feel free to shoot us an email to work out an agreement. I promise we're easy to work with! contact@corridordigital.com. Outside of any commercial agreements, this license is effectively a [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+Use this tool for whatever you'd like, including for processing images as part of a commercial project! You MAY NOT repackage this tool and sell it, and any variations or improvements of this tool that are released must remain free and open source, and must include the name Corridor Key.
 
-Please keep the Corridor Key name in any future variations!
+You MAY NOT offer inference with this model as a paid API service. If you run a commercial software package or inference service and wish to incoporate this tool into your software, shoot us an email to work out an agreement! I promise we're easy to work with. contact@corridordigital.com. Outside of the stipulations listed above, this license is effectively a variation of [Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+Please keep the Corridor Key name in any future forks or releases!
 
 ## Acknowledgements and Licensing
 
