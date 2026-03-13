@@ -26,12 +26,8 @@ body:
     id: proposal
     attributes:
       label: Proposed Solution
-      description: Describe how you'd like this feature to work. Include user-facing changes, API changes, or behavior changes.
-      placeholder: |
-        Example:
-        - Add a new `--output-format json` flag to the CLI
-        - Automatically detect when config is stale and prompt user
-        - Expose new `analyze()` method on the service API
+      description: Describe how you'd like this feature to work.
+      placeholder: "Add a new flag to support... or integrate with... or expose a method to..."
       required: true
 
   - type: textarea
@@ -45,7 +41,9 @@ body:
     id: context
     attributes:
       label: Additional Context
-      description: Add any mockups, screenshots, links to related discussions, or references that might be helpful.
+      description: Add any screenshots, links, or other helpful references (optional).
+      placeholder: "Screenshots, related discussions, or examples..."
+      required: false
 
   - type: checkboxes
     id: checklist
