@@ -1,66 +1,69 @@
-name: 💡 Feature Request
-description: Suggest a new idea, enhancement, or improvement.
-title: "[Feature]: "
-labels: [enhancement]
+name: 🐛 Bug Report
+description: Report a reproducible issue or unexpected behavior in the project.
+title: "[Bug]: "
+labels: [bug]
 
 body:
   - type: markdown
     attributes:
       value: |
-        Thank you for suggesting a feature! Before submitting, please check if a similar request already exists.
-
-        **Good feature requests are:**
-        - Clear and descriptive
-        - Focused on solving a specific problem
-        - Documented with examples when helpful
+        Thanks for reporting a bug! Please fill out the form below so we can investigate the issue.
 
   - type: input
-    id: motivation
+    id: environment
     attributes:
-      label: Problem or Motivation
-      description: What problem does this solve, or what's the motivation behind it?
-      placeholder: "Currently, I have to manually... It would be great if..."
+      label: Environment
+      description: Relevant environmental details (OS, version, tools, etc.)
+      placeholder: "e.g. Ubuntu 22.04, macOS 13, Docker, etc."
+    validations:
       required: true
 
   - type: textarea
-    id: proposal
+    id: steps
     attributes:
-      label: Proposed Solution
-      description: Describe how you'd like this feature to work.
-      placeholder: "Add a new flag to support... or integrate with... or expose a method to..."
+      label: Steps to Reproduce
+      description: Describe the steps to trigger the issue. Be as specific as possible.
+      placeholder: |
+        1. Do '...'
+        2. Then do '...'
+        3. Observe '...'
+    validations:
       required: true
 
   - type: textarea
-    id: alternatives
+    id: expected
     attributes:
-      label: Alternatives Considered
-      description: Have you considered other solutions or approaches? Explain why the proposed solution is preferable.
-      placeholder: "I considered using X instead, but Y would be better because..."
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
 
   - type: textarea
-    id: context
+    id: actual
     attributes:
-      label: Additional Context
-      description: Add any screenshots, links, or other helpful references (optional).
-      placeholder: "Screenshots, related discussions, or examples..."
+      label: Actual Behavior
+      description: What actually happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Screenshots
+      description: Paste error logs or screenshots here, if any.
+      placeholder: |
+        ```
+        Error output or logs here
+        ```
+    validations:
       required: false
 
   - type: checkboxes
-    id: checklist
+    id: checks
     attributes:
-      label: Prerequisites
+      label: Checklist
       options:
-        - label: I have searched for existing feature requests and found none
+        - label: I’ve verified this bug hasn’t been reported before.
           required: true
-        - label: This feature is not already in progress or planned
+        - label: I’ve included all relevant logs/screenshots/configs.
           required: true
-
-  - type: checkboxes
-    id: agreement
-    attributes:
-      label: Agreement
-      options:
-        - label: I agree to follow this project's Code of Conduct
-          required: true
-        - label: I understand this feature will be reviewed and may not be implemented
-          required: false

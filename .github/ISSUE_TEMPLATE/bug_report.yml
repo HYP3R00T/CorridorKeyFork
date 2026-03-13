@@ -20,6 +20,7 @@ body:
       label: Operating System
       description: Your operating system and version.
       placeholder: "Windows 11, macOS 14.2, Ubuntu 22.04 LTS"
+    validations:
       required: true
 
   - type: input
@@ -28,6 +29,7 @@ body:
       label: Installation Method
       description: How did you install CorridorKey? (e.g., Windows batch installer, `uv sync`, Docker, manual setup)
       placeholder: "Windows batch installer, uv sync --extra cuda, Docker"
+    validations:
       required: true
 
   - type: input
@@ -36,6 +38,7 @@ body:
       label: GPU/Hardware (Optional)
       description: GPU model and VRAM if applicable, or other relevant hardware constraints.
       placeholder: "NVIDIA RTX 4090 (24GB), Apple M3 Pro (18GB unified memory)"
+    validations:
       required: true
 
   - type: textarea
@@ -49,6 +52,7 @@ body:
         3. Step 3
         4. Step 4
         5. Error occurs
+    validations:
       required: true
 
   - type: textarea
@@ -57,6 +61,7 @@ body:
       label: Expected Behavior
       description: What should happen instead? Be clear and concise.
       placeholder: "The application should display a settings panel without errors."
+    validations:
       required: false
 
   - type: textarea
@@ -65,6 +70,7 @@ body:
       label: Actual Behavior
       description: What happened instead? Describe the bug clearly and concisely.
       placeholder: "The application crashes with an Error"
+    validations:
       required: true
 
   - type: textarea
@@ -83,6 +89,7 @@ body:
       label: Workaround (if available)
       description: If you've found a way to work around this issue, please describe it.
       placeholder: "As a workaround, I can set the timeout environment variable before starting the app."
+    validations:
       required: false
 
   - type: checkboxes
