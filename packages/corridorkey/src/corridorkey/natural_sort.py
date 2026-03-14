@@ -29,9 +29,9 @@ def natural_sort_key(text: str) -> list[str | int]:
     """
     parts: list[str | int] = []
     for chunk in _SPLIT_RE.split(text):
-        if chunk.isdigit():
+        try:
             parts.append(int(chunk))
-        else:
+        except ValueError:
             parts.append(chunk.lower())
     return parts
 
