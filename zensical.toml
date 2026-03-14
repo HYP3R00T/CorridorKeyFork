@@ -9,6 +9,7 @@ nav = [
   { Development = [
     { "Developer Setup" = "dev/developer-setup.md" },
     { "Authoring Documentation" = "dev/authoring-documentation.md" },
+    { "Naming Conventions" = "dev/naming-conventions.md" },
     { "Documentation Principles" = [
       { "Overview" = "dev/documentation-principles/index.md" },
       { "Principle 1" = "dev/documentation-principles/principle-1-no-fiction.md" },
