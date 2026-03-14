@@ -11,6 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from corridorkey.clip_state import ClipEntry, ClipState
+from corridorkey.config import CorridorKeyConfig
 from corridorkey.errors import CorridorKeyError, JobCancelledError
 from corridorkey.protocols import AlphaGenerator
 from corridorkey.service import CorridorKeyService, InferenceParams, OutputConfig
@@ -54,6 +55,7 @@ def process_directory(
     params: InferenceParams | None = None,
     output_config: OutputConfig | None = None,
     alpha_generator: AlphaGenerator | None = None,
+    config: CorridorKeyConfig | None = None,
     device: str | None = None,
     on_progress: Callable[[str, int, int], None] | None = None,
     on_warning: Callable[[str], None] | None = None,
@@ -75,7 +77,9 @@ def process_directory(
         params: Inference parameters. Defaults to InferenceParams().
         output_config: Output format config. Defaults to OutputConfig().
         alpha_generator: Optional AlphaGenerator for RAW/MASKED clips.
-        device: Compute device ("cuda", "mps", "cpu", "auto"). Auto-detected if None.
+        config: CorridorKeyConfig instance. Loaded from disk if None.
+        device: Compute device override ("cuda", "mps", "cpu", "auto").
+            Overrides config.device when provided.
         on_progress: Called with (clip_name, current_frame, total_frames).
         on_warning: Called with non-fatal warning messages.
         on_clip_start: Called with (clip_name, state) before processing each clip.
@@ -87,7 +91,7 @@ def process_directory(
     params = params or InferenceParams()
     output_config = output_config or OutputConfig()
 
-    service = CorridorKeyService()
+    service = CorridorKeyService(config)
     service.detect_device(device)
     result = PipelineResult()
 
