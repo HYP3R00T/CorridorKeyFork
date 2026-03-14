@@ -58,9 +58,9 @@ _SRGB_LINEAR_SCALE = 12.92
 # Exponent for the power curve (encoding: linear -> sRGB)
 _SRGB_GAMMA = 1.0 / 2.4
 # Scale factor for the power curve
-_SRGB_ALPHA = 1.055
+_SRGB_SCALE = 1.055
 # Offset for the power curve
-_SRGB_BETA = 0.055
+_SRGB_OFFSET = 0.055
 
 
 def linear_to_srgb(x: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
@@ -70,7 +70,7 @@ def linear_to_srgb(x: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
     """
     x = _clamp(x, 0.0)
     mask = x <= _SRGB_LINEAR_THRESHOLD
-    return _where(mask, x * _SRGB_LINEAR_SCALE, _SRGB_ALPHA * _power(x, _SRGB_GAMMA) - _SRGB_BETA)
+    return _where(mask, x * _SRGB_LINEAR_SCALE, _SRGB_SCALE * _power(x, _SRGB_GAMMA) - _SRGB_OFFSET)
 
 
 def srgb_to_linear(x: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
@@ -80,7 +80,7 @@ def srgb_to_linear(x: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
     """
     x = _clamp(x, 0.0)
     mask = x <= _SRGB_ENCODED_THRESHOLD
-    return _where(mask, x / _SRGB_LINEAR_SCALE, _power((x + _SRGB_BETA) / _SRGB_ALPHA, 2.4))
+    return _where(mask, x / _SRGB_LINEAR_SCALE, _power((x + _SRGB_OFFSET) / _SRGB_SCALE, 2.4))
 
 
 def premultiply(fg: np.ndarray | torch.Tensor, alpha: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
@@ -138,77 +138,77 @@ def despill(
     g = image[..., 1]
     b = image[..., 2]
 
-    limit = _maximum(r, b) if green_limit_mode == "max" else (r + b) / 2.0
+    green_limit = _maximum(r, b) if green_limit_mode == "max" else (r + b) / 2.0
 
     if isinstance(image, torch.Tensor):
-        diff: torch.Tensor = g - limit  # type: ignore[assignment]
-        spill_amount = torch.clamp(diff, min=0.0)
+        green_excess: torch.Tensor = g - green_limit  # type: ignore[assignment]
+        spill_amount = torch.clamp(green_excess, min=0.0)
     else:
-        spill_amount = np.maximum(g - limit, 0.0)
+        spill_amount = np.maximum(g - green_limit, 0.0)
 
     g_new = g - spill_amount
     r_new = r + (spill_amount * 0.5)
     b_new = b + (spill_amount * 0.5)
 
-    despilled = _stack([r_new, g_new, b_new])
+    despilled_image = _stack([r_new, g_new, b_new])
 
     if strength < 1.0:
-        return image * (1.0 - strength) + despilled * strength
+        return image * (1.0 - strength) + despilled_image * strength
 
-    return despilled
+    return despilled_image
 
 
-def clean_matte(alpha_np: np.ndarray, area_threshold: int = 300, dilation: int = 15, blur_size: int = 5) -> np.ndarray:
+def clean_matte(alpha: np.ndarray, area_threshold: int = 300, dilation: int = 15, blur_size: int = 5) -> np.ndarray:
     """Remove small disconnected regions from a predicted alpha matte.
 
     Useful for eliminating tracking markers, noise islands, or other small
     artifacts that the model incorrectly classified as foreground.
 
     Args:
-        alpha_np: Float array with shape [H, W] or [H, W, 1] in range 0.0-1.0.
+        alpha: Float array with shape [H, W] or [H, W, 1] in range 0.0-1.0.
         area_threshold: Minimum pixel area for a connected component to be kept.
         dilation: Radius in pixels to dilate the cleaned mask before blending.
         blur_size: Radius in pixels for Gaussian blur applied after dilation.
     """
     # Needs to be 2D for connected components analysis
     is_3d = False
-    if alpha_np.ndim == 3:
+    if alpha.ndim == 3:
         is_3d = True
-        alpha_np = alpha_np[:, :, 0]
+        alpha = alpha[:, :, 0]
 
     # Binarize at 0.5 to get a uint8 mask for OpenCV
-    mask_8u = (alpha_np > 0.5).astype(np.uint8) * 255
+    alpha_binary = (alpha > 0.5).astype(np.uint8) * 255
 
     # Label each connected foreground region
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(mask_8u, connectivity=8)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(alpha_binary, connectivity=8)
 
-    cleaned_mask = np.zeros_like(mask_8u)
+    foreground_mask = np.zeros_like(alpha_binary)
 
     # Keep regions above the area threshold; label 0 is background and is always skipped
     for i in range(1, num_labels):
         if stats[i, cv2.CC_STAT_AREA] >= area_threshold:
-            cleaned_mask[labels == i] = 255
+            foreground_mask[labels == i] = 255
 
     # Dilate to recover edges lost during binarization
     if dilation > 0:
         kernel_size = int(dilation * 2 + 1)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
-        cleaned_mask = cv2.dilate(cleaned_mask, kernel)
+        foreground_mask = cv2.dilate(foreground_mask, kernel)
 
     # Blur to soften the hard edges of the cleaned mask
     if blur_size > 0:
-        b_size = int(blur_size * 2 + 1)
-        cleaned_mask = cv2.GaussianBlur(cleaned_mask, (b_size, b_size), 0)
+        blur_kernel_size = int(blur_size * 2 + 1)
+        foreground_mask = cv2.GaussianBlur(foreground_mask, (blur_kernel_size, blur_kernel_size), 0)
 
-    safe_zone = cleaned_mask.astype(np.float32) / 255.0
+    keep_mask = foreground_mask.astype(np.float32) / 255.0
 
-    # Multiply the original soft alpha by the safe zone to zero out removed regions
-    result_alpha = alpha_np * safe_zone
+    # Multiply the original soft alpha by the keep_mask to zero out removed regions
+    alpha_cleaned = alpha * keep_mask
 
     if is_3d:
-        result_alpha = result_alpha[:, :, np.newaxis]
+        alpha_cleaned = alpha_cleaned[:, :, np.newaxis]
 
-    return result_alpha
+    return alpha_cleaned
 
 
 def create_checkerboard(
@@ -240,6 +240,6 @@ def create_checkerboard(
     # Even sum = color1, odd sum = color2
     checker = (x_grid + y_grid) % 2
 
-    bg_img = np.where(checker == 0, color1, color2).astype(np.float32)
+    checker_pattern = np.where(checker == 0, color1, color2).astype(np.float32)
 
-    return np.stack([bg_img, bg_img, bg_img], axis=-1)
+    return np.stack([checker_pattern, checker_pattern, checker_pattern], axis=-1)
