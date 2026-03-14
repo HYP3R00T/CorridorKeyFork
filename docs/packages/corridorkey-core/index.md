@@ -20,23 +20,6 @@ For MLX (Apple Silicon):
 uv add "corridorkey-core[mlx]"
 ```
 
-## Quick Start
-
-```python
-from corridorkey_core import create_engine
-import numpy as np
-
-engine = create_engine("/path/to/checkpoints")
-
-# image: float32 [H, W, 3] sRGB, range 0.0-1.0
-# mask:  float32 [H, W] or [H, W, 1], range 0.0-1.0
-image = np.zeros((1080, 1920, 3), dtype=np.float32)
-mask  = np.zeros((1080, 1920),    dtype=np.float32)
-
-result = engine.process_frame(image, mask)
-alpha  = result["alpha"]      # [H, W, 1] float32
-```
-
 ## Documents in This Section
 
 - [Output contract](output-contract.md) - The four keys returned by `process_frame` and how to use them.

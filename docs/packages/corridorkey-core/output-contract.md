@@ -41,33 +41,6 @@ If your source footage is already linear (e.g. OpenEXR), pass `input_is_linear=T
 result = fg * alpha + bg * (1 - alpha)
 ```
 
-## Example: Writing to EXR
-
-```python
-import OpenEXR
-import Imath
-import numpy as np
-from corridorkey_core import create_engine
-
-engine = create_engine("/path/to/checkpoints")
-result = engine.process_frame(image, mask)
-
-rgba = result["processed"]  # [H, W, 4] linear premultiplied
-
-# Split channels for OpenEXR
-r, g, b, a = [rgba[..., i].tobytes() for i in range(4)]
-
-header = OpenEXR.Header(rgba.shape[1], rgba.shape[0])
-header["channels"] = {
-    "R": Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT)),
-    "G": Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT)),
-    "B": Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT)),
-    "A": Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT)),
-}
-exr = OpenEXR.OutputFile("output.exr", header)
-exr.writePixels({"R": r, "G": g, "B": b, "A": a})
-```
-
 ## Related
 
 - [inference-engine reference](../../api/corridorkey-core/inference-engine.md)

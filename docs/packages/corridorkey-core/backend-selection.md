@@ -20,27 +20,6 @@ Auto-detect selects MLX when all three conditions are true:
 
 Otherwise Torch is used.
 
-## Selecting a Backend Explicitly
-
-```python
-from corridorkey_core import create_engine
-
-# Force Torch
-engine = create_engine("/path/to/checkpoints", backend="torch")
-
-# Force MLX (Apple Silicon only - raises RuntimeError on other platforms)
-engine = create_engine("/path/to/checkpoints", backend="mlx")
-```
-
-## Selecting via Environment Variable
-
-```shell
-CORRIDORKEY_BACKEND=mlx uv run your_script.py
-CORRIDORKEY_BACKEND=torch uv run your_script.py
-```
-
-The environment variable is read at engine creation time, not at import time.
-
 ## Checkpoint Layout
 
 Each backend expects a different checkpoint file format in the same directory:
@@ -72,28 +51,11 @@ The adapter is transparent. Callers always receive the same float32 output contr
 
 ## Device Selection (Torch Only)
 
-The `device` argument to `create_engine` is passed directly to PyTorch. It has no effect on the MLX backend.
-
-```python
-# CUDA
-engine = create_engine("/path/to/checkpoints", device="cuda")
-
-# Specific GPU
-engine = create_engine("/path/to/checkpoints", device="cuda:1")
-
-# CPU (default)
-engine = create_engine("/path/to/checkpoints", device="cpu")
-```
+The `device` argument to `create_engine` is passed directly to PyTorch. It has no effect on the MLX backend. See the [inference-engine reference](../../api/corridorkey-core/inference-engine.md) for accepted values.
 
 ## Image Size
 
-`img_size` controls the square resolution the model runs at internally. Inputs are resized to this resolution before inference and outputs are resized back to the original frame size.
-
-The default is `2048`. Reducing it speeds up inference at the cost of detail in fine edges.
-
-```python
-engine = create_engine("/path/to/checkpoints", img_size=1024)
-```
+`img_size` controls the square resolution the model runs at internally. Inputs are resized to this resolution before inference and outputs are resized back to the original frame size. The default is `2048`. Reducing it speeds up inference at the cost of detail in fine edges.
 
 ## Related
 

@@ -13,7 +13,13 @@ nav = [
       { "Backend Selection" = "packages/corridorkey-core/backend-selection.md" },
       { "Compositing Utilities" = "packages/corridorkey-core/compositing-utilities.md" },
     ] },
-    { "corridorkey" = "packages/corridorkey.md" },
+    { "corridorkey" = [
+      { "Overview" = "packages/corridorkey/index.md" },
+      { "Clip State Machine" = "packages/corridorkey/clip-state.md" },
+      { "Project Layout" = "packages/corridorkey/project-layout.md" },
+      { "Job Queue" = "packages/corridorkey/job-queue.md" },
+      { "Configuration" = "packages/corridorkey/configuration.md" },
+    ] },
   ] },
   { Development = [
     { "Developer Setup" = "dev/developer-setup.md" },
