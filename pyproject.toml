@@ -9,6 +9,9 @@ authors = [{ name = "Corridor Digital" }]
 maintainers = [{ name = "Rajesh Das", email = "rajesh@hyperoot.dev" }]
 dependencies = []
 
+[project.optional-dependencies]
+cuda = ["corridorkey-core[cuda]"]
+
 [dependency-groups]
 dev = [
   "git-cliff>=2.12.0",
