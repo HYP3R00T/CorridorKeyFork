@@ -1,4 +1,4 @@
-"""Engine factory — selects Torch or MLX backend and normalizes output contracts.
+"""Engine factory - selects Torch or MLX backend and normalizes output contracts.
 
 This is the Core Layer's public entry point for constructing an inference engine.
 Callers receive an object with a process_frame() method that always returns the
@@ -14,8 +14,8 @@ Backend resolution order:
     explicit argument > CORRIDORKEY_BACKEND env var > auto-detect
 
 Auto-detect:
-    Apple Silicon + corridorkey_mlx importable + .safetensors present → mlx
-    Otherwise → torch
+    Apple Silicon + corridorkey_mlx importable + .safetensors present -> mlx
+    Otherwise -> torch
 """
 
 from __future__ import annotations
@@ -89,14 +89,14 @@ def _mlx_available() -> bool:
 def _auto_detect_backend() -> str:
     """Try MLX on Apple Silicon, fall back to Torch."""
     if sys.platform != "darwin" or platform.machine() != "arm64":
-        logger.info("Not Apple Silicon — using torch backend")
+        logger.info("Not Apple Silicon - using torch backend")
         return "torch"
 
     if not _mlx_available():
-        logger.info("corridorkey_mlx not installed — using torch backend")
+        logger.info("corridorkey_mlx not installed - using torch backend")
         return "torch"
 
-    logger.info("Apple Silicon + MLX available — using mlx backend")
+    logger.info("Apple Silicon + MLX available - using mlx backend")
     return "mlx"
 
 
@@ -140,7 +140,7 @@ def discover_checkpoint(checkpoint_dir: str | Path, ext: str) -> Path:
         hint = ""
         if other_files:
             other_backend = "mlx" if other_ext == MLX_EXT else "torch"
-            hint = f" (Found {other_ext} files — did you mean --backend={other_backend}?)"
+            hint = f" (Found {other_ext} files - did you mean --backend={other_backend}?)"
         raise FileNotFoundError(f"No {ext} checkpoint found in {checkpoint_dir}.{hint}")
 
     if len(matches) > 1:
@@ -174,20 +174,20 @@ def _wrap_mlx_output(
         srgb_to_linear,
     )
 
-    # alpha: uint8 [H, W] → float32 [H, W, 1]
+    # alpha: uint8 [H, W] -> float32 [H, W, 1]
     alpha = mlx_output["alpha"].astype(np.float32) / 255.0
     if alpha.ndim == 2:
         alpha = alpha[:, :, np.newaxis]
 
-    # fg: uint8 [H, W, 3] → float32 [H, W, 3] sRGB
+    # fg: uint8 [H, W, 3] -> float32 [H, W, 3] sRGB
     fg = mlx_output["fg"].astype(np.float32) / 255.0
 
-    # Despeckle (MLX stubs this — adapter applies it)
+    # Despeckle (MLX stubs this - adapter applies it)
     processed_alpha = (
         clean_matte(alpha, area_threshold=despeckle_size, dilation=25, blur_size=5) if auto_despeckle else alpha
     )
 
-    # Despill (MLX stubs this — adapter applies it)
+    # Despill (MLX stubs this - adapter applies it)
     fg_despilled = despill(fg, green_limit_mode="average", strength=despill_strength)
 
     # Composite over checkerboard for the comp output
@@ -239,13 +239,13 @@ class _MLXEngineAdapter:  # pragma: no cover
         despeckle_size: int = 400,
     ) -> dict:
         """Delegate to the MLX engine then normalize output to the Torch contract."""
-        # MLX engine expects uint8 — convert if float
+        # MLX engine expects uint8 - convert if float
         image_u8 = (np.clip(image, 0.0, 1.0) * 255).astype(np.uint8) if image.dtype != np.uint8 else image
         mask_u8 = (
             (np.clip(mask_linear, 0.0, 1.0) * 255).astype(np.uint8) if mask_linear.dtype != np.uint8 else mask_linear
         )
 
-        # MLX validates [H, W] or [H, W, 1] — squeeze to 2D
+        # MLX validates [H, W] or [H, W, 1] - squeeze to 2D
         if mask_u8.ndim == 3:
             mask_u8 = mask_u8[:, :, 0]
 
@@ -255,8 +255,8 @@ class _MLXEngineAdapter:  # pragma: no cover
             refiner_scale=refiner_scale,
             input_is_linear=input_is_linear,
             fg_is_straight=fg_is_straight,
-            despill_strength=0.0,  # disabled — adapter applies despill
-            auto_despeckle=False,  # disabled — adapter applies despeckle
+            despill_strength=0.0,  # disabled - adapter applies despill
+            auto_despeckle=False,  # disabled - adapter applies despeckle
             despeckle_size=despeckle_size,
         )
 
@@ -286,8 +286,8 @@ def create_engine(
         backend: "torch", "mlx", "auto", or None. Resolved via resolve_backend().
         device: Torch device string (e.g. "cuda", "cpu"). Torch only. Defaults to "cpu" when None.
         img_size: Square resolution the model runs at internally.
-        tile_size: MLX only — tile size for tiled inference. None = full-frame.
-        overlap: MLX only — overlap pixels between tiles.
+        tile_size: MLX only - tile size for tiled inference. None = full-frame.
+        overlap: MLX only - overlap pixels between tiles.
 
     Returns:
         An engine object with a process_frame() method matching the Torch contract.

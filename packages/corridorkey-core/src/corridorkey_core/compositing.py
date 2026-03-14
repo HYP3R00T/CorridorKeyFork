@@ -160,7 +160,7 @@ def despill(
     r_new = _clamp(r + (spill_amount * 0.5), 0.0)
     b_new = _clamp(b + (spill_amount * 0.5), 0.0)
 
-    # Clamp to [0, 1] — redistribution can push bright channels above 1.0
+    # Clamp to [0, 1] - redistribution can push bright channels above 1.0
     if isinstance(image, torch.Tensor):
         r_new = r_new.clamp(max=1.0)
         b_new = b_new.clamp(max=1.0)

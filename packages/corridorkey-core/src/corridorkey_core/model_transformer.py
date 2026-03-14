@@ -177,7 +177,7 @@ class CNNRefinerModule(nn.Module):
         self.res3 = RefinerBlock(hidden_channels, dilation=4)
         self.res4 = RefinerBlock(hidden_channels, dilation=8)
 
-        # Final Projection (no activation — outputs are additive logit corrections)
+        # Final Projection (no activation - outputs are additive logit corrections)
         self.final = nn.Conv2d(hidden_channels, out_channels, kernel_size=1)
 
         # Small weight init prevents large corrections at the start of training.
@@ -307,7 +307,7 @@ class GreenFormer(nn.Module):
         except AttributeError:
             self.encoder.patch_embed.proj = patched_conv  # ty:ignore[invalid-assignment]
 
-        logger.info("Patched input layer: 3 → %d channels (extra initialized to 0)", in_channels)
+        logger.info("Patched input layer: 3 -> %d channels (extra initialized to 0)", in_channels)
 
     def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         """Run the full forward pass and return alpha and foreground predictions.

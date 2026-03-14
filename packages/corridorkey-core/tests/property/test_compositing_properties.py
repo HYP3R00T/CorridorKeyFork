@@ -1,7 +1,7 @@
 """Property-based tests for corridorkey_core.compositing.
 
 Uses Hypothesis to verify mathematical invariants across many random inputs.
-These tests run in the fast suite — no GPU or checkpoint required.
+These tests run in the fast suite - no GPU or checkpoint required.
 """
 
 import numpy as np

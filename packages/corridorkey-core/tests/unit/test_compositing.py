@@ -136,7 +136,7 @@ class TestCompositing:
 
 class TestDespill:
     def test_no_spill_unchanged(self):
-        # Pure red — no green to remove
+        # Pure red - no green to remove
         img = _solid(4, 4, 1.0, 0.0, 0.0)
         result = despill(img, strength=1.0)
         assert np.allclose(result, img, atol=1e-6)
@@ -243,7 +243,7 @@ class TestCreateCheckerboard:
         assert np.any(np.isclose(flat, 0.9, atol=1e-4))
 
     def test_rgb_channels_equal(self):
-        # Checkerboard is grayscale — all three channels must be identical
+        # Checkerboard is grayscale - all three channels must be identical
         result = create_checkerboard(64, 64)
         assert np.allclose(result[..., 0], result[..., 1])
         assert np.allclose(result[..., 1], result[..., 2])
