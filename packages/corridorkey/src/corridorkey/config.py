@@ -4,20 +4,20 @@ All tool-managed files (models, logs, cache) live under ``app_dir``,
 which defaults to ``~/.config/corridorkey``. Users can override any
 field via:
 
-- A config file at ``~/.config/corridorkey/corridorkey.toml``  (global)
-- A ``corridorkey.toml`` dropped in the current working directory  (project)
+- A config file at ``~/.config/corridorkey/corridorkey.yaml``  (global)
+- A ``corridorkey.yaml`` dropped in the current working directory  (project)
 - Environment variables prefixed with ``CORRIDORKEY_``
 - Runtime overrides passed to ``load_config()``
 
 Precedence (lowest to highest):
     defaults < global config < project config < env vars < overrides
 
-Example config file (``~/.config/corridorkey/corridorkey.toml``):
+Example config file (``~/.config/corridorkey/corridorkey.yaml``):
 
-    checkpoint_dir = "~/studio/shared/corridorkey/models"
-    device = "cuda"
-    despill_strength = 0.85
-    fg_format = "exr"
+    checkpoint_dir: ~/studio/shared/corridorkey/models
+    device: cuda
+    despill_strength: 0.85
+    fg_format: exr
 """
 
 from __future__ import annotations
@@ -102,9 +102,9 @@ class CorridorKeyConfig(BaseModel):
 
 
 def export_config(config: CorridorKeyConfig, path: str | Path | None = None) -> Path:
-    """Write the current configuration to a TOML file.
+    """Write the current configuration to a YAML file.
 
-    If no path is given, writes to ``~/.config/corridorkey/corridorkey.toml``
+    If no path is given, writes to ``~/.config/corridorkey/corridorkey.yaml``
     (the global user config location that ``load_config`` reads from).
 
     Args:
@@ -122,10 +122,9 @@ def export_config(config: CorridorKeyConfig, path: str | Path | None = None) -> 
 
         Export to a custom path::
 
-            export_config(config, path="/tmp/my_corridorkey.toml")
+            export_config(config, path="/tmp/my_corridorkey.yaml")
     """
-
-    dest = Path(path).expanduser() if path else config.app_dir / "corridorkey.toml"
+    dest = Path(path).expanduser() if path else config.app_dir / "corridorkey.yaml"
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     lines: list[str] = [
@@ -139,12 +138,12 @@ def export_config(config: CorridorKeyConfig, path: str | Path | None = None) -> 
             continue
         if isinstance(value, Path):
             value = str(value)
-        if isinstance(value, str):
-            lines.append(f'{field_name} = "{value}"')
-        elif isinstance(value, bool):
-            lines.append(f"{field_name} = {'true' if value else 'false'}")
+        if isinstance(value, bool):
+            lines.append(f"{field_name}: {'true' if value else 'false'}")
+        elif isinstance(value, str):
+            lines.append(f"{field_name}: {value}")
         else:
-            lines.append(f"{field_name} = {value}")
+            lines.append(f"{field_name}: {value}")
 
     dest.write_text("\n".join(lines) + "\n", encoding="utf-8")
     logger.info("Config exported to: %s", dest)
@@ -156,8 +155,8 @@ def load_config(overrides: dict | None = None) -> CorridorKeyConfig:
 
     Resolution order (lowest to highest priority):
         1. Model field defaults
-        2. ``~/.config/corridorkey/corridorkey.toml`` (global user config)
-        3. ``./corridorkey.toml`` in the current working directory
+        2. ``~/.config/corridorkey/corridorkey.yaml`` (global user config)
+        3. ``./corridorkey.yaml`` in the current working directory
         4. Environment variables prefixed with ``CORRIDORKEY_``
         5. ``overrides`` dict passed to this function
 
@@ -185,8 +184,8 @@ def load_config(overrides: dict | None = None) -> CorridorKeyConfig:
 
         Point to a shared studio checkpoint directory::
 
-            # corridorkey.toml
-            # checkpoint_dir = "/mnt/studio/corridorkey/models"
+            # corridorkey.yaml
+            # checkpoint_dir: /mnt/studio/corridorkey/models
             config = load_config()
     """
     config, _ = load_settings(

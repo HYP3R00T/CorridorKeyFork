@@ -27,14 +27,14 @@ def config_show() -> None:
     console.print(table)
     console.print(
         "\n[dim]Sources (lowest to highest priority): defaults → "
-        "~/.config/corridorkey/corridorkey.toml → ./corridorkey.toml → "
+        "~/.config/corridorkey/corridorkey.yaml → ./corridorkey.yaml → "
         "CORRIDORKEY_* env vars[/dim]"
     )
 
 
 @app.command("init")
 def config_init() -> None:
-    """Write a starter config file to ~/.config/corridorkey/corridorkey.toml."""
+    """Write a starter config file to ~/.config/corridorkey/corridorkey.yaml."""
     config = load_config()
     dest = export_config(config)
     console.print(f"[green]Config written:[/green] {dest}")

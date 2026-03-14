@@ -83,7 +83,7 @@ def doctor() -> None:
 
     # Config file
     config = load_config()
-    config_file = config.app_dir / "corridorkey.toml"
+    config_file = config.app_dir / "corridorkey.yaml"
     rows.append((
         "config file",
         _PASS if config_file.exists() else _WARN,
