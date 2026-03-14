@@ -1,4 +1,9 @@
-"""Property-based tests for natural_sort.py."""
+"""Property-based tests for natural_sort.py.
+
+natural_sort_key must produce a stable, idempotent ordering for any string
+input. Hypothesis generates random strings and numeric pairs to verify that
+the sort is a valid permutation, is idempotent, and respects numeric order.
+"""
 
 from __future__ import annotations
 

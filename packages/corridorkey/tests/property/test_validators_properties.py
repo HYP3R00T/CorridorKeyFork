@@ -1,4 +1,10 @@
-"""Property-based tests for validators.py."""
+"""Property-based tests for validators.py.
+
+normalize_mask_dtype must produce float32 output in [0, 1] for any uint8
+or uint16 input, and must return float32 arrays unchanged. Hypothesis
+generates random arrays of each dtype to verify these contracts hold across
+the full value range, not just the boundary values tested in unit tests.
+"""
 
 from __future__ import annotations
 

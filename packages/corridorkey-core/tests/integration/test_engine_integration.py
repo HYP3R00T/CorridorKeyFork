@@ -52,49 +52,58 @@ class TestProcessFrameContract:
     """Verify the output dict keys, shapes, dtypes, and value ranges."""
 
     def test_output_keys(self, engine, sample_frame):
+        """process_frame must return a dict with exactly the four expected output keys."""
         image, mask = sample_frame
         result = engine.process_frame(image, mask)
         assert set(result.keys()) == {"alpha", "fg", "comp", "processed"}
 
     def test_alpha_shape(self, engine, sample_frame):
+        """alpha output must have shape (H, W, 1)."""
         image, mask = sample_frame
         result = engine.process_frame(image, mask)
         assert result["alpha"].shape == (1080, 1920, 1)
 
     def test_fg_shape(self, engine, sample_frame):
+        """fg output must have shape (H, W, 3)."""
         image, mask = sample_frame
         result = engine.process_frame(image, mask)
         assert result["fg"].shape == (1080, 1920, 3)
 
     def test_comp_shape(self, engine, sample_frame):
+        """comp output must have shape (H, W, 3)."""
         image, mask = sample_frame
         result = engine.process_frame(image, mask)
         assert result["comp"].shape == (1080, 1920, 3)
 
     def test_processed_shape(self, engine, sample_frame):
+        """processed output must have shape (H, W, 4) - RGBA."""
         image, mask = sample_frame
         result = engine.process_frame(image, mask)
         assert result["processed"].shape == (1080, 1920, 4)
 
     def test_alpha_range(self, engine, sample_frame):
+        """alpha values must be in [0, 1]."""
         image, mask = sample_frame
         result = engine.process_frame(image, mask)
         assert result["alpha"].min() >= 0.0
         assert result["alpha"].max() <= 1.0
 
     def test_fg_range(self, engine, sample_frame):
+        """fg values must be in [0, 1]."""
         image, mask = sample_frame
         result = engine.process_frame(image, mask)
         assert result["fg"].min() >= 0.0
         assert result["fg"].max() <= 1.0
 
     def test_comp_range(self, engine, sample_frame):
+        """comp values must be in [0, 1]."""
         image, mask = sample_frame
         result = engine.process_frame(image, mask)
         assert result["comp"].min() >= 0.0
         assert result["comp"].max() <= 1.0
 
     def test_all_outputs_float32(self, engine, sample_frame):
+        """Every output array must have dtype float32."""
         image, mask = sample_frame
         result = engine.process_frame(image, mask)
         for key, arr in result.items():
@@ -106,30 +115,35 @@ class TestProcessFrameInputHandling:
     """Verify the engine handles different input formats correctly."""
 
     def test_uint8_image_accepted(self, engine):
+        """A uint8 image must be accepted and produce the correct output shape."""
         image = (np.random.rand(256, 256, 3) * 255).astype(np.uint8)
         mask = np.random.rand(256, 256).astype(np.float32)
         result = engine.process_frame(image, mask)
         assert result["alpha"].shape == (256, 256, 1)
 
     def test_3d_mask_accepted(self, engine):
+        """A 3-D mask with a single channel must be accepted and squeezed internally."""
         image = np.random.rand(256, 256, 3).astype(np.float32)
         mask = np.random.rand(256, 256, 1).astype(np.float32)
         result = engine.process_frame(image, mask)
         assert result["alpha"].shape == (256, 256, 1)
 
     def test_linear_input_flag(self, engine):
+        """input_is_linear=True must be accepted without raising."""
         image = np.random.rand(256, 256, 3).astype(np.float32)
         mask = np.random.rand(256, 256).astype(np.float32)
         result = engine.process_frame(image, mask, input_is_linear=True)
         assert result["alpha"].shape == (256, 256, 1)
 
     def test_despeckle_disabled(self, engine):
+        """auto_despeckle=False must be accepted without raising."""
         image = np.random.rand(256, 256, 3).astype(np.float32)
         mask = np.random.rand(256, 256).astype(np.float32)
         result = engine.process_frame(image, mask, auto_despeckle=False)
         assert result["alpha"].shape == (256, 256, 1)
 
     def test_despill_disabled(self, engine):
+        """despill_strength=0.0 must disable despill without raising."""
         image = np.random.rand(256, 256, 3).astype(np.float32)
         mask = np.random.rand(256, 256).astype(np.float32)
         result = engine.process_frame(image, mask, despill_strength=0.0)

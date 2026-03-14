@@ -1,4 +1,10 @@
-"""Property-based tests for models.py."""
+"""Property-based tests for models.py.
+
+InOutRange arithmetic must hold for any valid integer inputs, not just the
+hand-picked examples in the unit tests. Hypothesis generates hundreds of
+random (in_point, out_point) pairs to verify frame_count, contains(), and
+the serialisation roundtrip.
+"""
 
 from __future__ import annotations
 

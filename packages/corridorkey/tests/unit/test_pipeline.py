@@ -1,4 +1,17 @@
-"""Unit tests for pipeline.py - high-level process_directory orchestration."""
+"""Unit tests for pipeline.py - high-level process_directory orchestration.
+
+pipeline.py is the glue between CorridorKeyService and the outside world.
+Its _process_clip function implements the per-clip state routing logic that
+decides whether to skip, generate alpha, or run inference. Tests use mocks
+for CorridorKeyService so no GPU or filesystem is needed.
+
+Key invariants tested:
+- COMPLETE and ERROR clips are always skipped
+- RAW/MASKED clips without a generator are skipped with a warning
+- RAW/MASKED clips with a generator run alpha generation then inference
+- Exceptions from inference are captured into ClipSummary.error
+- unload_engine is always called, even if an exception is raised
+"""
 
 from __future__ import annotations
 
@@ -24,18 +37,25 @@ def _make_service(clips: list[ClipEntry]) -> MagicMock:
 
 
 class TestClipSummary:
+    """ClipSummary - skipped and error flag semantics."""
+
     def test_skipped_flag(self):
+        """A skipped summary must have skipped=True and no error."""
         s = ClipSummary(name="x", state="RAW", skipped=True)
         assert s.skipped is True
         assert s.error is None
 
     def test_error_flag(self):
+        """An errored summary must carry the error message string."""
         s = ClipSummary(name="x", state="RAW", error="boom")
         assert s.error == "boom"
 
 
 class TestPipelineResult:
+    """PipelineResult - succeeded/failed/skipped partition properties."""
+
     def test_succeeded_failed_skipped(self):
+        """succeeded, failed, and skipped must partition the clips list correctly."""
         result = PipelineResult(
             clips=[
                 ClipSummary(name="a", state="COMPLETE", frames_processed=10, frames_total=10),
@@ -49,27 +69,33 @@ class TestPipelineResult:
 
 
 class TestProcessClip:
+    """_process_clip - per-clip state routing, alpha generation, and error capture."""
+
     def _service(self) -> MagicMock:
         s = MagicMock()
         s.run_inference.return_value = [MagicMock(success=True)] * 5
         return s
 
     def test_complete_clip_is_skipped(self):
+        """A COMPLETE clip must be skipped without calling run_inference."""
         clip = _make_clip("shot1", ClipState.COMPLETE)
         summary = _process_clip(clip, self._service(), InferenceParams(), OutputConfig(), None, None, None, None)
         assert summary.skipped is True
 
     def test_error_clip_is_skipped(self):
+        """An ERROR clip must be skipped; its existing error_message is preserved."""
         clip = _make_clip("shot1", ClipState.ERROR, error_message="something broke")
         summary = _process_clip(clip, self._service(), InferenceParams(), OutputConfig(), None, None, None, None)
         assert summary.skipped is True
 
     def test_extracting_clip_is_skipped(self):
+        """An EXTRACTING clip (frames not yet ready) must be skipped."""
         clip = _make_clip("shot1", ClipState.EXTRACTING)
         summary = _process_clip(clip, self._service(), InferenceParams(), OutputConfig(), None, None, None, None)
         assert summary.skipped is True
 
     def test_raw_without_generator_is_skipped(self):
+        """A RAW clip with no alpha generator must be skipped with a warning."""
         clip = _make_clip("shot1", ClipState.RAW)
         warnings: list[str] = []
         summary = _process_clip(
@@ -79,6 +105,7 @@ class TestProcessClip:
         assert any("no alpha generator" in w for w in warnings)
 
     def test_ready_clip_runs_inference(self):
+        """A READY clip must call run_inference and report the processed frame count."""
         clip = _make_clip("shot1", ClipState.READY)
         service = self._service()
         summary = _process_clip(clip, service, InferenceParams(), OutputConfig(), None, None, None, None)
@@ -87,6 +114,7 @@ class TestProcessClip:
         assert summary.error is None
 
     def test_raw_with_generator_runs_alpha_then_inference(self):
+        """A RAW clip with a generator must run alpha generation then inference in order."""
         clip = _make_clip("shot1", ClipState.RAW)
         service = self._service()
         generator = MagicMock()
@@ -104,6 +132,7 @@ class TestProcessClip:
         assert summary.error is None
 
     def test_inference_error_captured(self):
+        """A CorridorKeyError raised by run_inference must be captured into summary.error."""
         from corridorkey.errors import CorridorKeyError
 
         clip = _make_clip("shot1", ClipState.READY)
@@ -113,6 +142,7 @@ class TestProcessClip:
         assert summary.error == "inference exploded"
 
     def test_on_clip_start_called(self):
+        """on_clip_start callback must be invoked with the clip name and state string."""
         clip = _make_clip("shot1", ClipState.COMPLETE)
         started: list[tuple] = []
         _process_clip(
@@ -129,7 +159,10 @@ class TestProcessClip:
 
 
 class TestProcessDirectory:
+    """process_directory - service lifecycle and engine cleanup guarantees."""
+
     def test_empty_directory_returns_empty_result(self):
+        """An empty project directory must return a PipelineResult with no clips."""
         with patch("corridorkey.pipeline.CorridorKeyService") as mock_service_cls:
             instance = mock_service_cls.return_value
             instance.scan_clips.return_value = []
@@ -138,6 +171,7 @@ class TestProcessDirectory:
         assert result.clips == []
 
     def test_engine_unloaded_on_completion(self):
+        """unload_engine must be called after a successful run to free GPU memory."""
         with patch("corridorkey.pipeline.CorridorKeyService") as mock_service_cls:
             instance = mock_service_cls.return_value
             instance.scan_clips.return_value = []
@@ -146,6 +180,7 @@ class TestProcessDirectory:
         instance.unload_engine.assert_called_once()
 
     def test_engine_unloaded_on_exception(self):
+        """unload_engine must be called even when an exception is raised mid-run."""
         with patch("corridorkey.pipeline.CorridorKeyService") as mock_service_cls:
             instance = mock_service_cls.return_value
             instance.scan_clips.side_effect = RuntimeError("scan failed")

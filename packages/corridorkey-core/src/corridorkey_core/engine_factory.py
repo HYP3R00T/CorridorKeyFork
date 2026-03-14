@@ -45,11 +45,6 @@ BACKEND_ENV_VAR = "CORRIDORKEY_BACKEND"
 VALID_BACKENDS = ("auto", "torch", "mlx")
 
 
-# ---------------------------------------------------------------------------
-# Backend resolution
-# ---------------------------------------------------------------------------
-
-
 def resolve_backend(requested: str | None = None) -> str:
     """Resolve which backend to use.
 
@@ -112,11 +107,6 @@ def _validate_mlx_available() -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# Checkpoint discovery
-# ---------------------------------------------------------------------------
-
-
 def discover_checkpoint(checkpoint_dir: str | Path, ext: str) -> Path:
     """Find exactly one checkpoint file with the given extension in checkpoint_dir.
 
@@ -148,11 +138,6 @@ def discover_checkpoint(checkpoint_dir: str | Path, ext: str) -> Path:
         raise ValueError(f"Multiple {ext} checkpoints in {checkpoint_dir}: {names}. Keep exactly one.")
 
     return matches[0]
-
-
-# ---------------------------------------------------------------------------
-# MLX output normalization
-# ---------------------------------------------------------------------------
 
 
 def _wrap_mlx_output(
@@ -210,11 +195,6 @@ def _wrap_mlx_output(
     }
 
 
-# ---------------------------------------------------------------------------
-# MLX adapter
-# ---------------------------------------------------------------------------
-
-
 class _MLXEngineAdapter:  # pragma: no cover
     """Wraps CorridorKeyMLXEngine to expose the same process_frame() contract as CorridorKeyEngine.
 
@@ -261,11 +241,6 @@ class _MLXEngineAdapter:  # pragma: no cover
         )
 
         return _wrap_mlx_output(mlx_output, despill_strength, auto_despeckle, despeckle_size)
-
-
-# ---------------------------------------------------------------------------
-# Public factory
-# ---------------------------------------------------------------------------
 
 
 def create_engine(
