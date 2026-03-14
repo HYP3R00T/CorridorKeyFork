@@ -89,8 +89,7 @@ class CorridorKeyEngine:  # pragma: no cover
                 with torch.inference_mode():
                     self.model(dummy_input)
             except Exception as e:
-                logger.info(f"Model compilation failed with error: {e}")
-                logger.warning("Model compilation failed. Falling back to eager mode.")
+                logger.warning("Model compilation failed (%s). Falling back to eager mode.", e)
                 torch.cuda.empty_cache()
                 self.model = model
 
