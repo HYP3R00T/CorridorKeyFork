@@ -20,15 +20,18 @@ Auto-detect:
 
 from __future__ import annotations
 
-import glob
 import importlib.util
 import logging
 import os
 import platform
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from corridorkey_core.inference_engine import CorridorKeyEngine
 
 logger = logging.getLogger(__name__)
 
@@ -114,7 +117,7 @@ def _validate_mlx_available() -> None:
 # ---------------------------------------------------------------------------
 
 
-def discover_checkpoint(checkpoint_dir: str, ext: str) -> Path:
+def discover_checkpoint(checkpoint_dir: str | Path, ext: str) -> Path:
     """Find exactly one checkpoint file with the given extension in checkpoint_dir.
 
     Args:
@@ -128,11 +131,12 @@ def discover_checkpoint(checkpoint_dir: str, ext: str) -> Path:
         FileNotFoundError: If no matching file is found.
         ValueError: If more than one matching file is found.
     """
-    matches = glob.glob(os.path.join(checkpoint_dir, f"*{ext}"))
+    checkpoint_dir = Path(checkpoint_dir)
+    matches = list(checkpoint_dir.glob(f"*{ext}"))
 
     if len(matches) == 0:
         other_ext = MLX_EXT if ext == TORCH_EXT else TORCH_EXT
-        other_files = glob.glob(os.path.join(checkpoint_dir, f"*{other_ext}"))
+        other_files = list(checkpoint_dir.glob(f"*{other_ext}"))
         hint = ""
         if other_files:
             other_backend = "mlx" if other_ext == MLX_EXT else "torch"
@@ -140,10 +144,10 @@ def discover_checkpoint(checkpoint_dir: str, ext: str) -> Path:
         raise FileNotFoundError(f"No {ext} checkpoint found in {checkpoint_dir}.{hint}")
 
     if len(matches) > 1:
-        names = [os.path.basename(f) for f in matches]
+        names = [f.name for f in matches]
         raise ValueError(f"Multiple {ext} checkpoints in {checkpoint_dir}: {names}. Keep exactly one.")
 
-    return Path(matches[0])
+    return matches[0]
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +155,7 @@ def discover_checkpoint(checkpoint_dir: str, ext: str) -> Path:
 # ---------------------------------------------------------------------------
 
 
-def _wrap_mlx_output(raw: dict, despill_strength: float, auto_despeckle: bool, despeckle_size: int) -> dict:
+def _wrap_mlx_output(mlx_output: dict, despill_strength: float, auto_despeckle: bool, despeckle_size: int) -> dict:
     """Normalize MLX uint8 output to match the Torch float32 contract.
 
     MLX engines return uint8 arrays and stub out despill/despeckle.
@@ -169,13 +173,12 @@ def _wrap_mlx_output(raw: dict, despill_strength: float, auto_despeckle: bool, d
     )
 
     # alpha: uint8 [H, W] → float32 [H, W, 1]
-    alpha_raw = raw["alpha"]
-    alpha = alpha_raw.astype(np.float32) / 255.0
+    alpha = mlx_output["alpha"].astype(np.float32) / 255.0
     if alpha.ndim == 2:
         alpha = alpha[:, :, np.newaxis]
 
     # fg: uint8 [H, W, 3] → float32 [H, W, 3] sRGB
-    fg = raw["fg"].astype(np.float32) / 255.0
+    fg = mlx_output["fg"].astype(np.float32) / 255.0
 
     # Despeckle (MLX stubs this — adapter applies it)
     processed_alpha = (
@@ -218,8 +221,8 @@ class _MLXEngineAdapter:
     Application Layer never needs to know which backend is active.
     """
 
-    def __init__(self, raw_engine) -> None:
-        self._engine = raw_engine
+    def __init__(self, mlx_engine) -> None:
+        self._engine = mlx_engine
         logger.info("MLX adapter active: despill and despeckle are handled by the adapter, not native MLX")
 
     def process_frame(
@@ -244,7 +247,7 @@ class _MLXEngineAdapter:
         if mask_u8.ndim == 3:
             mask_u8 = mask_u8[:, :, 0]
 
-        raw = self._engine.process_frame(
+        mlx_output = self._engine.process_frame(
             image_u8,
             mask_u8,
             refiner_scale=refiner_scale,
@@ -255,7 +258,7 @@ class _MLXEngineAdapter:
             despeckle_size=despeckle_size,
         )
 
-        return _wrap_mlx_output(raw, despill_strength, auto_despeckle, despeckle_size)
+        return _wrap_mlx_output(mlx_output, despill_strength, auto_despeckle, despeckle_size)
 
 
 # ---------------------------------------------------------------------------
@@ -264,13 +267,13 @@ class _MLXEngineAdapter:
 
 
 def create_engine(
-    checkpoint_dir: str,
+    checkpoint_dir: str | Path,
     backend: str | None = None,
     device: str | None = None,
     img_size: int = DEFAULT_IMG_SIZE,
     tile_size: int | None = DEFAULT_MLX_TILE_SIZE,
     overlap: int = DEFAULT_MLX_TILE_OVERLAP,
-):
+) -> CorridorKeyEngine | _MLXEngineAdapter:
     """Create and return an inference engine for the resolved backend.
 
     The returned object always exposes process_frame() with the Torch output
@@ -290,7 +293,7 @@ def create_engine(
     backend = resolve_backend(backend)
 
     if backend == "mlx":
-        ckpt = discover_checkpoint(checkpoint_dir, MLX_EXT)
+        ckpt = discover_checkpoint(Path(checkpoint_dir), MLX_EXT)
         from corridorkey_mlx import CorridorKeyMLXEngine  # type: ignore[import-not-found]
 
         raw_engine = CorridorKeyMLXEngine(str(ckpt), img_size=img_size, tile_size=tile_size, overlap=overlap)
@@ -299,8 +302,8 @@ def create_engine(
         return _MLXEngineAdapter(raw_engine)
 
     # Torch
-    ckpt = discover_checkpoint(checkpoint_dir, TORCH_EXT)
+    ckpt = discover_checkpoint(Path(checkpoint_dir), TORCH_EXT)
     from corridorkey_core.inference_engine import CorridorKeyEngine
 
     logger.info("Torch engine loaded: %s (device=%s)", ckpt.name, device or "cpu")
-    return CorridorKeyEngine(checkpoint_path=str(ckpt), device=device or "cpu", img_size=img_size)
+    return CorridorKeyEngine(checkpoint_path=ckpt, device=device or "cpu", img_size=img_size)

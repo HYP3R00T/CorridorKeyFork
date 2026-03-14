@@ -82,25 +82,33 @@ class DecoderHead(nn.Module):
             Dense prediction tensor with shape [B, output_dim, H/4, W/4].
         """
         c1, c2, c3, c4 = features
-        n, _, h, w = c4.shape
+        batch_size, _, _, _ = c4.shape
 
         # Resize to C1 size (which is H/4)
-        _c4 = self.linear_c4(c4.flatten(2).transpose(1, 2)).transpose(1, 2).view(n, -1, c4.shape[2], c4.shape[3])
-        _c4 = functional.interpolate(_c4, size=c1.shape[2:], mode="bilinear", align_corners=False)
+        proj_c4 = (
+            self.linear_c4(c4.flatten(2).transpose(1, 2)).transpose(1, 2).view(batch_size, -1, c4.shape[2], c4.shape[3])
+        )
+        proj_c4 = functional.interpolate(proj_c4, size=c1.shape[2:], mode="bilinear", align_corners=False)
 
-        _c3 = self.linear_c3(c3.flatten(2).transpose(1, 2)).transpose(1, 2).view(n, -1, c3.shape[2], c3.shape[3])
-        _c3 = functional.interpolate(_c3, size=c1.shape[2:], mode="bilinear", align_corners=False)
+        proj_c3 = (
+            self.linear_c3(c3.flatten(2).transpose(1, 2)).transpose(1, 2).view(batch_size, -1, c3.shape[2], c3.shape[3])
+        )
+        proj_c3 = functional.interpolate(proj_c3, size=c1.shape[2:], mode="bilinear", align_corners=False)
 
-        _c2 = self.linear_c2(c2.flatten(2).transpose(1, 2)).transpose(1, 2).view(n, -1, c2.shape[2], c2.shape[3])
-        _c2 = functional.interpolate(_c2, size=c1.shape[2:], mode="bilinear", align_corners=False)
+        proj_c2 = (
+            self.linear_c2(c2.flatten(2).transpose(1, 2)).transpose(1, 2).view(batch_size, -1, c2.shape[2], c2.shape[3])
+        )
+        proj_c2 = functional.interpolate(proj_c2, size=c1.shape[2:], mode="bilinear", align_corners=False)
 
-        _c1 = self.linear_c1(c1.flatten(2).transpose(1, 2)).transpose(1, 2).view(n, -1, c1.shape[2], c1.shape[3])
+        proj_c1 = (
+            self.linear_c1(c1.flatten(2).transpose(1, 2)).transpose(1, 2).view(batch_size, -1, c1.shape[2], c1.shape[3])
+        )
 
-        _c = self.linear_fuse(torch.cat([_c4, _c3, _c2, _c1], dim=1))
-        _c = self.bn(_c)
-        _c = self.relu(_c)
+        fused_features = self.linear_fuse(torch.cat([proj_c4, proj_c3, proj_c2, proj_c1], dim=1))
+        fused_features = self.bn(fused_features)
+        fused_features = self.relu(fused_features)
 
-        x = self.dropout(_c)
+        x = self.dropout(fused_features)
         x = self.classifier(x)
 
         return x
@@ -222,6 +230,7 @@ class GreenFormer(nn.Module):
         in_channels: int = 4,
         img_size: int = 512,
         use_refiner: bool = True,
+        embedding_dim: int = 256,
     ) -> None:
         super().__init__()
 
@@ -242,8 +251,6 @@ class GreenFormer(nn.Module):
         except (AttributeError, TypeError):
             feature_channels = [112, 224, 448, 896]
         logger.info("Feature channels: %s", feature_channels)
-
-        embedding_dim = 256
 
         self.alpha_decoder = DecoderHead(feature_channels, embedding_dim, output_dim=1)
         self.fg_decoder = DecoderHead(feature_channels, embedding_dim, output_dim=3)
@@ -276,12 +283,11 @@ class GreenFormer(nn.Module):
         weight = patch_embed.weight.data  # [Out, 3, K, K]  # ty:ignore[unresolved-attribute]
         bias = patch_embed.bias.data if patch_embed.bias is not None else None  # ty:ignore[unresolved-attribute]
 
-        new_in_channels = in_channels
-        out_channels, _, k, k = weight.shape  # ty:ignore[not-iterable]
+        out_channels, _, k, _ = weight.shape  # ty:ignore[not-iterable]
 
         # Create new conv
-        new_conv = nn.Conv2d(
-            new_in_channels,
+        patched_conv = nn.Conv2d(
+            in_channels,
             out_channels,
             kernel_size=k,
             stride=patch_embed.stride,  # ty:ignore[invalid-argument-type]
@@ -289,17 +295,17 @@ class GreenFormer(nn.Module):
             bias=(bias is not None),
         )
 
-        new_conv.weight.data[:, :3, :, :] = weight  # ty:ignore[invalid-assignment]
-        new_conv.weight.data[:, 3:, :, :] = 0.0  # extra channels start at zero to avoid disrupting RGB features
+        patched_conv.weight.data[:, :3, :, :] = weight  # ty:ignore[invalid-assignment]
+        patched_conv.weight.data[:, 3:, :, :] = 0.0  # extra channels start at zero to avoid disrupting RGB features
 
         if bias is not None:
-            new_conv.bias.data = bias  # ty:ignore[invalid-assignment]
+            patched_conv.bias.data = bias  # ty:ignore[invalid-assignment]
 
         # Replace in module
         try:
-            self.encoder.model.patch_embed.proj = new_conv  # ty:ignore[unresolved-attribute, invalid-assignment]
+            self.encoder.model.patch_embed.proj = patched_conv  # ty:ignore[unresolved-attribute, invalid-assignment]
         except AttributeError:
-            self.encoder.patch_embed.proj = new_conv  # ty:ignore[invalid-assignment]
+            self.encoder.patch_embed.proj = patched_conv  # ty:ignore[invalid-assignment]
 
         logger.info("Patched input layer: 3 → %d channels (extra initialized to 0)", in_channels)
 
@@ -314,7 +320,7 @@ class GreenFormer(nn.Module):
                 "alpha": Predicted alpha matte with shape [B, 1, H, W] in range 0-1.
                 "fg": Predicted foreground color with shape [B, 3, H, W] in range 0-1.
         """
-        input_size = x.shape[2:]
+        spatial_size = x.shape[2:]
 
         features = self.encoder(x)
 
@@ -322,8 +328,8 @@ class GreenFormer(nn.Module):
         fg_logits = self.fg_decoder(features)  # [B, 3, H/4, W/4]
 
         # Upsample coarse logits to full resolution before refinement.
-        alpha_logits_up = functional.interpolate(alpha_logits, size=input_size, mode="bilinear", align_corners=False)
-        fg_logits_up = functional.interpolate(fg_logits, size=input_size, mode="bilinear", align_corners=False)
+        alpha_logits_up = functional.interpolate(alpha_logits, size=spatial_size, mode="bilinear", align_corners=False)
+        fg_logits_up = functional.interpolate(fg_logits, size=spatial_size, mode="bilinear", align_corners=False)
 
         # Clamping was removed to preserve all backbone detail.
         # The refiner receives raw logits in (-inf, +inf).
@@ -334,13 +340,13 @@ class GreenFormer(nn.Module):
         alpha_coarse = torch.sigmoid(alpha_logits_up)
         fg_coarse = torch.sigmoid(fg_logits_up)
 
-        rgb = x[:, :3, :, :]
+        rgb_input = x[:, :3, :, :]
         coarse_pred = torch.cat([alpha_coarse, fg_coarse], dim=1)  # [B, 4, H, W]
 
         # The refiner predicts additive delta logits, not absolute values.
         # Adding in logit space allows unbounded corrections without sigmoid saturation.
         if self.use_refiner and self.refiner is not None:
-            delta_logits = self.refiner(rgb, coarse_pred)
+            delta_logits = self.refiner(rgb_input, coarse_pred)
         else:
             delta_logits = torch.zeros_like(coarse_pred)
 
