@@ -186,7 +186,7 @@ class CorridorKeyService:
         self._config = config or load_config()
         self._engine = None
         self._engine_loaded = False
-        self._device: str = self._config.device
+        self._device: str = device_utils.resolve_device(self._config.device)
         self._job_queue: GPUJobQueue | None = None
         self._gpu_lock = threading.Lock()
 
@@ -307,6 +307,14 @@ class CorridorKeyService:
         self._engine_loaded = True
         logger.info("Engine loaded in %.1fs", time.monotonic() - t0)
         return self._engine
+
+    def load_engine(self) -> None:
+        """Eagerly load the inference engine into VRAM.
+
+        No-op if the engine is already loaded. Useful for pre-warming before
+        the first inference call so the caller can show a loading indicator.
+        """
+        self._get_engine()
 
     def unload_engine(self) -> None:
         """Free GPU memory by unloading the inference engine."""

@@ -82,7 +82,13 @@ class ProgressContext:
         if self._task is None:
             self._task = self._progress.add_task(f"[cyan]{clip_name}[/cyan]", total=total)
         else:
-            self._progress.update(self._task, completed=current, total=total)
+            # On the first real frame, torch.compile fires — show a hint.
+            description = (
+                f"[cyan]{clip_name}[/cyan] [dim](compiling kernels...)[/dim]"
+                if current == 0
+                else f"[cyan]{clip_name}[/cyan]"
+            )
+            self._progress.update(self._task, completed=current, total=total, description=description)
 
     def on_warning(self, message: str) -> None:
         """Print a warning without breaking the progress bar."""
