@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 TORCH_EXT = ".pth"
 MLX_EXT = ".safetensors"
-DEFAULT_IMG_SIZE = 2048
+DEFAULT_IMG_SIZE = 512
 DEFAULT_MLX_TILE_SIZE = 512
 DEFAULT_MLX_TILE_OVERLAP = 64
 

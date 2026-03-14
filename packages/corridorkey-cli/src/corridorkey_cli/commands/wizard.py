@@ -209,11 +209,31 @@ def _run_inference(
     output_config: OutputConfig,
 ) -> None:
     """Run inference on a list of READY clips with a progress bar."""
+    import time
+
+    from rich.progress import Progress as RichProgress
+    from rich.progress import SpinnerColumn, TextColumn
+
     failed: list[str] = []
 
+    # Pre-load the engine once with a spinner so the user sees activity
+    # during the potentially long model load + first-frame compilation.
+    if not service.is_engine_loaded:
+        with RichProgress(
+            SpinnerColumn(),
+            TextColumn("[cyan]Loading model (first run compiles kernels, ~1 min)...[/cyan]"),
+            console=console,
+            transient=True,
+        ) as spin:
+            spin.add_task("")
+            service.load_engine()
+
     for clip in clips:
-        console.print(f"\nProcessing [cyan]{clip.name}[/cyan]...")
+        total = clip.input_asset.frame_count if clip.input_asset else 0
+        console.print(f"\nProcessing [cyan]{clip.name}[/cyan]  ({total} frames)")
+
         with ProgressContext() as prog:
+            t0 = time.monotonic()
             try:
                 results = service.run_inference(
                     clip,
@@ -222,8 +242,12 @@ def _run_inference(
                     on_warning=prog.on_warning,
                     output_config=output_config,
                 )
+                elapsed = time.monotonic() - t0
                 ok = sum(1 for r in results if r.success)
-                console.print(f"  [green]Done:[/green] {ok}/{len(results)} frames")
+                fps = ok / elapsed if elapsed > 0 else 0
+                console.print(
+                    f"  [green]Done:[/green] {ok}/{len(results)} frames  [dim]{elapsed:.1f}s  ({fps:.2f} fps)[/dim]"
+                )
             except Exception as e:
                 console.print(f"  [red]Failed:[/red] {e}")
                 failed.append(clip.name)

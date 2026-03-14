@@ -83,11 +83,14 @@ class CorridorKeyEngine:  # pragma: no cover
         # torch.compile is only tested on Linux and Windows; skip on other platforms.
         if sys.platform == "linux" or sys.platform == "win32":
             try:
+                # Point the inductor cache at a stable directory so compiled
+                # kernels are reused across runs (first run still compiles once).
+                cache_dir = Path.home() / ".cache" / "corridorkey" / "torch_compile"
+                cache_dir.mkdir(parents=True, exist_ok=True)
+                import torch._inductor.config as inductor_cfg
+
+                inductor_cfg.cache_dir = str(cache_dir)
                 self.model = torch.compile(model)
-                # Warm up the compiled model to trigger JIT compilation now rather than on the first real frame.
-                dummy_input = torch.zeros(1, 4, img_size, img_size, dtype=model_precision, device=self.device)
-                with torch.inference_mode():
-                    self.model(dummy_input)
             except Exception as e:
                 logger.warning("Model compilation failed (%s). Falling back to eager mode.", e)
                 torch.cuda.empty_cache()
