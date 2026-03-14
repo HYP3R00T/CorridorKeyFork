@@ -48,14 +48,18 @@ _numpy_stack = functools.partial(np.stack, axis=-1)
 
 # sRGB transfer function constants (IEC 61966-2-1)
 # Reference: https://www.color.org/chardata/rgb/srgb.xalter
-_SRGB_LINEAR_THRESHOLD = 0.0031308  # Linear values at or below this use the linear segment
-_SRGB_ENCODED_THRESHOLD = (
-    0.04045  # Encoded values at or below this use the linear segment (= _SRGB_LINEAR_THRESHOLD * 12.92)
-)
-_SRGB_LINEAR_SCALE = 12.92  # Slope of the linear segment
-_SRGB_GAMMA = 1.0 / 2.4  # Exponent for the power curve (encoding: linear -> sRGB)
-_SRGB_ALPHA = 1.055  # Scale factor for the power curve
-_SRGB_BETA = 0.055  # Offset for the power curve
+# Linear values at or below this use the linear segment
+_SRGB_LINEAR_THRESHOLD = 0.0031308
+# Encoded values at or below this use the linear segment (= _SRGB_LINEAR_THRESHOLD * 12.92)
+_SRGB_ENCODED_THRESHOLD = 0.04045
+# Slope of the linear segment
+_SRGB_LINEAR_SCALE = 12.92
+# Exponent for the power curve (encoding: linear -> sRGB)
+_SRGB_GAMMA = 1.0 / 2.4
+# Scale factor for the power curve
+_SRGB_ALPHA = 1.055
+# Offset for the power curve
+_SRGB_BETA = 0.055
 
 
 def linear_to_srgb(x: np.ndarray | torch.Tensor) -> np.ndarray | torch.Tensor:
