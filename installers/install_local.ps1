@@ -1,19 +1,24 @@
-# CorridorKey Installer for Windows
+# CorridorKey Local Installer for Windows
 #
-# Usage:
-#   irm https://corridorkey.dev/install.ps1 | iex
-# Or locally:
-#   powershell -ExecutionPolicy Bypass -File install.ps1
+# For contributors and testers who have cloned the repo.
+# Installs directly from the local workspace - no PyPI needed.
+#
+# Usage (run from the repo root):
+#   powershell -ExecutionPolicy Bypass -File installers\install_local.ps1
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$host.UI.RawUI.WindowTitle = "CorridorKey Installer"
+$host.UI.RawUI.WindowTitle = "CorridorKey Local Installer"
 
 function Write-Step([string]$msg) { Write-Host ""; Write-Host ">>> $msg" -ForegroundColor Cyan }
 function Write-Ok([string]$msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn([string]$msg) { Write-Host "    [WARN] $msg" -ForegroundColor Yellow }
 function Write-Fail([string]$msg) { Write-Host ""; Write-Host "    [ERROR] $msg" -ForegroundColor Red }
+
+# Resolve repo root - script lives in <repo>/installers/
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$cliPath  = Join-Path $repoRoot "packages\corridorkey-cli"
 
 # -------------------------------------------------------
 # Banner
@@ -21,8 +26,18 @@ function Write-Fail([string]$msg) { Write-Host ""; Write-Host "    [ERROR] $msg"
 Write-Host ""
 Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host "    CorridorKey - AI Green Screen Keyer"           -ForegroundColor Cyan
-Write-Host "    Windows Installer"                             -ForegroundColor Cyan
+Write-Host "    Local Installer (from repo)"                   -ForegroundColor Cyan
 Write-Host "===================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "    Repo: $repoRoot" -ForegroundColor DarkGray
+
+# Sanity check - make sure we're actually inside the repo
+if (-not (Test-Path $cliPath)) {
+    Write-Fail "Could not find packages\corridorkey-cli at: $cliPath"
+    Write-Host "    Make sure you run this script from inside the cloned repo." -ForegroundColor Yellow
+    Read-Host "Press Enter to exit"
+    exit 1
+}
 
 # -------------------------------------------------------
 # Step 1: Pick GPU variant
@@ -40,12 +55,15 @@ while ($choice -notin @("1", "2")) {
 }
 
 switch ($choice) {
-    "1" { $package = "corridorkey-cli[cuda]"; $backend = "NVIDIA (CUDA)" }
-    "2" { $package = "corridorkey-cli";       $backend = "CPU" }
+    "1" { $extra = "cuda"; $backend = "NVIDIA (CUDA)" }
+    "2" { $extra = "";     $backend = "CPU" }
 }
+
+$package = if ($extra) { "$cliPath[$extra]" } else { $cliPath }
 
 Write-Host ""
 Write-Ok "Selected: $backend"
+Write-Ok "Source:   $cliPath"
 
 # -------------------------------------------------------
 # Step 2: Ensure uv is installed
@@ -64,7 +82,6 @@ if (-not $uvCmd) {
         exit 1
     }
 
-    # Refresh PATH for this session
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "User") + ";$env:PATH"
 
     $uvCmd = Get-Command "uv" -ErrorAction SilentlyContinue
@@ -77,9 +94,9 @@ if (-not $uvCmd) {
 Write-Ok "uv is ready."
 
 # -------------------------------------------------------
-# Step 3: Install corridorkey-cli
+# Step 3: Install corridorkey-cli from local path
 # -------------------------------------------------------
-Write-Step "Installing $package..."
+Write-Step "Installing from local workspace..."
 
 try {
     & uv tool install $package --python 3.13

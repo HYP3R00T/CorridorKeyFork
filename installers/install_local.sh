@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# CorridorKey Installer - macOS / Linux
+# CorridorKey Local Installer - macOS / Linux
 #
-# Usage:
-#   curl -sSf https://corridorkey.dev/install.sh | bash
-# Or locally:
-#   bash install.sh
+# For contributors and testers who have cloned the repo.
+# Installs directly from the local workspace - no PyPI needed.
+#
+# Usage (run from the repo root):
+#   bash installers/install_local.sh
 
 set -euo pipefail
 
@@ -22,35 +23,49 @@ fail() { echo -e "\n    ${RED}[ERROR]${RESET} $*"; }
 SYSTEM="$(uname -s)"
 ARCH="$(uname -m)"
 
+# Resolve repo root - script lives in <repo>/installers/
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+CLI_PATH="$REPO_ROOT/packages/corridorkey-cli"
+
 # -------------------------------------------------------
 # Banner
 # -------------------------------------------------------
 echo ""
 echo -e "${CYAN}===================================================${RESET}"
 echo -e "${CYAN}    CorridorKey - AI Green Screen Keyer${RESET}"
-echo -e "${CYAN}    Installer${RESET}"
+echo -e "${CYAN}    Local Installer (from repo)${RESET}"
 echo -e "${CYAN}===================================================${RESET}"
+echo -e "    Repo: ${REPO_ROOT}"
+
+# Sanity check
+if [[ ! -d "$CLI_PATH" ]]; then
+    fail "Could not find packages/corridorkey-cli at: $CLI_PATH"
+    echo "    Make sure you run this script from inside the cloned repo."
+    exit 1
+fi
 
 # -------------------------------------------------------
 # Step 1: Pick GPU variant
 # -------------------------------------------------------
 echo ""
 
-# On Apple Silicon, MLX is the only sensible GPU option - skip the NVIDIA choice
+EXTRA=""
+BACKEND=""
+
 if [[ "$SYSTEM" == "Darwin" && "$ARCH" == "arm64" ]]; then
     echo "Which build would you like to install?"
     echo ""
     echo "  [1] Apple Silicon - M1/M2/M3/M4 (MLX)  <-- recommended for this Mac"
     echo "  [2] CPU only"
     echo ""
-    CHOICES=("1" "2")
     CHOICE=""
-    while [[ ! " ${CHOICES[*]} " =~ " $CHOICE " ]]; do
+    while [[ "$CHOICE" != "1" && "$CHOICE" != "2" ]]; do
         read -rp "Enter choice [1/2]: " CHOICE
     done
     case "$CHOICE" in
-        1) PACKAGE="corridorkey-cli[mlx]"; BACKEND="Apple Silicon (MLX)" ;;
-        2) PACKAGE="corridorkey-cli";      BACKEND="CPU" ;;
+        1) EXTRA="mlx"; BACKEND="Apple Silicon (MLX)" ;;
+        2) EXTRA="";    BACKEND="CPU" ;;
     esac
 else
     echo "Which GPU do you have?"
@@ -58,19 +73,21 @@ else
     echo "  [1] NVIDIA GPU (CUDA)"
     echo "  [2] No GPU / CPU only"
     echo ""
-    CHOICES=("1" "2")
     CHOICE=""
-    while [[ ! " ${CHOICES[*]} " =~ " $CHOICE " ]]; do
+    while [[ "$CHOICE" != "1" && "$CHOICE" != "2" ]]; do
         read -rp "Enter choice [1/2]: " CHOICE
     done
     case "$CHOICE" in
-        1) PACKAGE="corridorkey-cli[cuda]"; BACKEND="NVIDIA (CUDA)" ;;
-        2) PACKAGE="corridorkey-cli";       BACKEND="CPU" ;;
+        1) EXTRA="cuda"; BACKEND="NVIDIA (CUDA)" ;;
+        2) EXTRA="";     BACKEND="CPU" ;;
     esac
 fi
 
+PACKAGE="${CLI_PATH}${EXTRA:+[$EXTRA]}"
+
 echo ""
 ok "Selected: $BACKEND"
+ok "Source:   $CLI_PATH"
 
 # -------------------------------------------------------
 # Step 2: Ensure uv is installed
@@ -91,13 +108,12 @@ fi
 ok "uv is ready."
 
 # -------------------------------------------------------
-# Step 3: Install corridorkey-cli
+# Step 3: Install corridorkey-cli from local path
 # -------------------------------------------------------
-step "Installing $PACKAGE..."
+step "Installing from local workspace..."
 
 if ! uv tool install "$PACKAGE" --python 3.13; then
     fail "Installation failed."
-    echo "    Try the CPU build: uv tool install corridorkey-cli"
     exit 1
 fi
 ok "corridorkey-cli installed."
@@ -133,20 +149,15 @@ else
         LAUNCHER="$DESKTOP_DIR/CorridorKey.command"
         cat > "$LAUNCHER" << 'LAUNCHER_EOF'
 #!/usr/bin/env bash
-# CorridorKey launcher - drag a clips folder onto this in Finder
 if [[ -z "${1:-}" ]]; then
     echo "[ERROR] No folder provided."
-    echo ""
     echo "Drag and drop a clips folder onto this file in Finder."
-    echo "Or run: ./CorridorKey.command /path/to/clips"
-    read -rp "Press Enter to exit..."
-    exit 1
+    read -rp "Press Enter to exit..."; exit 1
 fi
 TARGET="${1%/}"
 if [[ ! -d "$TARGET" ]]; then
     echo "[ERROR] Not a directory: $TARGET"
-    read -rp "Press Enter to exit..."
-    exit 1
+    read -rp "Press Enter to exit..."; exit 1
 fi
 echo "Starting CorridorKey..."
 echo "Target: $TARGET"
@@ -156,10 +167,7 @@ read -rp "Press Enter to close..."
 LAUNCHER_EOF
         chmod +x "$LAUNCHER"
         ok "Launcher created: $LAUNCHER"
-        echo "    Drag a clips folder onto 'CorridorKey.command' on your Desktop."
-
     else
-        # Linux .desktop file
         LAUNCHER="$DESKTOP_DIR/CorridorKey.desktop"
         cat > "$LAUNCHER" << DESKTOP_EOF
 [Desktop Entry]
@@ -175,9 +183,9 @@ MimeType=inode/directory;
 DESKTOP_EOF
         chmod +x "$LAUNCHER"
         ok "Launcher created: $LAUNCHER"
-        echo "    Drag a clips folder onto 'CorridorKey' on your Desktop."
         warn "Some Linux desktops may ask you to trust the launcher on first run."
     fi
+    echo "    Drag a clips folder onto 'CorridorKey' on your Desktop to start."
 fi
 
 # -------------------------------------------------------
