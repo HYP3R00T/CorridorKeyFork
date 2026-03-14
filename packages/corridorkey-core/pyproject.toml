@@ -24,7 +24,6 @@ dependencies = [
   "torchvision==0.25.0",
   "opencv-python>=4.13.0.92",
   "timm>=1.0.25",
-  "utilityhub-config>=0.2.3",
 ]
 
 [project.optional-dependencies]
