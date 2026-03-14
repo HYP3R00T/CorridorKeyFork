@@ -9,6 +9,7 @@ The repository currently maintains the docs pages under `docs/` and `docs/dev/`.
 - `docs/index.md` - Documentation home
 - `docs/dev/authoring-documentation.md` - Authoring guidance
 - `docs/dev/developer-setup.md` - Setup guidance
+- `docs/dev/naming-conventions.md` - Naming conventions for code identifiers
 - `docs/dev/resources.md` - Tooling and references
 - `docs/dev/documentation-principles/` - Standards and rules
 

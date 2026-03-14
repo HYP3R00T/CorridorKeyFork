@@ -49,5 +49,6 @@ This enables automatic checks before each commit for:
 ## Related
 
 - [Authoring Documentation](authoring-documentation.md)
+- [Naming Conventions](naming-conventions.md)
 - [Resources](resources.md)
 - [Documentation Principles](documentation-principles/index.md)
