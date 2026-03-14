@@ -42,3 +42,7 @@ description = "Run GPU tests (requires CUDA)"
 [tasks.test-cov]
 run = "uv run --project packages/corridorkey-core pytest packages/corridorkey-core/tests --cov=corridorkey_core --cov-report=term-missing --cov-fail-under=75 --cov-config=packages/corridorkey-core/pyproject.toml"
 description = "Run fast tests with coverage report (fails under 75%)"
+
+[tasks.check-ascii]
+run = "uv run python scripts/check_ascii.py"
+description = "Check for non-ASCII characters in docs and source files"
