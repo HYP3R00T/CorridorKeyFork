@@ -6,6 +6,9 @@ repo_url = "https://github.com/nikopueringer/CorridorKey"
 
 nav = [
     { Home = "index.md" },
+    { Packages = [
+        { "corridorkey-core" = "packages/corridorkey-core.md" },
+    ] },
     { Development = [
         { "Developer Setup" = "dev/developer-setup.md" },
         { "Authoring Documentation" = "dev/authoring-documentation.md" },
