@@ -47,6 +47,7 @@ class ClipState(Enum):
 
 
 # Valid state transitions: from_state -> set of allowed to_states.
+# Valid state transitions: from_state -> set of allowed to_states.
 _TRANSITIONS: dict[ClipState, set[ClipState]] = {
     ClipState.EXTRACTING: {ClipState.RAW, ClipState.ERROR},
     ClipState.RAW: {ClipState.MASKED, ClipState.READY, ClipState.ERROR},
@@ -125,6 +126,7 @@ class ClipEntry:
         error_message: Set when state is ERROR.
         extraction_progress: Progress fraction (0.0-1.0) during EXTRACTING.
         extraction_total: Total frames expected during extraction.
+        _processing: Internal lock; True while a GPU job is active on this clip.
     """
 
     name: str
@@ -138,6 +140,7 @@ class ClipEntry:
     error_message: str | None = None
     extraction_progress: float = 0.0
     extraction_total: int = 0
+    # True while a GPU job is actively working on this clip; watcher skips reclassification.
     _processing: bool = field(default=False, repr=False)
 
     @property

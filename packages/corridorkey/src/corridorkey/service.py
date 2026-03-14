@@ -44,12 +44,21 @@ from corridorkey.validators import ensure_output_dirs, validate_frame_counts, va
 
 logger = logging.getLogger(__name__)
 
+# Default directory for model checkpoints, co-located with this module.
 CHECKPOINT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoints")
 
 
 @dataclass
 class InferenceParams:
-    """Frozen parameters for a single inference job."""
+    """Frozen parameters for a single inference job.
+
+    Attributes:
+        input_is_linear: True if the input frames are in linear light (e.g. EXR).
+        despill_strength: Strength of the green-spill suppression (0.0-1.0).
+        auto_despeckle: Enable automatic matte despeckling.
+        despeckle_size: Maximum speckle area in pixels to remove.
+        refiner_scale: Scale factor passed to the optional refiner stage.
+    """
 
     input_is_linear: bool = False
     despill_strength: float = 1.0
@@ -58,17 +67,41 @@ class InferenceParams:
     refiner_scale: float = 1.0
 
     def to_dict(self) -> dict:
+        """Serialise to a plain dict (for manifest storage).
+
+        Returns:
+            Dict representation of all fields.
+        """
         return asdict(self)
 
     @classmethod
     def from_dict(cls, d: dict) -> InferenceParams:
+        """Deserialise from a plain dict, ignoring unknown keys.
+
+        Args:
+            d: Dict that may contain extra keys from older manifest versions.
+
+        Returns:
+            InferenceParams instance with known fields populated.
+        """
         known = {f.name for f in cls.__dataclass_fields__.values()}
         return cls(**{k: v for k, v in d.items() if k in known})
 
 
 @dataclass
 class OutputConfig:
-    """Which output types to produce and their format."""
+    """Which output types to produce and their format.
+
+    Attributes:
+        fg_enabled: Write foreground (RGBA) frames.
+        fg_format: File format for FG frames ("exr" or "png").
+        matte_enabled: Write alpha matte frames.
+        matte_format: File format for matte frames ("exr" or "png").
+        comp_enabled: Write composited preview frames.
+        comp_format: File format for comp frames ("exr" or "png").
+        processed_enabled: Write pre-processed input frames.
+        processed_format: File format for processed frames ("exr" or "png").
+    """
 
     fg_enabled: bool = True
     fg_format: str = "exr"  # "exr" or "png"
@@ -80,10 +113,23 @@ class OutputConfig:
     processed_format: str = "exr"
 
     def to_dict(self) -> dict:
+        """Serialise to a plain dict (for manifest storage).
+
+        Returns:
+            Dict representation of all fields.
+        """
         return asdict(self)
 
     @classmethod
     def from_dict(cls, d: dict) -> OutputConfig:
+        """Deserialise from a plain dict, ignoring unknown keys.
+
+        Args:
+            d: Dict that may contain extra keys from older manifest versions.
+
+        Returns:
+            OutputConfig instance with known fields populated.
+        """
         known = {f.name for f in cls.__dataclass_fields__.values()}
         return cls(**{k: v for k, v in d.items() if k in known})
 
@@ -104,7 +150,14 @@ class OutputConfig:
 
 @dataclass
 class FrameResult:
-    """Result summary for a single processed frame (no numpy arrays)."""
+    """Result summary for a single processed frame (no numpy arrays).
+
+    Attributes:
+        frame_index: Zero-based index of the frame within the clip.
+        input_stem: Filename stem of the input frame (e.g. "frame_000001").
+        success: True if the frame was processed and written successfully.
+        warning: Non-fatal message if the frame was skipped or had issues.
+    """
 
     frame_index: int
     input_stem: str
@@ -156,13 +209,26 @@ class CorridorKeyService:
     # ------------------------------------------------------------------
 
     def detect_device(self, requested: str | None = None) -> str:
-        """Resolve and store the compute device."""
+        """Resolve and store the compute device.
+
+        Args:
+            requested: Explicit device string ("cuda", "mps", "cpu", or "auto").
+                None triggers env-var lookup then auto-detection.
+
+        Returns:
+            Resolved device string stored on this service instance.
+        """
         self._device = device_utils.resolve_device(requested)
         logger.info("Compute device: %s", self._device)
         return self._device
 
     def get_vram_info(self) -> dict[str, float | str]:
-        """Return GPU VRAM info in GB. Empty dict if not CUDA."""
+        """Return GPU VRAM info in GB.
+
+        Returns:
+            Dict with keys "total", "reserved", "allocated", "free" (all GB),
+            and "name" (device name string). Empty dict if CUDA is unavailable.
+        """
         try:
             import torch
 
@@ -296,11 +362,28 @@ class CorridorKeyService:
     # ------------------------------------------------------------------
 
     def scan_clips(self, clips_dir: str, allow_standalone_videos: bool = True) -> list[ClipEntry]:
-        """Scan a directory for clip folders."""
+        """Scan a directory for clip folders.
+
+        Args:
+            clips_dir: Path to the directory to scan.
+            allow_standalone_videos: When False, loose video files at the top
+                level are ignored.
+
+        Returns:
+            List of ClipEntry objects found in the directory.
+        """
         return scan_clips_dir(clips_dir, allow_standalone_videos=allow_standalone_videos)
 
     def get_clips_by_state(self, clips: list[ClipEntry], state: ClipState) -> list[ClipEntry]:
-        """Filter clips by state."""
+        """Filter clips by state.
+
+        Args:
+            clips: Full list of ClipEntry objects to filter.
+            state: Target ClipState to match.
+
+        Returns:
+            Subset of clips whose state equals the requested state.
+        """
         return [c for c in clips if c.state == state]
 
     # ------------------------------------------------------------------
@@ -315,6 +398,18 @@ class CorridorKeyService:
         input_cap: Any | None,
         input_is_linear: bool,
     ) -> tuple[np.ndarray | None, str, bool]:
+        """Read one input frame from either a video capture or an image sequence.
+
+        Args:
+            clip: Clip being processed (used for logging).
+            frame_index: Zero-based frame index.
+            input_files: Sorted list of image filenames (empty for video assets).
+            input_cap: OpenCV VideoCapture for video assets, None for sequences.
+            input_is_linear: Whether the source is in linear light.
+
+        Returns:
+            Tuple of (image array or None, stem string, is_linear flag).
+        """
         input_stem = f"{frame_index:05d}"
         if input_cap:
             ret, frame = input_cap.read()
@@ -343,6 +438,17 @@ class CorridorKeyService:
         alpha_files: list[str],
         alpha_cap: Any | None,
     ) -> np.ndarray | None:
+        """Read one alpha hint frame from either a video capture or an image sequence.
+
+        Args:
+            clip: Clip being processed (used for path resolution).
+            frame_index: Zero-based frame index.
+            alpha_files: Sorted list of alpha image filenames (empty for video assets).
+            alpha_cap: OpenCV VideoCapture for video alpha assets, None for sequences.
+
+        Returns:
+            Float32 alpha array in [0, 1], or None if the read failed.
+        """
         if alpha_cap:
             ret, frame = alpha_cap.read()
             if not ret:
@@ -358,6 +464,17 @@ class CorridorKeyService:
     # ------------------------------------------------------------------
 
     def _write_image(self, img: np.ndarray, path: str, fmt: str, clip_name: str, frame_index: int) -> None:
+        """Write a single image to disk in the requested format.
+
+        Handles dtype conversion: EXR expects float32, PNG expects uint8.
+
+        Args:
+            img: Image array to write.
+            path: Absolute destination path including filename and extension.
+            fmt: Target format string ("exr" or "png").
+            clip_name: Clip name used in error messages.
+            frame_index: Frame index used in error messages.
+        """
         if fmt == "exr":
             if img.dtype != np.float32:
                 img = img.astype(np.float32) / 255.0 if img.dtype == np.uint8 else img.astype(np.float32)
@@ -368,6 +485,16 @@ class CorridorKeyService:
             validate_write(cv2.imwrite(path, img), clip_name, frame_index, path)
 
     def _write_manifest(self, output_root: str, output_config: OutputConfig, params: InferenceParams) -> None:
+        """Write a JSON run manifest to the output directory.
+
+        Uses atomic write (tmp file + os.replace) to avoid partial reads.
+        Failures are logged as warnings and do not abort processing.
+
+        Args:
+            output_root: Absolute path to the Output directory.
+            output_config: Output configuration to record.
+            params: Inference parameters to record.
+        """
         manifest = {
             "version": 1,
             "enabled_outputs": output_config.enabled_outputs,
@@ -397,6 +524,16 @@ class CorridorKeyService:
         frame_index: int,
         cfg: OutputConfig,
     ) -> None:
+        """Write all enabled output images for a single processed frame.
+
+        Args:
+            res: Engine result dict with keys "fg", "alpha", "comp", "processed".
+            dirs: Output subdirectory paths keyed by output name.
+            input_stem: Filename stem used for output filenames.
+            clip_name: Clip name used in error messages.
+            frame_index: Frame index used in error messages.
+            cfg: Output configuration controlling which outputs to write.
+        """
         if cfg.fg_enabled:
             fg_bgr = cv2.cvtColor(res["fg"], cv2.COLOR_RGB2BGR)
             self._write_image(
@@ -603,6 +740,16 @@ class CorridorKeyService:
         """Reprocess a single frame in memory. Does not write to disk.
 
         Used for live preview in the GUI.
+
+        Args:
+            clip: Clip with valid input_asset and alpha_asset.
+            params: Inference parameters to apply.
+            frame_index: Zero-based index of the frame to reprocess.
+            job: Optional GPUJob for cancel checking.
+
+        Returns:
+            Engine result dict with keys "fg", "alpha", "comp", "processed",
+            or None if the frame could not be read or the job was cancelled.
         """
         if clip.input_asset is None or clip.alpha_asset is None:
             return None

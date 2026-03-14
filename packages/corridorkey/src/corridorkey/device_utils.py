@@ -7,12 +7,19 @@ import torch
 
 logger = logging.getLogger(__name__)
 
+# Environment variable name used to override device selection at runtime.
 DEVICE_ENV_VAR = "CORRIDORKEY_DEVICE"
+
+# Accepted device strings (including the sentinel "auto" for auto-detection).
 VALID_DEVICES = ("auto", "cuda", "mps", "cpu")
 
 
 def detect_best_device() -> str:
-    """Auto-detect best available device: CUDA > MPS > CPU."""
+    """Auto-detect best available device: CUDA > MPS > CPU.
+
+    Returns:
+        Device string: "cuda", "mps", or "cpu".
+    """
     if torch.cuda.is_available():
         device = "cuda"
     elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
@@ -68,7 +75,12 @@ def resolve_device(requested: str | None = None) -> str:
 
 
 def clear_device_cache(device: torch.device | str) -> None:
-    """Clear GPU memory cache if applicable (no-op for CPU)."""
+    """Clear GPU memory cache if applicable (no-op for CPU).
+
+    Args:
+        device: Target device. Accepts a ``torch.device`` or a plain string
+            such as ``"cuda"`` or ``"mps"``.
+    """
     device_type = device.type if isinstance(device, torch.device) else device
     if device_type == "cuda":
         torch.cuda.empty_cache()

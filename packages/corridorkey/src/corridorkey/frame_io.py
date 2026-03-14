@@ -53,7 +53,8 @@ def read_image_frame(fpath: str, gamma_correct_exr: bool = False) -> np.ndarray 
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         result = np.maximum(img_rgb, 0.0).astype(np.float32)
         if gamma_correct_exr:
-            result = linear_to_srgb(result).astype(np.float32)
+            srgb = linear_to_srgb(result)
+            result = np.asarray(srgb, dtype=np.float32)
         return result
     else:
         img = cv2.imread(fpath)

@@ -32,24 +32,49 @@ logger = logging.getLogger(__name__)
 
 
 class JobType(Enum):
+    """Discriminator for the kind of GPU work a job represents."""
+
+    # Full inference pass on a clip.
     INFERENCE = "inference"
+    # Alpha hint generation (any AlphaGenerator implementation).
     ALPHA_GEN = "alpha_gen"
+    # Single-frame reprocess for live GUI preview.
     PREVIEW_REPROCESS = "preview_reprocess"
+    # FFmpeg frame extraction from a source video.
     VIDEO_EXTRACT = "video_extract"
+    # FFmpeg frame stitching back to a video.
     VIDEO_STITCH = "video_stitch"
 
 
 class JobStatus(Enum):
+    """Lifecycle state of a single GPUJob."""
+
+    # Waiting in the queue.
     QUEUED = "queued"
+    # Currently being processed by the worker.
     RUNNING = "running"
+    # Finished successfully.
     COMPLETED = "completed"
+    # Stopped by user request.
     CANCELLED = "cancelled"
+    # Stopped due to an unrecoverable error.
     FAILED = "failed"
 
 
 @dataclass
 class GPUJob:
-    """A single GPU job to be executed."""
+    """A single GPU job to be executed.
+
+    Attributes:
+        job_type: Discriminator for the kind of work.
+        clip_name: Name of the clip this job operates on.
+        id: Short hex UUID assigned at creation time.
+        params: Arbitrary keyword arguments forwarded to the processing function.
+        status: Current lifecycle state.
+        error_message: Set when status is FAILED.
+        current_frame: Last reported frame index (for progress display).
+        total_frames: Total frames expected (for progress display).
+    """
 
     job_type: JobType
     clip_name: str
@@ -69,6 +94,7 @@ class GPUJob:
 
     @property
     def is_cancelled(self) -> bool:
+        """True if cancellation has been requested for this job."""
         return self._cancel_requested
 
     def check_cancelled(self) -> None:
@@ -90,7 +116,7 @@ class GPUJobQueue:
     Usage (CLI mode):
         queue = GPUJobQueue()
         queue.submit(GPUJob(JobType.INFERENCE, "shot1", params={...}))
-        queue.submit(GPUJob(JobType.GVM_ALPHA, "shot2", params={...}))
+        queue.submit(GPUJob(JobType.ALPHA_GEN, "shot2", params={...}))
 
         # Process all jobs sequentially
         while queue.has_pending:
@@ -108,7 +134,8 @@ class GPUJobQueue:
         in its run loop. The UI submits jobs from the main thread.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
+        """Initialise an empty queue with no callbacks registered."""
         self._queue: deque[GPUJob] = deque()
         self._lock = threading.Lock()
         self._current_job: GPUJob | None = None
@@ -291,16 +318,19 @@ class GPUJobQueue:
 
     @property
     def has_pending(self) -> bool:
+        """True if there is at least one job waiting in the queue."""
         with self._lock:
             return len(self._queue) > 0
 
     @property
     def current_job(self) -> GPUJob | None:
+        """The job currently being processed, or None if the worker is idle."""
         with self._lock:
             return self._current_job
 
     @property
     def pending_count(self) -> int:
+        """Number of jobs waiting in the queue (excludes the running job)."""
         with self._lock:
             return len(self._queue)
 

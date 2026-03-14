@@ -245,6 +245,7 @@ def extract_frames(
         text=True,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
+    assert proc.stderr is not None  # guaranteed by stderr=subprocess.PIPE
 
     last_frame = start_frame
     frame_re = re.compile(r"frame=\s*(\d+)")
@@ -252,9 +253,10 @@ def extract_frames(
     import queue as _queue
 
     line_q: _queue.Queue[str | None] = _queue.Queue()
+    stderr = proc.stderr  # capture for closure - ty can't narrow through assert
 
     def _reader() -> None:
-        for ln in proc.stderr:
+        for ln in stderr:
             line_q.put(ln)
         line_q.put(None)
 
@@ -358,6 +360,8 @@ def stitch_video(
         text=True,
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
+    assert proc.stderr is not None  # guaranteed by stderr=subprocess.PIPE
+    assert proc.stdin is not None  # guaranteed by stdin=subprocess.PIPE
 
     frame_re = re.compile(r"frame=\s*(\d+)")
 
