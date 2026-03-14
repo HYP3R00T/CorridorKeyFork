@@ -121,6 +121,7 @@ def sanitize_stem(filename: str, max_len: int = 60) -> str:
 
 def create_project(
     source_video_paths: str | list[str],
+    projects_dir: str,
     *,
     copy_source: bool = True,
     display_name: str | None = None,
@@ -131,10 +132,12 @@ def create_project(
     copy_source is True the video is copied into ``Source/``; otherwise
     only a reference path is stored in clip.json.
 
-    Creates: ``Projects/YYMMDD_HHMMSS_{stem}/clips/{clip_stem}/Source/...``
+    Creates: ``{projects_dir}/YYMMDD_HHMMSS_{stem}/clips/{clip_stem}/Source/...``
 
     Args:
         source_video_paths: Single video path or list of paths.
+        projects_dir: Absolute path to the directory where projects are stored.
+            This must always be provided - there is no default.
         copy_source: Copy video files into clip folders when True.
         display_name: Optional project name. Derived from the first video
             filename when None.
@@ -150,7 +153,8 @@ def create_project(
     if not source_video_paths:
         raise ValueError("At least one source video path is required")
 
-    root = projects_root()
+    root = projects_dir
+    os.makedirs(root, exist_ok=True)
 
     if display_name and display_name.strip():
         clean = display_name.strip()
