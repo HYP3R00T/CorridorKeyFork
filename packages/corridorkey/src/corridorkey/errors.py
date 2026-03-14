@@ -91,16 +91,25 @@ class JobCancelledError(CorridorKeyError):
 
 
 class FFmpegNotFoundError(CorridorKeyError):
-    """Raised when FFmpeg/FFprobe binaries cannot be located."""
+    """Raised when FFmpeg/FFprobe binaries cannot be located.
 
-    def __init__(self):
+    The error message includes platform-specific install instructions so
+    users know exactly what to do without consulting documentation.
+    """
+
+    def __init__(self, binary: str = "ffmpeg") -> None:
         if sys.platform == "darwin":
-            hint = "Install FFmpeg via Homebrew: brew install ffmpeg"
+            hint = "brew install ffmpeg"
         elif sys.platform.startswith("linux"):
-            hint = "Install FFmpeg via your package manager: sudo apt install ffmpeg"
+            hint = "sudo apt install ffmpeg  # or: sudo dnf install ffmpeg"
         else:
-            hint = r"Place ffmpeg.exe in C:\Program Files\ffmpeg\bin\ or add it to PATH"
-        super().__init__(f"FFmpeg not found. {hint}")
+            hint = "choco install ffmpeg  # or: winget install ffmpeg"
+        super().__init__(
+            f"{binary} not found on PATH.\n"
+            f"Install FFmpeg and ensure it is available system-wide:\n"
+            f"  {hint}\n"
+            f"Then restart your terminal and try again."
+        )
 
 
 class ExtractionError(CorridorKeyError):

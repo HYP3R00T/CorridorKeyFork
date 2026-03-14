@@ -2,11 +2,15 @@
 
 Pure Python, no Qt dependencies. Provides:
 
-- find_ffmpeg / find_ffprobe: locate binaries
+- require_ffmpeg / require_ffprobe: locate binaries or raise FFmpegNotFoundError
+- check_ffmpeg: return version and path info (used by the doctor command)
 - probe_video: get fps, resolution, frame count, codec
 - extract_frames: video to image sequence (PNG)
 - stitch_video: image sequence to video (H.264)
 - write_video_metadata / read_video_metadata: sidecar JSON for roundtrip fidelity
+
+FFmpeg is treated as a system dependency. Install it via your platform package
+manager and ensure it is on PATH before using any function in this module.
 """
 
 from __future__ import annotations
@@ -21,53 +25,89 @@ import subprocess
 import threading
 from collections.abc import Callable
 
+from corridorkey.errors import FFmpegNotFoundError
+
 logger = logging.getLogger(__name__)
 
 # Filename used for the video metadata sidecar JSON.
 _METADATA_FILENAME = ".video_metadata.json"
 
-# Common FFmpeg install locations on Windows.
-_FFMPEG_SEARCH_PATHS = [
-    r"C:\Program Files\ffmpeg\bin",
-    r"C:\Program Files (x86)\ffmpeg\bin",
-    r"C:\ffmpeg\bin",
-]
 
+def require_ffmpeg() -> str:
+    """Return the path to the ffmpeg binary or raise FFmpegNotFoundError.
 
-def find_ffmpeg() -> str | None:
-    """Locate the ffmpeg binary.
-
-    Checks PATH first, then common Windows install directories.
+    Uses PATH only - no platform-specific search paths. Install FFmpeg
+    system-wide and ensure it is on PATH before calling this.
 
     Returns:
-        Absolute path to ffmpeg, or None if not found.
+        Absolute path to the ffmpeg binary.
+
+    Raises:
+        FFmpegNotFoundError: If ffmpeg is not found on PATH.
     """
-    found = shutil.which("ffmpeg")
-    if found:
-        return found
-    for d in _FFMPEG_SEARCH_PATHS:
-        candidate = os.path.join(d, "ffmpeg.exe")
-        if os.path.isfile(candidate):
-            return candidate
-    return None
+    path = shutil.which("ffmpeg")
+    if path is None:
+        raise FFmpegNotFoundError("ffmpeg")
+    return path
 
 
-def find_ffprobe() -> str | None:
-    """Locate the ffprobe binary.
+def require_ffprobe() -> str:
+    """Return the path to the ffprobe binary or raise FFmpegNotFoundError.
 
-    Checks PATH first, then common Windows install directories.
+    Uses PATH only. ffprobe ships alongside ffmpeg in all standard installs.
 
     Returns:
-        Absolute path to ffprobe, or None if not found.
+        Absolute path to the ffprobe binary.
+
+    Raises:
+        FFmpegNotFoundError: If ffprobe is not found on PATH.
     """
-    found = shutil.which("ffprobe")
-    if found:
-        return found
-    for d in _FFMPEG_SEARCH_PATHS:
-        candidate = os.path.join(d, "ffprobe.exe")
-        if os.path.isfile(candidate):
-            return candidate
-    return None
+    path = shutil.which("ffprobe")
+    if path is None:
+        raise FFmpegNotFoundError("ffprobe")
+    return path
+
+
+def check_ffmpeg() -> dict[str, str | bool]:
+    """Return FFmpeg availability and version info for diagnostics.
+
+    Intended for use by the ``corridorkey doctor`` CLI command. Does not
+    raise - returns a dict that callers can inspect and display.
+
+    Returns:
+        Dict with keys:
+            available (bool): True if ffmpeg is on PATH.
+            ffmpeg_path (str): Absolute path, or empty string if missing.
+            ffprobe_path (str): Absolute path, or empty string if missing.
+            version (str): Version string from ``ffmpeg -version``, or
+                empty string if unavailable.
+    """
+    ffmpeg_path = shutil.which("ffmpeg") or ""
+    ffprobe_path = shutil.which("ffprobe") or ""
+    version = ""
+
+    if ffmpeg_path:
+        try:
+            result = subprocess.run(
+                [ffmpeg_path, "-version"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            first_line = result.stdout.splitlines()[0] if result.stdout else ""
+            # e.g. "ffmpeg version 6.1.1 Copyright ..."
+            match = re.search(r"ffmpeg version (\S+)", first_line)
+            version = match.group(1) if match else first_line
+        except Exception as e:
+            logger.debug("FFmpeg version check failed: %s", e)
+
+    return {
+        "available": bool(ffmpeg_path),
+        "ffmpeg_path": ffmpeg_path,
+        "ffprobe_path": ffprobe_path,
+        "version": version,
+    }
 
 
 def probe_video(path: str) -> dict:
@@ -83,9 +123,7 @@ def probe_video(path: str) -> dict:
     Raises:
         RuntimeError: If ffprobe is not found or the probe fails.
     """
-    ffprobe = find_ffprobe()
-    if not ffprobe:
-        raise RuntimeError("ffprobe not found")
+    ffprobe = require_ffprobe()
 
     cmd = [
         ffprobe,
@@ -171,11 +209,10 @@ def extract_frames(
         Number of frames present in out_dir after extraction.
 
     Raises:
-        RuntimeError: If ffmpeg is not found or extraction fails.
+        FFmpegNotFoundError: If ffmpeg is not on PATH.
+        RuntimeError: If extraction fails or times out.
     """
-    ffmpeg = find_ffmpeg()
-    if not ffmpeg:
-        raise RuntimeError("ffmpeg not found")
+    ffmpeg = require_ffmpeg()
 
     os.makedirs(out_dir, exist_ok=True)
 
@@ -324,11 +361,10 @@ def stitch_video(
         cancel_event: Set this event to cancel stitching.
 
     Raises:
-        RuntimeError: If ffmpeg is not found or stitching fails.
+        FFmpegNotFoundError: If ffmpeg is not on PATH.
+        RuntimeError: If stitching fails or times out.
     """
-    ffmpeg = find_ffmpeg()
-    if not ffmpeg:
-        raise RuntimeError("ffmpeg not found")
+    ffmpeg = require_ffmpeg()
 
     total_frames = len([f for f in os.listdir(in_dir) if f.lower().endswith((".png", ".jpg", ".jpeg", ".exr"))])
 

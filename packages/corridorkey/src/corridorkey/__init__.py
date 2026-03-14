@@ -8,7 +8,8 @@ from corridorkey.clip_state import (
     scan_clips_dir,
     scan_project_clips,
 )
-from corridorkey.errors import CorridorKeyError
+from corridorkey.errors import CorridorKeyError, FFmpegNotFoundError
+from corridorkey.ffmpeg_tools import check_ffmpeg
 from corridorkey.job_queue import GPUJob, GPUJobQueue, JobStatus, JobType
 from corridorkey.models import InOutRange
 from corridorkey.natural_sort import natsorted, natural_sort_key
@@ -62,6 +63,9 @@ __all__ = [
     "JobStatus",
     # Errors
     "CorridorKeyError",
+    "FFmpegNotFoundError",
+    # FFmpeg diagnostics
+    "check_ffmpeg",
     # Project utilities
     "projects_root",
     "create_project",
