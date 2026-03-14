@@ -18,7 +18,6 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -30,6 +29,7 @@ from corridorkey_core.engine_factory import create_engine
 
 from corridorkey import device_utils
 from corridorkey.clip_state import ClipEntry, ClipState, scan_clips_dir
+from corridorkey.config import CorridorKeyConfig, load_config
 from corridorkey.errors import CorridorKeyError, FrameReadError, JobCancelledError, WriteFailureError
 from corridorkey.frame_io import (
     EXR_WRITE_FLAGS,
@@ -43,9 +43,6 @@ from corridorkey.protocols import AlphaGenerator
 from corridorkey.validators import ensure_output_dirs, validate_frame_counts, validate_frame_read, validate_write
 
 logger = logging.getLogger(__name__)
-
-# Default directory for model checkpoints, co-located with this module.
-CHECKPOINT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoints")
 
 
 @dataclass
@@ -173,25 +170,25 @@ class CorridorKeyService:
     functions in their respective modules.
 
     Usage (CLI):
-        service = CorridorKeyService()
-        service.detect_device()
+        config = load_config()
+        service = CorridorKeyService(config)
         clips = service.scan_clips("/path/to/clips")
         for clip in service.get_clips_by_state(clips, ClipState.READY):
             service.run_inference(clip, InferenceParams())
 
     Usage (GUI):
-        service = CorridorKeyService()
-        service.detect_device()
+        config = load_config(overrides={"device": "cuda"})
+        service = CorridorKeyService(config)
         queue = service.job_queue  # GPUJobQueue for async job management
     """
 
-    def __init__(self, checkpoint_dir: str | Path | None = None) -> None:
+    def __init__(self, config: CorridorKeyConfig | None = None) -> None:
+        self._config = config or load_config()
         self._engine = None
         self._engine_loaded = False
-        self._device: str = "cpu"
+        self._device: str = self._config.device
         self._job_queue: GPUJobQueue | None = None
         self._gpu_lock = threading.Lock()
-        self._checkpoint_dir = Path(checkpoint_dir) if checkpoint_dir else Path(CHECKPOINT_DIR)
 
     # ------------------------------------------------------------------
     # Job queue (lazy - only needed for GUI/async use)
@@ -213,12 +210,12 @@ class CorridorKeyService:
 
         Args:
             requested: Explicit device string ("cuda", "mps", "cpu", or "auto").
-                None triggers env-var lookup then auto-detection.
+                None uses the device from config, falling back to auto-detection.
 
         Returns:
             Resolved device string stored on this service instance.
         """
-        self._device = device_utils.resolve_device(requested)
+        self._device = device_utils.resolve_device(requested or self._config.device)
         logger.info("Compute device: %s", self._device)
         return self._device
 
@@ -286,7 +283,7 @@ class CorridorKeyService:
         logger.info("Loading inference engine (device=%s)...", self._device)
         t0 = time.monotonic()
         self._engine = create_engine(
-            checkpoint_dir=self._checkpoint_dir,
+            checkpoint_dir=self._config.checkpoint_dir,
             device=self._device,
         )
         self._engine_loaded = True

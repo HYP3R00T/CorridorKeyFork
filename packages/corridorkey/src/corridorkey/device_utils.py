@@ -1,14 +1,10 @@
 """Centralized cross-platform device selection for CorridorKey."""
 
 import logging
-import os
 
 import torch
 
 logger = logging.getLogger(__name__)
-
-# Environment variable name used to override device selection at runtime.
-DEVICE_ENV_VAR = "CORRIDORKEY_DEVICE"
 
 # Accepted device strings (including the sentinel "auto" for auto-detection).
 VALID_DEVICES = ("auto", "cuda", "mps", "cpu")
@@ -31,11 +27,14 @@ def detect_best_device() -> str:
 
 
 def resolve_device(requested: str | None = None) -> str:
-    """Resolve device from explicit request > env var > auto-detect.
+    """Resolve and validate a device string.
 
     Args:
-        requested: Device string from CLI arg. None or "auto" triggers
-                   env var lookup then auto-detection.
+        requested: Explicit device string ("cuda", "mps", "cpu", or "auto").
+            None or "auto" triggers auto-detection. The config system
+            (``CorridorKeyConfig.device``) is the preferred source for this
+            value - callers should read from config rather than relying on
+            environment variables directly.
 
     Returns:
         Validated device string ("cuda", "mps", or "cpu").
@@ -43,10 +42,7 @@ def resolve_device(requested: str | None = None) -> str:
     Raises:
         RuntimeError: If the requested backend is unavailable.
     """
-    # CLI arg takes priority, then env var, then auto
-    device = requested
-    if device is None or device == "auto":
-        device = os.environ.get(DEVICE_ENV_VAR, "auto")
+    device = requested or "auto"
 
     if device == "auto":
         return detect_best_device()
@@ -55,7 +51,6 @@ def resolve_device(requested: str | None = None) -> str:
     if device not in VALID_DEVICES:
         raise RuntimeError(f"Unknown device '{device}'. Valid options: {', '.join(VALID_DEVICES)}")
 
-    # Validate the explicit request
     if device == "cuda":
         if not torch.cuda.is_available():
             raise RuntimeError(

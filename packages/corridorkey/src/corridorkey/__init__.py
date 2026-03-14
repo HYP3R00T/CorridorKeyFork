@@ -8,6 +8,7 @@ from corridorkey.clip_state import (
     scan_clips_dir,
     scan_project_clips,
 )
+from corridorkey.config import CorridorKeyConfig, load_config
 from corridorkey.errors import CorridorKeyError, FFmpegNotFoundError
 from corridorkey.ffmpeg_tools import check_ffmpeg
 from corridorkey.job_queue import GPUJob, GPUJobQueue, JobStatus, JobType
@@ -40,6 +41,9 @@ __all__ = [
     "InferenceParams",
     "OutputConfig",
     "FrameResult",
+    # Config
+    "CorridorKeyConfig",
+    "load_config",
     # Protocols
     "AlphaGenerator",
     # Pipeline

@@ -1,0 +1,148 @@
+"""Centralised configuration for CorridorKey.
+
+All tool-managed files (models, logs, cache) live under ``app_dir``,
+which defaults to ``~/.config/corridorkey``. Users can override any
+field via:
+
+- A config file at ``~/.config/corridorkey/corridorkey.toml``  (global)
+- A ``corridorkey.toml`` dropped in the current working directory  (project)
+- Environment variables prefixed with ``CORRIDORKEY_``
+- Runtime overrides passed to ``load_config()``
+
+Precedence (lowest to highest):
+    defaults < global config < project config < env vars < overrides
+
+Example config file (``~/.config/corridorkey/corridorkey.toml``):
+
+    checkpoint_dir = "~/studio/shared/corridorkey/models"
+    device = "cuda"
+    despill_strength = 0.85
+    fg_format = "exr"
+"""
+
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+from pydantic import BaseModel, field_validator
+from utilityhub_config import expand_path_validator, load_settings
+
+logger = logging.getLogger(__name__)
+
+# Application name used for config file discovery and directory naming.
+_APP_NAME = "corridorkey"
+
+# Default application directory - all tool-managed files live here.
+_DEFAULT_APP_DIR = Path("~/.config/corridorkey")
+
+# Default checkpoint directory - models are stored here.
+_DEFAULT_CHECKPOINT_DIR = Path("~/.config/corridorkey/models")
+
+
+class CorridorKeyConfig(BaseModel):
+    """Validated configuration for the CorridorKey pipeline.
+
+    All Path fields support tilde (``~``) and environment variable
+    expansion (e.g. ``$STUDIO_ROOT/models``).
+
+    Attributes:
+        app_dir: Root directory for all tool-managed files. Created on
+            first use if it does not exist.
+        checkpoint_dir: Directory where model checkpoints are stored.
+            Can be overridden to a shared network path in studio environments.
+        device: Compute device to use. One of "auto", "cuda", "mps", "cpu".
+            "auto" selects the best available device at runtime.
+        despill_strength: Default green-spill suppression strength (0.0-1.0).
+        auto_despeckle: Enable automatic matte despeckling by default.
+        despeckle_size: Maximum speckle area in pixels to remove.
+        refiner_scale: Scale factor for the optional refiner stage.
+        input_is_linear: Treat input frames as linear light (e.g. EXR) by default.
+        fg_format: Default foreground output format ("exr" or "png").
+        matte_format: Default matte output format ("exr" or "png").
+        comp_format: Default composite preview format ("exr" or "png").
+        processed_format: Default processed input format ("exr" or "png").
+    """
+
+    # Paths
+    app_dir: Path = _DEFAULT_APP_DIR
+    checkpoint_dir: Path = _DEFAULT_CHECKPOINT_DIR
+
+    # Device
+    device: str = "auto"
+
+    # Default inference params
+    despill_strength: float = 1.0
+    auto_despeckle: bool = True
+    despeckle_size: int = 400
+    refiner_scale: float = 1.0
+    input_is_linear: bool = False
+
+    # Default output formats
+    fg_format: str = "exr"
+    matte_format: str = "exr"
+    comp_format: str = "png"
+    processed_format: str = "png"
+
+    @field_validator("app_dir", "checkpoint_dir", mode="before")
+    @classmethod
+    def _expand_paths(cls, v: Path | str) -> Path:
+        """Expand tilde and environment variables in path fields."""
+        return expand_path_validator(v)
+
+
+def load_config(overrides: dict | None = None) -> CorridorKeyConfig:
+    """Load and validate CorridorKey configuration from all sources.
+
+    Resolution order (lowest to highest priority):
+        1. Model field defaults
+        2. ``~/.config/corridorkey/corridorkey.toml`` (global user config)
+        3. ``./corridorkey.toml`` in the current working directory
+        4. Environment variables prefixed with ``CORRIDORKEY_``
+        5. ``overrides`` dict passed to this function
+
+    After loading, ensures ``app_dir`` and ``checkpoint_dir`` exist on disk.
+
+    Args:
+        overrides: Optional dict of field values to apply at highest priority.
+            Useful for CLI flags and programmatic configuration.
+
+    Returns:
+        Validated ``CorridorKeyConfig`` instance.
+
+    Raises:
+        utilityhub_config.errors.ConfigValidationError: If any field fails
+            Pydantic validation (e.g. wrong type, out-of-range value).
+
+    Example:
+        Load defaults::
+
+            config = load_config()
+
+        Override device at runtime::
+
+            config = load_config(overrides={"device": "cuda"})
+
+        Point to a shared studio checkpoint directory::
+
+            # corridorkey.toml
+            # checkpoint_dir = "/mnt/studio/corridorkey/models"
+            config = load_config()
+    """
+    config, _ = load_settings(
+        CorridorKeyConfig,
+        app_name=_APP_NAME,
+        env_prefix="CORRIDORKEY",
+        overrides=overrides,
+    )
+
+    # Ensure managed directories exist on first use.
+    config.app_dir.mkdir(parents=True, exist_ok=True)
+    config.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    logger.debug(
+        "Config loaded: device=%s, checkpoint_dir=%s",
+        config.device,
+        config.checkpoint_dir,
+    )
+    return config
