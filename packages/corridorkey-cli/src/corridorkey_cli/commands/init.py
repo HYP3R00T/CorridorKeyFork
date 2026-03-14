@@ -34,7 +34,7 @@ def init() -> None:
 
     # 2. Config file
     config = load_config()
-    config_file = config.app_dir / "corridorkey.toml"
+    config_file = config.app_dir / "corridorkey.yaml"
 
     if config_file.exists():
         console.print(f"[green]Config file already exists:[/green] {config_file}")

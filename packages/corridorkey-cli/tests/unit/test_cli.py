@@ -375,13 +375,13 @@ class TestConfigCommands:
             patch("corridorkey_cli.commands.config.export_config") as mock_export,
         ):
             mock_cfg.return_value = MagicMock()
-            mock_export.return_value = config_dir / "corridorkey.toml"
+            mock_export.return_value = config_dir / "corridorkey.yaml"
 
             result = runner.invoke(app, ["config", "init"])
 
         assert result.exit_code == 0
         mock_export.assert_called_once()
-        assert "corridorkey.toml" in result.output
+        assert "corridorkey.yaml" in result.output
 
 
 class TestInit:
@@ -399,7 +399,7 @@ class TestInit:
             cfg.app_dir = config_dir
             cfg.checkpoint_dir = config_dir / "models"
             mock_cfg.return_value = cfg
-            mock_export.return_value = config_dir / "corridorkey.toml"
+            mock_export.return_value = config_dir / "corridorkey.yaml"
             mock_model.return_value = True
 
             # Config file does not exist yet
