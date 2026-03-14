@@ -10,7 +10,16 @@ import numpy as np
 import torch
 from torch.nn import functional
 
-from corridorkey_core import color_utils
+from corridorkey_core.compositing import (
+    clean_matte,
+    composite_premul,
+    composite_straight,
+    create_checkerboard,
+    despill,
+    linear_to_srgb,
+    premultiply,
+    srgb_to_linear,
+)
 from corridorkey_core.model_transformer import GreenFormer
 
 logger = logging.getLogger(__name__)
@@ -172,7 +181,7 @@ class CorridorKeyEngine:
             # Resize in Linear
             img_resized_lin = cv2.resize(image, (self.img_size, self.img_size), interpolation=cv2.INTER_LINEAR)
             # Convert to sRGB for Model
-            img_resized = color_utils.linear_to_srgb(img_resized_lin)
+            img_resized = linear_to_srgb(img_resized_lin)
         else:
             # Standard sRGB Resize
             img_resized = cv2.resize(image, (self.img_size, self.img_size), interpolation=cv2.INTER_LINEAR)
@@ -223,20 +232,18 @@ class CorridorKeyEngine:
 
         # A. Clean Matte (Auto-Despeckle)
         if auto_despeckle:
-            processed_alpha = color_utils.clean_matte(
-                res_alpha, area_threshold=despeckle_size, dilation=25, blur_size=5
-            )
+            processed_alpha = clean_matte(res_alpha, area_threshold=despeckle_size, dilation=25, blur_size=5)
         else:
             processed_alpha = res_alpha
 
         # B. Despill FG
         # res_fg is sRGB.
-        fg_despilled = color_utils.despill(res_fg, green_limit_mode="average", strength=despill_strength)
+        fg_despilled = despill(res_fg, green_limit_mode="average", strength=despill_strength)
 
         # C. Premultiply (for EXR Output)
         # CONVERT TO LINEAR FIRST! EXRs must house linear color premultiplied by linear alpha.
-        fg_despilled_lin = color_utils.srgb_to_linear(fg_despilled)
-        fg_premul_lin = color_utils.premultiply(fg_despilled_lin, processed_alpha)
+        fg_despilled_lin = srgb_to_linear(fg_despilled)
+        fg_premul_lin = premultiply(fg_despilled_lin, processed_alpha)
 
         # D. Pack RGBA
         # [H, W, 4] - All channels are now strictly Linear Float
@@ -246,18 +253,18 @@ class CorridorKeyEngine:
 
         # 7. Composite (on Checkerboard) for checking
         # Generate Dark/Light Gray Checkerboard (in sRGB, convert to Linear)
-        bg_srgb = color_utils.create_checkerboard(w, h, checker_size=128, color1=0.15, color2=0.55)
-        bg_lin = color_utils.srgb_to_linear(bg_srgb)
+        bg_srgb = create_checkerboard(w, h, checker_size=128, color1=0.15, color2=0.55)
+        bg_lin = srgb_to_linear(bg_srgb)
 
         if fg_is_straight:
-            comp_lin = color_utils.composite_straight(fg_despilled_lin, bg_lin, processed_alpha)
+            comp_lin = composite_straight(fg_despilled_lin, bg_lin, processed_alpha)
         else:
             # If premultiplied model, we shouldn't multiply again (though our pipeline forces straight)
-            comp_lin = color_utils.composite_premul(fg_despilled_lin, bg_lin, processed_alpha)
+            comp_lin = composite_premul(fg_despilled_lin, bg_lin, processed_alpha)
 
-        comp_srgb = color_utils.linear_to_srgb(comp_lin)
+        comp_srgb = linear_to_srgb(comp_lin)
 
-        # color_utils.* returns ndarray|Tensor but inputs are always ndarray here
+        # * returns ndarray|Tensor but inputs are always ndarray here
         return {
             "alpha": res_alpha,  # Linear, Raw Prediction
             "fg": res_fg,  # sRGB, Raw Prediction (Straight)
