@@ -19,10 +19,10 @@ UV_LINK_MODE = "copy"
 run = "uv run zensical serve"
 description = "Serve the documentation locally"
 
-[tasks.sync]
-run = "uv sync --all-extras --all-groups"
-description = "Run uv sync for devs"
-
 [tasks.check]
 run = "uv run ty check packages"
 description = "Run type checking"
+
+[tasks.sync-cuda]
+run = "uv sync --extra cuda --all-groups"
+description = "Run uv sync for devs"
