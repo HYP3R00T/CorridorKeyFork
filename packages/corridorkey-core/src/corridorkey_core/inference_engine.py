@@ -123,7 +123,7 @@ class CorridorKeyEngine:  # pragma: no cover
                 k = k[10:]
 
             if "pos_embed" in k and k in model_state and v.shape != model_state[k].shape:
-                print(f"Resizing {k} from {v.shape} to {model_state[k].shape}")
+                logger.debug("Resizing %s from %s to %s", k, v.shape, model_state[k].shape)
                 # Treat the sequence dimension as a square spatial grid and bicubic-interpolate.
                 seq_len_src = v.shape[1]
                 seq_len_dst = model_state[k].shape[1]
@@ -142,9 +142,9 @@ class CorridorKeyEngine:  # pragma: no cover
 
         missing, unexpected = model.load_state_dict(new_state_dict, strict=False)
         if len(missing) > 0:
-            print(f"[Warning] Missing keys: {missing}")
+            logger.warning("Missing keys in checkpoint: %s", missing)
         if len(unexpected) > 0:
-            print(f"[Warning] Unexpected keys: {unexpected}")
+            logger.warning("Unexpected keys in checkpoint: %s", unexpected)
 
         return model
 
