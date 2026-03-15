@@ -16,12 +16,14 @@ from corridorkey.models import InOutRange
 from corridorkey.project import (
     add_clips_to_project,
     create_project,
+    detect_unstructured,
     get_clip_dirs,
     get_display_name,
     is_image_file,
     is_v2_project,
     is_video_file,
     load_in_out_range,
+    organize_clips,
     read_clip_json,
     read_project_json,
     sanitize_stem,
@@ -324,3 +326,114 @@ class TestAddClipsToProject:
         data = read_project_json(project_dir)
         assert data is not None
         assert len(data["clips"]) == 2
+
+
+class TestDetectUnstructured:
+    """detect_unstructured() - identifies loose videos and unstructured dirs."""
+
+    def test_loose_video_detected(self, tmp_path: Path):
+        """A video file sitting directly in clips_dir must be reported as loose."""
+        (tmp_path / "shot.mp4").touch()
+        loose, dirs = detect_unstructured(str(tmp_path))
+        assert len(loose) == 1
+        assert loose[0].endswith("shot.mp4")
+
+    def test_known_stem_not_loose(self, tmp_path: Path):
+        """A file named input.mp4 is a recognised name and must not be reported."""
+        (tmp_path / "input.mp4").touch()
+        loose, _ = detect_unstructured(str(tmp_path))
+        assert loose == []
+
+    def test_unstructured_dir_with_video(self, tmp_path: Path):
+        """A subdir containing a raw video but no Input/ must be reported."""
+        d = tmp_path / "shot1"
+        d.mkdir()
+        (d / "clip.mp4").touch()
+        _, dirs = detect_unstructured(str(tmp_path))
+        assert len(dirs) == 1
+
+    def test_unstructured_dir_with_images(self, tmp_path: Path):
+        """A subdir containing raw images but no Input/ must be reported."""
+        d = tmp_path / "shot1"
+        d.mkdir()
+        (d / "frame_000.png").touch()
+        _, dirs = detect_unstructured(str(tmp_path))
+        assert len(dirs) == 1
+
+    def test_structured_dir_not_reported(self, tmp_path: Path):
+        """A subdir that already has an Input/ subfolder must not be reported."""
+        d = tmp_path / "shot1"
+        (d / "Input").mkdir(parents=True)
+        (d / "Input" / "frame_000.png").touch()
+        _, dirs = detect_unstructured(str(tmp_path))
+        assert dirs == []
+
+    def test_empty_dir_returns_empty(self, tmp_path: Path):
+        """An empty directory must return two empty lists."""
+        loose, dirs = detect_unstructured(str(tmp_path))
+        assert loose == []
+        assert dirs == []
+
+    def test_missing_dir_returns_empty(self, tmp_path: Path):
+        """A non-existent path must return two empty lists without raising."""
+        loose, dirs = detect_unstructured(str(tmp_path / "nonexistent"))
+        assert loose == []
+        assert dirs == []
+
+
+class TestOrganizeClips:
+    """organize_clips() - restructures loose videos and unstructured dirs."""
+
+    def test_loose_video_moved_into_subfolder(self, tmp_path: Path):
+        """A loose video must be moved into {stem}/Input.ext."""
+        (tmp_path / "shot.mp4").touch()
+        organize_clips(str(tmp_path))
+        assert (tmp_path / "shot" / "Input.mp4").exists()
+        assert not (tmp_path / "shot.mp4").exists()
+
+    def test_alphahint_dir_created_for_loose_video(self, tmp_path: Path):
+        """organize_clips must create an empty AlphaHint/ next to the moved video."""
+        (tmp_path / "shot.mp4").touch()
+        organize_clips(str(tmp_path))
+        assert (tmp_path / "shot" / "AlphaHint").is_dir()
+
+    def test_videomamamaskhint_dir_created(self, tmp_path: Path):
+        """organize_clips must create an empty VideoMamaMaskHint/ as well."""
+        (tmp_path / "shot.mp4").touch()
+        organize_clips(str(tmp_path))
+        assert (tmp_path / "shot" / "VideoMamaMaskHint").is_dir()
+
+    def test_image_sequence_moved_into_input(self, tmp_path: Path):
+        """Raw images in a subdir must be moved into Input/."""
+        d = tmp_path / "shot1"
+        d.mkdir()
+        for i in range(3):
+            (d / f"frame_{i:04d}.png").touch()
+        organize_clips(str(tmp_path))
+        assert (d / "Input").is_dir()
+        assert len(list((d / "Input").iterdir())) == 3
+
+    def test_video_in_subdir_renamed_to_input(self, tmp_path: Path):
+        """A raw video in a subdir must be renamed to Input.ext."""
+        d = tmp_path / "shot1"
+        d.mkdir()
+        (d / "clip.mp4").touch()
+        organize_clips(str(tmp_path))
+        assert (d / "Input.mp4").exists()
+        assert not (d / "clip.mp4").exists()
+
+    def test_returns_count(self, tmp_path: Path):
+        """organize_clips must return the number of clips organised."""
+        (tmp_path / "a.mp4").touch()
+        (tmp_path / "b.mp4").touch()
+        n = organize_clips(str(tmp_path))
+        assert n == 2
+
+    def test_already_structured_untouched(self, tmp_path: Path):
+        """A clip that already has Input/ must not be modified."""
+        d = tmp_path / "shot1"
+        (d / "Input").mkdir(parents=True)
+        (d / "Input" / "frame_000.png").touch()
+        n = organize_clips(str(tmp_path))
+        assert n == 0
+        assert (d / "Input" / "frame_000.png").exists()
