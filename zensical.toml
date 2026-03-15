@@ -20,6 +20,12 @@ nav = [
       { "Job Queue" = "packages/corridorkey/job-queue.md" },
       { "Configuration" = "packages/corridorkey/configuration.md" },
     ] },
+    { "corridorkey-cli" = [
+      { "Overview" = "packages/corridorkey-cli/index.md" },
+      { "Setup Commands" = "packages/corridorkey-cli/setup-commands.md" },
+      { "Processing Commands" = "packages/corridorkey-cli/processing-commands.md" },
+      { "Config Commands" = "packages/corridorkey-cli/config-commands.md" },
+    ] },
   ] },
   { Development = [
     { "Developer Setup" = "dev/developer-setup.md" },
@@ -64,6 +70,16 @@ nav = [
       { "ffmpeg-tools" = "api/corridorkey/ffmpeg-tools.md" },
       { "validators" = "api/corridorkey/validators.md" },
       { "natural-sort" = "api/corridorkey/natural-sort.md" },
+    ] },
+    { "corridorkey-cli" = [
+      { "Overview" = "api/corridorkey-cli/index.md" },
+      { "wizard" = "api/corridorkey-cli/wizard.md" },
+      { "process" = "api/corridorkey-cli/process.md" },
+      { "scan" = "api/corridorkey-cli/scan.md" },
+      { "init" = "api/corridorkey-cli/init.md" },
+      { "doctor" = "api/corridorkey-cli/doctor.md" },
+      { "config" = "api/corridorkey-cli/config.md" },
+      { "helpers" = "api/corridorkey-cli/helpers.md" },
     ] },
   ] },
 ]
@@ -128,7 +144,12 @@ alternate_style = true
 
 [project.plugins.mkdocstrings.handlers.python]
 inventories = ["https://docs.python.org/3/objects.inv"]
-paths = ["src", "packages/corridorkey/src", "packages/corridorkey-core/src"]
+paths = [
+  "src",
+  "packages/corridorkey/src",
+  "packages/corridorkey-core/src",
+  "packages/corridorkey-cli/src",
+]
 
 [project.plugins.mkdocstrings.handlers.python.options]
 docstring_style = "google"

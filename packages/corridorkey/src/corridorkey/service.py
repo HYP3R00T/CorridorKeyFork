@@ -605,7 +605,8 @@ class CorridorKeyService:
             List of FrameResult per frame.
 
         Raises:
-            JobCancelledError, CorridorKeyError subclasses.
+            JobCancelledError: If the associated job is cancelled mid-clip.
+            CorridorKeyError: If the clip is missing assets or a frame fails.
         """
         from concurrent.futures import Future, ThreadPoolExecutor
 
