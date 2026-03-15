@@ -24,25 +24,25 @@
 Settings are resolved from lowest to highest priority:
 
 1. Model field defaults (the table above)
-2. `~/.config/corridorkey/corridorkey.toml` (global user config)
-3. `./corridorkey.toml` in the current working directory (project config)
+2. `~/.config/corridorkey/corridorkey.yaml` (global user config)
+3. `./corridorkey.yaml` in the current working directory (project config)
 4. Environment variables prefixed with `CORRIDORKEY_`
 5. `overrides` dict passed to `load_config()`
 
 ## Config File
 
-Create `~/.config/corridorkey/corridorkey.toml` to set persistent defaults:
+Create `~/.config/corridorkey/corridorkey.yaml` to set persistent defaults:
 
-```toml
-checkpoint_dir = "~/studio/shared/corridorkey/models"
-device = "cuda"
-despill_strength = 0.85
-fg_format = "exr"
-matte_format = "exr"
-comp_format = "png"
+```yaml
+checkpoint_dir: ~/studio/shared/corridorkey/models
+device: cuda
+despill_strength: 0.85
+fg_format: exr
+matte_format: exr
+comp_format: png
 ```
 
-A project-level `corridorkey.toml` in the current working directory overrides the global file. This is useful for per-show settings.
+A project-level `corridorkey.yaml` in the current working directory overrides the global file. This is useful for per-show settings.
 
 ## Environment Variables
 
@@ -58,10 +58,10 @@ CORRIDORKEY_DESPILL_STRENGTH=0.9
 
 In a shared studio environment, point `checkpoint_dir` to a network path so all workstations share the same model files:
 
-```toml
-# ~/.config/corridorkey/corridorkey.toml on each workstation
-checkpoint_dir = "/mnt/studio/corridorkey/models"
-device = "cuda"
+```yaml
+# ~/.config/corridorkey/corridorkey.yaml on each workstation
+checkpoint_dir: /mnt/studio/corridorkey/models
+device: cuda
 ```
 
 The `app_dir` can stay at the default per-user location since it holds user-specific logs and cache.

@@ -1,9 +1,11 @@
-# CorridorKey Documentation
+# CorridorKey
 
-This documentation tracks the current state of the CorridorKey repository.
+AI-powered green screen keyer by Corridor Digital.
 
-## Scope
+## I want to use CorridorKey
 
-- Contributor documentation process and standards
-- Local setup guidance for working in this repository
-- Tooling references used by the project
+Start with the [Guide](guide/index.md). It covers installation, first run, processing footage, and understanding the outputs. No programming knowledge required.
+
+## I want to build with CorridorKey
+
+Start with the [Developer Docs](dev/index.md). It covers the three-layer architecture, package internals, API reference, and contribution standards.
