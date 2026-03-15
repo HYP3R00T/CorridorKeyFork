@@ -8,9 +8,6 @@ markdownlint-cli2 = "latest"
 experimental = true
 idiomatic_version_file_enable_tools = ["python"]
 
-[hooks]
-enter = "bash ./scripts/enter-project-hook.sh"
-
 [env]
 _.file = '.env'       # for sensitive data
 UV_LINK_MODE = "copy"
