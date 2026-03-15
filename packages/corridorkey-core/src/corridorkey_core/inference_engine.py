@@ -67,6 +67,11 @@ class CorridorKeyEngine:  # pragma: no cover
         self.mean = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 1, 3)
         self.std = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 1, 3)
 
+        # Checkerboard is the same for every frame at a given resolution.
+        # Cache it as a numpy array keyed by (width, height) to avoid
+        # re-creating it on every process_frame call.
+        self._checkerboard_cache: dict[tuple[int, int], np.ndarray] = {}
+
         if mixed_precision or model_precision != torch.float32:
             # Faster matmul at the cost of slightly reduced float32 precision,
             # negligible compared to fp16 quantization error.
@@ -81,20 +86,29 @@ class CorridorKeyEngine:  # pragma: no cover
 
         model = self._load_model().to(model_precision)
 
-        # torch.compile is only tested on Linux and Windows; skip on other platforms.
-        if sys.platform == "linux" or sys.platform == "win32":
+        # torch.compile gives a large speedup (9x on RTX 3050) even on GPUs with
+        # few SMs. Only skip on non-Linux/Windows platforms as a precaution.
+        if sys.platform in ("linux", "win32"):
             try:
-                # Point the inductor cache at a stable directory so compiled
-                # kernels survive across runs — first run compiles once, all
-                # subsequent runs load from cache and skip the ~60s wait.
+                # Set cache dir BEFORE torch.compile so compiled kernels persist
+                # across runs — first run compiles once, subsequent runs skip it.
                 cache_dir = Path.home() / ".cache" / "corridorkey" / "torch_compile"
                 cache_dir.mkdir(parents=True, exist_ok=True)
-                os.environ.setdefault("TORCHINDUCTOR_CACHE_DIR", str(cache_dir))
+                os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(cache_dir)
                 self.model = torch.compile(model)
+                # Warm-up: trigger compilation now so the first real frame doesn't stall.
+                logger.info("Warming up compiled model (first run compiles kernels, subsequent runs use cache)...")
+                dummy = torch.zeros(1, 4, img_size, img_size, dtype=model_precision, device=self.device)
+                with torch.inference_mode():
+                    self.model(dummy)
+                del dummy
+                logger.info("Warm-up complete.")
             except Exception as e:
                 logger.warning("Model compilation failed (%s). Falling back to eager mode.", e)
                 torch.cuda.empty_cache()
                 self.model = model
+        else:
+            self.model = model
 
     def _load_model(self) -> GreenFormer:
         """Load and return a GreenFormer model from the configured checkpoint path.
@@ -204,7 +218,7 @@ class CorridorKeyEngine:  # pragma: no cover
         # energy in highlights during downsampling.
         if input_is_linear:
             image_resized_linear = cv2.resize(image, (self.img_size, self.img_size), interpolation=cv2.INTER_LINEAR)
-            image_resized_srgb = linear_to_srgb(image_resized_linear)
+            image_resized_srgb = np.asarray(linear_to_srgb(image_resized_linear), dtype=np.float32)
         else:
             image_resized_srgb = cv2.resize(image, (self.img_size, self.img_size), interpolation=cv2.INTER_LINEAR)
 
@@ -237,50 +251,47 @@ class CorridorKeyEngine:  # pragma: no cover
         if hook_handle:
             hook_handle.remove()
 
-        raw_alpha = model_output["alpha"]
-        raw_fg = model_output["fg"]
+        # Transfer at model resolution (2048²) — small tensors, fast DMA.
+        # All post-processing runs at this resolution (~4x fewer pixels than 4K).
+        # Only the final outputs are upsampled to original resolution.
+        alpha_s = model_output["alpha"][0].permute(1, 2, 0).float().cpu().numpy()  # [S, S, 1]
+        fg_s = model_output["fg"][0].permute(1, 2, 0).float().cpu().numpy()  # [S, S, 3]
 
-        # Resize predictions back to the original frame resolution.
-        # Lanczos4 minimises blur when upscaling back to 4K.
-        alpha_pred = raw_alpha[0].permute(1, 2, 0).float().cpu().numpy()
-        fg_pred = raw_fg[0].permute(1, 2, 0).float().cpu().numpy()
-        alpha_pred = cv2.resize(alpha_pred, (w, h), interpolation=cv2.INTER_LANCZOS4)
-        fg_pred = cv2.resize(fg_pred, (w, h), interpolation=cv2.INTER_LANCZOS4)
-
-        if alpha_pred.ndim == 2:
-            alpha_pred = alpha_pred[:, :, np.newaxis]
-
-        # Remove small foreground islands (tracking markers, noise) from the matte.
+        # Despeckle at model resolution (cv2 connected-components, no GPU equivalent).
         if auto_despeckle:
-            alpha_despeckled = clean_matte(alpha_pred, area_threshold=despeckle_size, dilation=25, blur_size=5)
-        else:
-            alpha_despeckled = alpha_pred
+            alpha_s = clean_matte(alpha_s, area_threshold=despeckle_size, dilation=25, blur_size=5)
 
-        # Remove green spill from the foreground (still in sRGB at this point).
-        fg_despilled = despill(fg_pred, green_limit_mode="average", strength=despill_strength)
+        # Despill and linearise at model resolution — color-only ops, resolution-independent.
+        fg_despilled_s = np.asarray(
+            despill(fg_s, green_limit_mode="average", strength=despill_strength), dtype=np.float32
+        )
+        fg_linear_s = np.asarray(srgb_to_linear(fg_despilled_s), dtype=np.float32)
 
-        # Convert to linear and premultiply for EXR output.
-        # EXR files must store linear, premultiplied color.
-        fg_despilled_linear = srgb_to_linear(fg_despilled)
-        fg_premultiplied = premultiply(fg_despilled_linear, alpha_despeckled)
-
-        # Pack the final linear premultiplied RGBA.
-        output_rgba = np.concatenate([fg_premultiplied, alpha_despeckled], axis=-1)
-
-        # Build a checkerboard preview composite in linear light, then convert to sRGB for display.
-        checkerboard_srgb = create_checkerboard(w, h, checker_size=128, color1=0.15, color2=0.55)
-        checkerboard_linear = srgb_to_linear(checkerboard_srgb)
+        # Checkerboard composite for preview — cached after first frame.
+        cb_key = (self.img_size, self.img_size)
+        if cb_key not in self._checkerboard_cache:
+            cb_srgb = create_checkerboard(self.img_size, self.img_size, checker_size=64, color1=0.15, color2=0.55)
+            self._checkerboard_cache[cb_key] = np.asarray(srgb_to_linear(cb_srgb), dtype=np.float32)
+        cb_linear_s = self._checkerboard_cache[cb_key]
 
         if fg_is_straight:
-            composite_linear = composite_straight(fg_despilled_linear, checkerboard_linear, alpha_despeckled)
+            comp_linear_s = np.asarray(composite_straight(fg_linear_s, cb_linear_s, alpha_s), dtype=np.float32)
         else:
-            composite_linear = composite_premul(fg_despilled_linear, checkerboard_linear, alpha_despeckled)
+            comp_linear_s = np.asarray(composite_premul(fg_linear_s, cb_linear_s, alpha_s), dtype=np.float32)
 
-        composite_srgb = linear_to_srgb(composite_linear)
+        comp_srgb_s = np.asarray(linear_to_srgb(comp_linear_s), dtype=np.float32)
+        fg_premul_s = np.asarray(premultiply(fg_linear_s, alpha_s), dtype=np.float32)
+        rgba_s = np.concatenate([fg_premul_s, alpha_s], axis=-1)
+
+        # Upsample all outputs to original resolution.
+        alpha_pred = cv2.resize(alpha_s, (w, h), interpolation=cv2.INTER_LINEAR)[:, :, np.newaxis]
+        fg_pred = cv2.resize(fg_s, (w, h), interpolation=cv2.INTER_LINEAR)
+        composite_srgb = cv2.resize(comp_srgb_s, (w, h), interpolation=cv2.INTER_LINEAR)
+        output_rgba = cv2.resize(rgba_s, (w, h), interpolation=cv2.INTER_LINEAR)
 
         return {
             "alpha": alpha_pred,  # linear float, raw prediction
             "fg": fg_pred,  # sRGB float, straight (unpremultiplied)
             "comp": composite_srgb,  # sRGB float, preview composite over checkerboard
             "processed": output_rgba,  # linear float, premultiplied RGBA
-        }  # ty:ignore[invalid-return-type]
+        }

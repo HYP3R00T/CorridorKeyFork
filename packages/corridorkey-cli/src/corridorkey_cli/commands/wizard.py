@@ -218,7 +218,7 @@ def _run_inference(
 
     # Pre-load the engine once with a spinner so the user sees activity
     # during the potentially long model load + first-frame compilation.
-    if not service.is_engine_loaded:
+    if not service.is_engine_loaded():
         with RichProgress(
             SpinnerColumn(),
             TextColumn("[cyan]Loading model (first run compiles kernels, ~1 min)...[/cyan]"),

@@ -533,6 +533,9 @@ class CorridorKeyService:
     ) -> None:
         """Write all enabled output images for a single processed frame.
 
+        All color conversions and dtype casts happen here on the background
+        write thread so the GPU thread is free to start the next frame.
+
         Args:
             res: Engine result dict with keys "fg", "alpha", "comp", "processed".
             dirs: Output subdirectory paths keyed by output name.
@@ -604,6 +607,8 @@ class CorridorKeyService:
         Raises:
             JobCancelledError, CorridorKeyError subclasses.
         """
+        from concurrent.futures import Future, ThreadPoolExecutor
+
         if clip.input_asset is None or clip.alpha_asset is None:
             raise CorridorKeyError(f"Clip '{clip.name}' missing input or alpha asset")
 
@@ -644,9 +649,26 @@ class CorridorKeyService:
             frame_indices = range(num_frames)
             range_count = num_frames
 
+        # Single I/O thread overlaps disk writes with GPU inference on the next frame.
+        write_executor = ThreadPoolExecutor(max_workers=1)
+        pending_write: Future | None = None
+
+        def _flush_pending(warn_cb: Any) -> None:
+            """Wait for the in-flight write to finish and surface any errors."""
+            nonlocal pending_write
+            if pending_write is not None:
+                try:
+                    pending_write.result()
+                except WriteFailureError as exc:
+                    logger.error(str(exc))
+                    if warn_cb:
+                        warn_cb(str(exc))
+                pending_write = None
+
         try:
             for progress_i, i in enumerate(frame_indices):
                 if job and job.is_cancelled:
+                    _flush_pending(on_warning)
                     raise JobCancelledError(clip.name, i)
                 if on_progress:
                     on_progress(clip.name, progress_i, range_count)
@@ -655,6 +677,7 @@ class CorridorKeyService:
                         clip, i, input_files, input_cap, params.input_is_linear
                     )
                     if img is None:
+                        _flush_pending(on_warning)
                         skipped.append(i)
                         results.append(FrameResult(i, f"{i:05d}", False, "video read failed"))
                         continue
@@ -663,11 +686,13 @@ class CorridorKeyService:
                         continue
                     mask = self._read_alpha_frame(clip, i, alpha_files, alpha_cap)
                     if mask is None:
+                        _flush_pending(on_warning)
                         skipped.append(i)
                         results.append(FrameResult(i, input_stem, False, "alpha read failed"))
                         continue
                     if mask.shape[:2] != img.shape[:2]:
                         mask = cv2.resize(mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
+
                     t_frame = time.monotonic()
                     with self._gpu_lock:
                         res = engine.process_frame(
@@ -681,7 +706,12 @@ class CorridorKeyService:
                             refiner_scale=params.refiner_scale,
                         )
                     logger.debug("Clip '%s' frame %d: %.3fs", clip.name, i, time.monotonic() - t_frame)
-                    self._write_outputs(res, dirs, input_stem, clip.name, i, cfg)
+
+                    # Wait for the previous write to finish, then immediately submit
+                    # the current frame — GPU starts next frame while disk writes.
+                    _flush_pending(on_warning)
+                    _res, _dirs, _stem, _name, _idx, _cfg = res, dirs, input_stem, clip.name, i, cfg
+                    pending_write = write_executor.submit(self._write_outputs, _res, _dirs, _stem, _name, _idx, _cfg)
                     results.append(FrameResult(i, input_stem, True))
                 except FrameReadError as e:
                     logger.warning(str(e))
@@ -694,9 +724,14 @@ class CorridorKeyService:
                     results.append(FrameResult(i, f"{i:05d}", False, str(e)))
                     if on_warning:
                         on_warning(str(e))
+
+            # Wait for the last frame's write to complete.
+            _flush_pending(on_warning)
             if on_progress:
                 on_progress(clip.name, range_count, range_count)
         finally:
+            _flush_pending(on_warning)
+            write_executor.shutdown(wait=True)
             if input_cap:
                 input_cap.release()
             if alpha_cap:
