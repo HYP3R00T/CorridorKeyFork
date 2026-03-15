@@ -20,7 +20,6 @@ State machine transitions:
 
 from __future__ import annotations
 
-import glob as glob_module
 import logging
 import os
 from dataclasses import dataclass, field
@@ -33,6 +32,57 @@ from corridorkey.project import is_image_file as _is_image_file
 from corridorkey.project import is_video_file as _is_video_file
 
 logger = logging.getLogger(__name__)
+
+
+def _find_dir_icase(parent: str, name: str) -> str | None:
+    """Return the real path of a subdirectory matched case-insensitively.
+
+    On case-sensitive file systems (Linux/Mac) a user might create ``input/``
+    or ``INPUT/`` instead of ``Input/``. This helper finds the first entry
+    whose name matches *name* regardless of case.
+
+    Args:
+        parent: Absolute path to the directory to search in.
+        name: Subdirectory name to look for (case-insensitive).
+
+    Returns:
+        Absolute path to the matched directory, or None if not found.
+    """
+    if not os.path.isdir(parent):
+        return None
+    name_lower = name.lower()
+    try:
+        for entry in os.scandir(parent):
+            if entry.is_dir() and entry.name.lower() == name_lower:
+                return entry.path
+    except OSError:
+        pass
+    return None
+
+
+def _find_file_icase(parent: str, stem: str) -> str | None:
+    """Return the real path of a file whose stem matches *stem* case-insensitively.
+
+    Picks the first match when multiple files share the same case-folded stem
+    (e.g. ``Input.mp4`` and ``input.mov`` would both match ``input``).
+
+    Args:
+        parent: Absolute path to the directory to search in.
+        stem: Filename stem to look for (case-insensitive, no extension).
+
+    Returns:
+        Absolute path to the matched file, or None if not found.
+    """
+    if not os.path.isdir(parent):
+        return None
+    stem_lower = stem.lower()
+    try:
+        for entry in os.scandir(parent):
+            if entry.is_file() and os.path.splitext(entry.name)[0].lower() == stem_lower:
+                return entry.path
+    except OSError:
+        pass
+    return None
 
 
 class ClipState(Enum):
@@ -288,10 +338,10 @@ class ClipEntry:
         Returns:
             Absolute path to the alpha video, or None if not found.
         """
-        # Candidate: AlphaHint.* in clip root
-        for candidate in glob_module.glob(os.path.join(self.root_path, "AlphaHint.*")):
-            if _is_video_file(candidate):
-                return candidate
+        # Candidate: AlphaHint.* in clip root (any case)
+        alpha_file = _find_file_icase(self.root_path, "AlphaHint")
+        if alpha_file and _is_video_file(alpha_file):
+            return alpha_file
 
         # Candidates based on input video stem
         if self.input_asset is None or self.input_asset.asset_type != "video":
@@ -299,9 +349,9 @@ class ClipEntry:
 
         input_stem = os.path.splitext(os.path.basename(self.input_asset.path))[0]
         for suffix in ("_alpha", "_matte"):
-            for candidate in glob_module.glob(os.path.join(self.root_path, f"{input_stem}{suffix}.*")):
-                if _is_video_file(candidate):
-                    return candidate
+            candidate = _find_file_icase(self.root_path, f"{input_stem}{suffix}")
+            if candidate and _is_video_file(candidate):
+                return candidate
 
         return None
 
@@ -315,13 +365,13 @@ class ClipEntry:
         Raises:
             ClipScanError: If no valid input asset can be located.
         """
-        frames_dir = os.path.join(self.root_path, "Frames")
-        input_dir = os.path.join(self.root_path, "Input")
-        source_dir = os.path.join(self.root_path, "Source")
+        frames_dir = _find_dir_icase(self.root_path, "Frames")
+        input_dir = _find_dir_icase(self.root_path, "Input")
+        source_dir = _find_dir_icase(self.root_path, "Source")
 
-        if os.path.isdir(frames_dir) and os.listdir(frames_dir):
+        if frames_dir and os.listdir(frames_dir):
             self.input_asset = ClipAsset(frames_dir, "sequence")
-        elif os.path.isdir(input_dir) and os.listdir(input_dir):
+        elif input_dir and os.listdir(input_dir):
             # If Input/ contains only video files (no images), treat it as a video asset.
             input_videos = [f for f in os.listdir(input_dir) if _is_video_file(f)]
             input_images = [f for f in os.listdir(input_dir) if _is_image_file(f)]
@@ -331,7 +381,7 @@ class ClipEntry:
                 self.input_asset = ClipAsset(os.path.join(input_dir, input_videos[0]), "video")
             else:
                 raise ClipScanError(f"Clip '{self.name}': Input dir has no image or video files.")
-        elif os.path.isdir(source_dir):
+        elif source_dir:
             videos = [f for f in os.listdir(source_dir) if _is_video_file(f)]
             if videos:
                 self.input_asset = ClipAsset(os.path.join(source_dir, videos[0]), "video")
@@ -342,11 +392,11 @@ class ClipEntry:
                 else:
                     raise ClipScanError(f"Clip '{self.name}': 'Source' dir has no video.")
         else:
-            candidates = glob_module.glob(os.path.join(self.root_path, "[Ii]nput.*"))
-            candidates = [c for c in candidates if _is_video_file(c)]
-            if candidates:
-                self.input_asset = ClipAsset(candidates[0], "video")
-            elif os.path.isdir(input_dir):
+            # Fall back to a loose video file named input.* (any case) in the clip root.
+            input_video = _find_file_icase(self.root_path, "input")
+            if input_video and _is_video_file(input_video):
+                self.input_asset = ClipAsset(input_video, "video")
+            elif input_dir:
                 raise ClipScanError(f"Clip '{self.name}': Input dir is empty - no image files.")
             else:
                 raise ClipScanError(f"Clip '{self.name}': no Input found.")
@@ -357,8 +407,8 @@ class ClipEntry:
         if display != os.path.basename(self.root_path):
             self.name = display
 
-        alpha_dir = os.path.join(self.root_path, "AlphaHint")
-        if os.path.isdir(alpha_dir) and os.listdir(alpha_dir):
+        alpha_dir = _find_dir_icase(self.root_path, "AlphaHint")
+        if alpha_dir and os.listdir(alpha_dir):
             alpha_videos = [f for f in os.listdir(alpha_dir) if _is_video_file(f)]
             alpha_images = [f for f in os.listdir(alpha_dir) if _is_image_file(f)]
             if alpha_images:
@@ -371,14 +421,13 @@ class ClipEntry:
             if alpha_video:
                 self.alpha_asset = ClipAsset(alpha_video, "video")
 
-        mask_dir = os.path.join(self.root_path, "VideoMamaMaskHint")
-        if os.path.isdir(mask_dir) and os.listdir(mask_dir):
+        mask_dir = _find_dir_icase(self.root_path, "VideoMamaMaskHint")
+        if mask_dir and os.listdir(mask_dir):
             self.mask_asset = ClipAsset(mask_dir, "sequence")
         else:
-            mask_candidates = glob_module.glob(os.path.join(self.root_path, "VideoMamaMaskHint.*"))
-            mask_candidates = [c for c in mask_candidates if _is_video_file(c)]
-            if mask_candidates:
-                self.mask_asset = ClipAsset(mask_candidates[0], "video")
+            mask_video = _find_file_icase(self.root_path, "VideoMamaMaskHint")
+            if mask_video and _is_video_file(mask_video):
+                self.mask_asset = ClipAsset(mask_video, "video")
 
         from corridorkey.project import load_in_out_range
 
@@ -478,11 +527,7 @@ def _looks_like_clip(path: str) -> bool:
     Returns:
         True when the directory looks like a clip root.
     """
-    for subdir in ("Frames", "Input", "Source"):
-        candidate = os.path.join(path, subdir)
-        if os.path.isdir(candidate):
-            return True
-    return False
+    return any(_find_dir_icase(path, subdir) is not None for subdir in ("Frames", "Input", "Source"))
 
 
 def scan_clips_dir(

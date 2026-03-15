@@ -15,7 +15,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from corridorkey.clip_state import ClipAsset, ClipEntry, ClipState, scan_clips_dir, scan_project_clips
+from corridorkey.clip_state import (
+    ClipAsset,
+    ClipEntry,
+    ClipState,
+    scan_clips_dir,
+    scan_project_clips,
+)
 from corridorkey.errors import ClipScanError, InvalidStateTransitionError
 
 
@@ -279,3 +285,79 @@ class TestScanProjectClips:
         _make_clip_dir(tmp_path)
         clips = scan_project_clips(str(tmp_path))
         assert len(clips) == 1
+
+
+class TestFindAssetsCaseInsensitive:
+    """find_assets() must accept any casing for Input/, AlphaHint/, Frames/."""
+
+    def test_lowercase_input_dir(self, tmp_path: Path):
+        """input/ (lowercase) must be detected as the input asset."""
+        _make_sequence(tmp_path / "input")
+        clip = ClipEntry(name="shot", root_path=str(tmp_path))
+        clip.find_assets()
+        assert clip.input_asset is not None
+        assert clip.state == ClipState.RAW
+
+    def test_uppercase_input_dir(self, tmp_path: Path):
+        """INPUT/ (uppercase) must be detected as the input asset."""
+        _make_sequence(tmp_path / "INPUT")
+        clip = ClipEntry(name="shot", root_path=str(tmp_path))
+        clip.find_assets()
+        assert clip.input_asset is not None
+
+    def test_lowercase_frames_dir(self, tmp_path: Path):
+        """frames/ (lowercase) must be detected as the input asset."""
+        _make_sequence(tmp_path / "frames")
+        clip = ClipEntry(name="shot", root_path=str(tmp_path))
+        clip.find_assets()
+        assert clip.input_asset is not None
+
+    def test_lowercase_alphahint_dir(self, tmp_path: Path):
+        """alphahint/ (lowercase) must be detected as the alpha asset."""
+        _make_sequence(tmp_path / "input")
+        _make_sequence(tmp_path / "alphahint")
+        clip = ClipEntry(name="shot", root_path=str(tmp_path))
+        clip.find_assets()
+        assert clip.alpha_asset is not None
+        assert clip.state == ClipState.READY
+
+    def test_uppercase_alphahint_dir(self, tmp_path: Path):
+        """ALPHAHINT/ (uppercase) must be detected as the alpha asset."""
+        _make_sequence(tmp_path / "input")
+        _make_sequence(tmp_path / "ALPHAHINT")
+        clip = ClipEntry(name="shot", root_path=str(tmp_path))
+        clip.find_assets()
+        assert clip.alpha_asset is not None
+        assert clip.state == ClipState.READY
+
+    def test_mixed_case_dirs(self, tmp_path: Path):
+        """Mixed-case Input/ and AlphaHint/ must both be found."""
+        _make_sequence(tmp_path / "iNpUt")
+        _make_sequence(tmp_path / "AlPhAhInT")
+        clip = ClipEntry(name="shot", root_path=str(tmp_path))
+        clip.find_assets()
+        assert clip.input_asset is not None
+        assert clip.alpha_asset is not None
+        assert clip.state == ClipState.READY
+
+    def test_video_in_lowercase_input_dir(self, tmp_path: Path):
+        """A video inside input/ (lowercase) must be detected as a video asset -> EXTRACTING."""
+        d = tmp_path / "input"
+        d.mkdir()
+        (d / "clip.mp4").touch()
+        clip = ClipEntry(name="shot", root_path=str(tmp_path))
+        clip.find_assets()
+        assert clip.input_asset is not None
+        assert clip.input_asset.asset_type == "video"
+        assert clip.state == ClipState.EXTRACTING
+
+    def test_video_in_lowercase_alphahint_dir(self, tmp_path: Path):
+        """A video inside alphahint/ (lowercase) must be detected as a video alpha asset."""
+        _make_sequence(tmp_path / "Frames")
+        d = tmp_path / "alphahint"
+        d.mkdir()
+        (d / "alpha.mp4").touch()
+        clip = ClipEntry(name="shot", root_path=str(tmp_path))
+        clip.find_assets()
+        assert clip.alpha_asset is not None
+        assert clip.alpha_asset.asset_type == "video"
