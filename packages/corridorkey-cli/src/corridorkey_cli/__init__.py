@@ -10,6 +10,7 @@ from corridorkey_cli.commands.config import app as config_app
 from corridorkey_cli.commands.doctor import doctor
 from corridorkey_cli.commands.init import init
 from corridorkey_cli.commands.process import process
+from corridorkey_cli.commands.reset import reset
 from corridorkey_cli.commands.scan import scan
 from corridorkey_cli.commands.stitch import stitch
 from corridorkey_cli.commands.wizard import wizard
@@ -27,6 +28,7 @@ app.command("wizard")(wizard)
 app.command("process")(process)
 app.command("scan")(scan)
 app.command("stitch")(stitch)
+app.command("reset")(reset)
 app.add_typer(config_app, name="config")
 
 

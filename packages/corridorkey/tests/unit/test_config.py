@@ -93,11 +93,11 @@ class TestExportConfig:
         assert "False" not in content
 
     def test_string_values_quoted(self, tmp_path: Path):
-        """String values must be quoted in TOML format."""
+        """String values must be quoted in YAML format."""
         config = _config(tmp_path, device="cpu")
-        dest = export_config(config, path=tmp_path / "out.toml")
+        dest = export_config(config, path=tmp_path / "out.yaml")
         content = dest.read_text()
-        assert 'device = "cpu"' in content
+        assert 'device: "cpu"' in content
 
     def test_creates_parent_dirs(self, tmp_path: Path):
         """export_config must create any missing parent directories."""

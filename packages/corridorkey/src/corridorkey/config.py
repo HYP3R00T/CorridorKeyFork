@@ -141,7 +141,7 @@ def export_config(config: CorridorKeyConfig, path: str | Path | None = None) -> 
         elif isinstance(value, bool):
             lines.append(f"{field_name}: {'true' if value else 'false'}")
         elif isinstance(value, str):
-            lines.append(f'{field_name} = "{value}"')
+            lines.append(f'{field_name}: "{value}"')
         else:
             lines.append(f"{field_name}: {value}")
 
@@ -188,12 +188,31 @@ def load_config(overrides: dict | None = None) -> CorridorKeyConfig:
             # checkpoint_dir: /mnt/studio/corridorkey/models
             config = load_config()
     """
-    config, _ = load_settings(
-        CorridorKeyConfig,
-        app_name=_APP_NAME,
-        env_prefix="CORRIDORKEY",
-        overrides=overrides,
-    )
+    try:
+        config, _ = load_settings(
+            CorridorKeyConfig,
+            app_name=_APP_NAME,
+            env_prefix="CORRIDORKEY",
+            overrides=overrides,
+        )
+    except RuntimeError as exc:
+        if "Failed to parse YAML" in str(exc):
+            config_file = Path(_DEFAULT_APP_DIR).expanduser() / "corridorkey.yaml"
+            if config_file.exists():
+                backup = config_file.with_suffix(".yaml.bak")
+                config_file.rename(backup)
+                logger.warning(
+                    "Corrupt config file moved to %s - using defaults. Run `corridorkey config init` to regenerate.",
+                    backup,
+                )
+            config, _ = load_settings(
+                CorridorKeyConfig,
+                app_name=_APP_NAME,
+                env_prefix="CORRIDORKEY",
+                overrides=overrides,
+            )
+        else:
+            raise
 
     # Ensure managed directories exist on first use.
     config.app_dir.mkdir(parents=True, exist_ok=True)
