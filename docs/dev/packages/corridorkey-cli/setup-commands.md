@@ -45,6 +45,22 @@ Checks performed:
 
 The three checks that produce FAIL are: Python version, ffmpeg, and inference model. All three must pass before `corridorkey wizard` or `corridorkey process` will work.
 
+## corridorkey reset
+
+`corridorkey reset` deletes the entire `~/.config/corridorkey` directory, including the config file, downloaded models, and any cached data. Use it to start completely fresh or recover from a broken installation.
+
+```shell
+corridorkey reset
+```
+
+The command shows what will be deleted and asks for confirmation before proceeding. To skip the prompt in scripts:
+
+```shell
+corridorkey reset --yes
+```
+
+After resetting, run `corridorkey init` to set up again.
+
 ## Related
 
 - [init reference](../../api/corridorkey-cli/init.md)

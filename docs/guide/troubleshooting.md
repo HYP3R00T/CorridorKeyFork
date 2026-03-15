@@ -119,6 +119,23 @@ WARN  config file  not found - run `corridorkey init` to create it
 
 This is a warning, not a failure. CorridorKey uses built-in defaults when no config file is present. Run `corridorkey init` or `corridorkey config init` to create the file.
 
+## Corrupt config file
+
+If the config file contains invalid YAML, CorridorKey will automatically rename it to `corridorkey.yaml.bak` and continue with defaults. You will see a warning in the output:
+
+```text
+WARN  Corrupt config file moved to ~/.config/corridorkey/corridorkey.yaml.bak - using defaults.
+      Run `corridorkey config init` to regenerate.
+```
+
+To start completely fresh and remove all config, models, and cached data:
+
+```shell
+corridorkey reset
+```
+
+Then run `corridorkey init` to set up again.
+
 ## Related
 
 - [First run](first-run.md)
