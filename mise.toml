@@ -16,7 +16,7 @@ _.file = '.env'       # for sensitive data
 UV_LINK_MODE = "copy"
 
 [tasks.docs]
-run = "uv run zensical serve"
+run = "zensical serve"
 description = "Serve the documentation locally"
 
 [tasks.check]
