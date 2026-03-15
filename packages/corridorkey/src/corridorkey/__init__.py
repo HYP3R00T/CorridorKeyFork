@@ -17,12 +17,14 @@ from corridorkey.pipeline import ClipSummary, PipelineResult, process_directory
 from corridorkey.project import (
     add_clips_to_project,
     create_project,
+    detect_unstructured,
     get_clip_dirs,
     get_display_name,
     is_image_file,
     is_v2_project,
     is_video_file,
     load_in_out_range,
+    organize_clips,
     read_clip_json,
     read_project_json,
     save_in_out_range,
@@ -75,6 +77,8 @@ __all__ = [
     # Project management
     "create_project",
     "add_clips_to_project",
+    "detect_unstructured",
+    "organize_clips",
     "get_clip_dirs",
     "is_v2_project",
     "write_project_json",

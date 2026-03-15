@@ -457,3 +457,157 @@ def is_image_file(filename: str) -> bool:
         True if the extension is in the known image set.
     """
     return os.path.splitext(filename)[1].lower() in _IMAGE_EXTS
+
+
+# ---------------------------------------------------------------------------
+# Clip organisation helpers
+# ---------------------------------------------------------------------------
+
+_PIPELINE_DIRS = frozenset({"Output", "AlphaHint", "alphahint", "VideoMamaMaskHint", "Frames", "Source"})
+_KNOWN_INPUT_STEMS = frozenset({"input", "alphahint", "videomamamaskhint"})
+
+
+def detect_unstructured(clips_dir: str) -> tuple[list[str], list[str]]:
+    """Scan *clips_dir* for content that is not yet in the expected clip structure.
+
+    Returns two lists:
+
+    - ``loose_videos``: video files sitting directly in *clips_dir* whose stem
+      is not a reserved name (``input``, ``alphahint``, etc.).
+    - ``unstructured_dirs``: subdirectories that contain raw image/video files
+      at their top level instead of an ``Input/`` or ``Frames/`` subfolder.
+
+    Args:
+        clips_dir: Absolute path to the directory to inspect.
+
+    Returns:
+        Tuple of (loose_video_paths, unstructured_dir_paths).
+    """
+    loose_videos: list[str] = []
+    unstructured_dirs: list[str] = []
+
+    if not os.path.isdir(clips_dir):
+        return loose_videos, unstructured_dirs
+
+    for entry in sorted(os.listdir(clips_dir)):
+        if entry.startswith(".") or entry.startswith("_"):
+            continue
+        full = os.path.join(clips_dir, entry)
+
+        if os.path.isfile(full) and is_video_file(entry):
+            stem = os.path.splitext(entry)[0].lower()
+            if stem not in _KNOWN_INPUT_STEMS:
+                loose_videos.append(full)
+
+        elif os.path.isdir(full) and entry not in _PIPELINE_DIRS:
+            # A subdirectory is "unstructured" when it has no Input/ or Frames/
+            # subfolder but does contain raw image or video files at its top level.
+            has_input = any(
+                os.path.isdir(os.path.join(full, d))
+                for d in os.listdir(full)
+                if d.lower() in ("input", "frames", "source")
+            )
+            if has_input:
+                continue
+            has_raw = any(
+                (is_image_file(f) or is_video_file(f))
+                for f in os.listdir(full)
+                if os.path.isfile(os.path.join(full, f))
+            )
+            if has_raw:
+                unstructured_dirs.append(full)
+
+    return loose_videos, unstructured_dirs
+
+
+def organize_clips(clips_dir: str) -> int:
+    """Restructure unorganised content in *clips_dir* into the expected clip layout.
+
+    For each loose video file at the top level:
+      - Creates ``{clips_dir}/{stem}/``
+      - Moves the video to ``{clips_dir}/{stem}/Input{ext}``
+      - Creates empty ``AlphaHint/`` and ``VideoMamaMaskHint/`` subdirectories
+
+    For each subdirectory that contains raw files but no ``Input/`` subfolder:
+      - If it contains video files → renames the largest one to ``Input{ext}``
+      - If it contains only image files → moves them all into ``Input/``
+      - Creates empty ``AlphaHint/`` and ``VideoMamaMaskHint/`` subdirectories
+
+    Skips any operation that would overwrite existing files and logs a warning
+    instead.
+
+    Args:
+        clips_dir: Absolute path to the directory to organise.
+
+    Returns:
+        Number of clips successfully organised.
+    """
+    organised = 0
+    loose_videos, unstructured_dirs = detect_unstructured(clips_dir)
+
+    # --- Loose videos at the top level ---
+    for video_path in loose_videos:
+        filename = os.path.basename(video_path)
+        stem = sanitize_stem(filename)
+        ext = os.path.splitext(filename)[1]
+
+        target_dir, _ = _dedupe_path(clips_dir, stem)
+        try:
+            os.makedirs(target_dir, exist_ok=True)
+            dest = os.path.join(target_dir, f"Input{ext}")
+            shutil.move(video_path, dest)
+            logger.info("Organised loose video '%s' -> '%s/Input%s'", filename, stem, ext)
+            for hint in ("AlphaHint", "VideoMamaMaskHint"):
+                os.makedirs(os.path.join(target_dir, hint), exist_ok=True)
+            organised += 1
+        except OSError as e:
+            logger.warning("Could not organise '%s': %s", filename, e)
+
+    # --- Subdirectories with raw content ---
+    for dir_path in unstructured_dirs:
+        try:
+            _organise_dir(dir_path)
+            organised += 1
+        except OSError as e:
+            logger.warning("Could not organise '%s': %s", os.path.basename(dir_path), e)
+
+    logger.info("Organisation complete: %d clip(s) restructured", organised)
+    return organised
+
+
+def _organise_dir(target_dir: str) -> None:
+    """Restructure a single clip directory in-place.
+
+    Args:
+        target_dir: Absolute path to the directory to restructure.
+    """
+    entries = os.listdir(target_dir)
+    video_files = sorted(
+        [f for f in entries if is_video_file(f) and os.path.isfile(os.path.join(target_dir, f))],
+        key=lambda f: os.path.getsize(os.path.join(target_dir, f)),
+        reverse=True,
+    )
+    image_files = sorted([f for f in entries if is_image_file(f) and os.path.isfile(os.path.join(target_dir, f))])
+
+    input_dir = os.path.join(target_dir, "Input")
+
+    if video_files:
+        # Rename the largest video to Input.ext
+        main = video_files[0]
+        ext = os.path.splitext(main)[1]
+        dest = os.path.join(target_dir, f"Input{ext}")
+        if not os.path.exists(dest):
+            shutil.move(os.path.join(target_dir, main), dest)
+            logger.info("Renamed '%s' -> 'Input%s' in '%s'", main, ext, os.path.basename(target_dir))
+    elif image_files:
+        # Move all images into Input/
+        os.makedirs(input_dir, exist_ok=True)
+        for img in image_files:
+            src = os.path.join(target_dir, img)
+            dst = os.path.join(input_dir, img)
+            if not os.path.exists(dst):
+                shutil.move(src, dst)
+        logger.info("Moved %d image(s) into 'Input/' in '%s'", len(image_files), os.path.basename(target_dir))
+
+    for hint in ("AlphaHint", "VideoMamaMaskHint"):
+        os.makedirs(os.path.join(target_dir, hint), exist_ok=True)

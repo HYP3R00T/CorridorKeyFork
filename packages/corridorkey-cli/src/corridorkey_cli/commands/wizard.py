@@ -13,7 +13,9 @@ from corridorkey import (
     CorridorKeyService,
     InferenceParams,
     OutputConfig,
+    detect_unstructured,
     load_config,
+    organize_clips,
 )
 from rich.panel import Panel
 from rich.prompt import Confirm, FloatPrompt, IntPrompt, Prompt
@@ -57,6 +59,7 @@ def wizard(
 
     # Main loop
     while True:
+        _offer_organize(clips_dir)
         clips = service.scan_clips(str(clips_dir))
         _print_state_table(clips, clips_dir)
 
@@ -103,6 +106,39 @@ def wizard(
             Prompt.ask("\nPress Enter to re-scan")
 
     console.print("[bold green]Goodbye.[/bold green]")
+
+
+def _offer_organize(clips_dir: Path) -> None:
+    """Detect unstructured content and offer to reorganise it.
+
+    Shows a summary of loose videos and unstructured folders, then prompts
+    the user once. If they accept, calls organize_clips() and prints a
+    confirmation. If there is nothing to organise, returns silently.
+
+    Args:
+        clips_dir: Directory being processed by the wizard.
+    """
+    loose_videos, unstructured_dirs = detect_unstructured(str(clips_dir))
+    if not loose_videos and not unstructured_dirs:
+        return
+
+    console.print()
+    if loose_videos:
+        console.print(f"[yellow]{len(loose_videos)} loose video file(s) found:[/yellow]")
+        for v in loose_videos:
+            console.print(f"  • {v}")
+    if unstructured_dirs:
+        console.print(f"[yellow]{len(unstructured_dirs)} folder(s) with unstructured content:[/yellow]")
+        for d in unstructured_dirs:
+            console.print(f"  • {d}")
+
+    console.print(
+        "\n[dim]These will be restructured into clip folders with [bold]Input/[/bold] "
+        "and empty [bold]AlphaHint/[/bold] subdirectories.[/dim]"
+    )
+    if Confirm.ask("Organise now?", default=False):
+        n = organize_clips(str(clips_dir))
+        console.print(f"[green]Organised {n} clip(s).[/green]")
 
 
 def _print_state_table(clips: list[ClipEntry], clips_dir: Path) -> None:
