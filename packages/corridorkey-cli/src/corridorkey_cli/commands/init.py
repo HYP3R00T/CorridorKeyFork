@@ -22,7 +22,7 @@ def init() -> None:
     - Creates the config file if missing
     - Offers to download the inference model if missing
     """
-    console.print("[bold cyan]CorridorKey — Init[/bold cyan]\n")
+    console.print("[bold cyan]CorridorKey - Init[/bold cyan]\n")
 
     # 1. Run doctor inline (import here to avoid circular at module level)
     from corridorkey_cli.commands.doctor import doctor

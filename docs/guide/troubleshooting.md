@@ -52,9 +52,9 @@ The wizard scans for `Input/`, `Frames/`, or `Source/` subdirectories (case-inse
 
 If you declined the organise prompt and clips are still missing, check that each clip folder contains at least one of:
 
-- `Input/` or `input/` — image sequence or video inside
-- `Frames/` or `frames/` — image sequence
-- `Source/` — video file
+- `Input/` or `input/` - image sequence or video inside
+- `Frames/` or `frames/` - image sequence
+- `Source/` - video file
 - A video file named `Input.mp4` (or any case/extension) directly in the clip root
 
 ## Clips stuck in RAW state

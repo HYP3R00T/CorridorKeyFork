@@ -21,7 +21,7 @@ from corridorkey.validators import normalize_mask_channels, normalize_mask_dtype
 
 logger = logging.getLogger(__name__)
 
-# EXR write flags — DWAA half-float: ~5x faster writes than PXR24, half the file size.
+# EXR write flags - DWAA half-float: ~5x faster writes than PXR24, half the file size.
 # DWAA is a lossy DCT-based compression standard used widely in VFX pipelines (Nuke, Resolve).
 # Visually lossless at default quality for compositing work.
 EXR_WRITE_FLAGS = [

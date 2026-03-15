@@ -1,6 +1,6 @@
 # Preparing Clips
 
-CorridorKey processes clips that are in the `READY` state. A clip reaches `READY` when it has both input frames and a matching set of alpha hint frames on disk. You can provide these as pre-extracted image sequences or as video files — and if your footage is not yet organised into the expected structure, the wizard will offer to do it for you.
+CorridorKey processes clips that are in the `READY` state. A clip reaches `READY` when it has both input frames and a matching set of alpha hint frames on disk. You can provide these as pre-extracted image sequences or as video files - and if your footage is not yet organised into the expected structure, the wizard will offer to do it for you.
 
 ## Folder Naming
 
@@ -24,7 +24,7 @@ The wizard detects these and offers to wrap each one into its own clip folder:
 session/
     actor_jump/
         Input.mp4
-        AlphaHint/          (empty — add your alpha here)
+        AlphaHint/          (empty - add your alpha here)
         VideoMamaMaskHint/  (empty)
     product_spin/
         Input.mp4
@@ -90,7 +90,7 @@ my_shot/
     AlphaHint.mp4
 ```
 
-The wizard detects the clip as `EXTRACTING` and extracts both videos to `Frames/` and `AlphaHint/` before running inference. Extraction is resumable — if interrupted, it picks up from where it left off.
+The wizard detects the clip as `EXTRACTING` and extracts both videos to `Frames/` and `AlphaHint/` before running inference. Extraction is resumable - if interrupted, it picks up from where it left off.
 
 If you only have the input video (no alpha), the clip will be `RAW` after extraction and will need an alpha generator package to proceed.
 

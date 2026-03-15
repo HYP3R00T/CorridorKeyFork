@@ -14,12 +14,12 @@ On Windows you can also drag a clips folder onto the `CorridorKey - Drop Clips H
 
 ## Step 1: Organise (if needed)
 
-Before showing the clip table, the wizard scans for unorganised content — loose video files or folders that contain raw footage without the expected `Input/` subfolder. If it finds any, it shows a summary and asks whether to restructure:
+Before showing the clip table, the wizard scans for unorganised content - loose video files or folders that contain raw footage without the expected `Input/` subfolder. If it finds any, it shows a summary and asks whether to restructure:
 
 ```text
 2 loose video file(s) found:
-  • /path/to/clips/actor_jump.mp4
-  • /path/to/clips/product_spin.mp4
+  - /path/to/clips/actor_jump.mp4
+  - /path/to/clips/product_spin.mp4
 
 These will be restructured into clip folders with Input/ and empty AlphaHint/ subdirectories.
 Organise now? [y/n] (n):
@@ -85,15 +85,15 @@ Press Enter to accept the defaults. Enter `n` to adjust each setting interactive
 
 ### What each setting does
 
-`input_is_linear` — Set to True if your frames are linear light (e.g. EXR from a camera or renderer). Leave False for standard sRGB footage (PNG, JPEG from a camera).
+`input_is_linear` - Set to True if your frames are linear light (e.g. EXR from a camera or renderer). Leave False for standard sRGB footage (PNG, JPEG from a camera).
 
-`despill_strength` — Controls how aggressively green colour contamination is removed from the subject. 1.0 is maximum. Reduce if skin tones look too magenta.
+`despill_strength` - Controls how aggressively green colour contamination is removed from the subject. 1.0 is maximum. Reduce if skin tones look too magenta.
 
-`auto_despeckle` — Removes small isolated holes and islands in the matte automatically. Leave enabled for most footage.
+`auto_despeckle` - Removes small isolated holes and islands in the matte automatically. Leave enabled for most footage.
 
-`despeckle_size` — The maximum size (in pixels) of a matte artefact to remove. Increase if small holes remain; decrease if fine detail like hair is being removed.
+`despeckle_size` - The maximum size (in pixels) of a matte artefact to remove. Increase if small holes remain; decrease if fine detail like hair is being removed.
 
-`refiner_scale` — Controls the edge refinement pass. 1.0 is the default. Reduce toward 0.0 to speed up processing at the cost of edge quality.
+`refiner_scale` - Controls the edge refinement pass. 1.0 is the default. Reduce toward 0.0 to speed up processing at the cost of edge quality.
 
 ## Model Loading
 

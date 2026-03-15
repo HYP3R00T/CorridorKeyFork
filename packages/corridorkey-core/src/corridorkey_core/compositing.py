@@ -62,14 +62,11 @@ _SRGB_SCALE = 1.055
 # Offset for the power curve
 _SRGB_OFFSET = 0.055
 
-# ---------------------------------------------------------------------------
-# LUT-accelerated sRGB transfer functions for numpy arrays
-#
+# LUT-accelerated sRGB transfer functions for numpy arrays.
 # np.power() on a 4K float32 array takes ~300ms. A uint16 LUT reduces this
 # to ~5ms by replacing the per-element power call with a vectorised table
 # lookup. The LUT has 65536 entries covering [0, 1] in steps of 1/65535,
-# giving sub-0.002% error vs the exact formula — imperceptible in 8-bit output.
-# ---------------------------------------------------------------------------
+# giving sub-0.002% error vs the exact formula - imperceptible in 8-bit output.
 _LUT_SIZE = 65536
 _lut_x = np.linspace(0.0, 1.0, _LUT_SIZE, dtype=np.float64)
 

@@ -459,10 +459,6 @@ def is_image_file(filename: str) -> bool:
     return os.path.splitext(filename)[1].lower() in _IMAGE_EXTS
 
 
-# ---------------------------------------------------------------------------
-# Clip organisation helpers
-# ---------------------------------------------------------------------------
-
 _PIPELINE_DIRS = frozenset({"Output", "AlphaHint", "alphahint", "VideoMamaMaskHint", "Frames", "Source"})
 _KNOWN_INPUT_STEMS = frozenset({"input", "alphahint", "videomamamaskhint"})
 
@@ -529,8 +525,8 @@ def organize_clips(clips_dir: str) -> int:
       - Creates empty ``AlphaHint/`` and ``VideoMamaMaskHint/`` subdirectories
 
     For each subdirectory that contains raw files but no ``Input/`` subfolder:
-      - If it contains video files → renames the largest one to ``Input{ext}``
-      - If it contains only image files → moves them all into ``Input/``
+      - If it contains video files -> renames the largest one to ``Input{ext}``
+      - If it contains only image files -> moves them all into ``Input/``
       - Creates empty ``AlphaHint/`` and ``VideoMamaMaskHint/`` subdirectories
 
     Skips any operation that would overwrite existing files and logs a warning
@@ -545,7 +541,6 @@ def organize_clips(clips_dir: str) -> int:
     organised = 0
     loose_videos, unstructured_dirs = detect_unstructured(clips_dir)
 
-    # --- Loose videos at the top level ---
     for video_path in loose_videos:
         filename = os.path.basename(video_path)
         stem = sanitize_stem(filename)
@@ -563,7 +558,6 @@ def organize_clips(clips_dir: str) -> int:
         except OSError as e:
             logger.warning("Could not organise '%s': %s", filename, e)
 
-    # --- Subdirectories with raw content ---
     for dir_path in unstructured_dirs:
         try:
             _organise_dir(dir_path)

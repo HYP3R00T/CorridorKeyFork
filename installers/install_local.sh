@@ -28,9 +28,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
 CLI_PATH="$REPO_ROOT/packages/corridorkey-cli"
 
-# -------------------------------------------------------
-# Banner
-# -------------------------------------------------------
 echo ""
 echo -e "${CYAN}===================================================${RESET}"
 echo -e "${CYAN}    CorridorKey - AI Green Screen Keyer${RESET}"
@@ -45,9 +42,6 @@ if [[ ! -d "$CLI_PATH" ]]; then
     exit 1
 fi
 
-# -------------------------------------------------------
-# Step 1: Pick GPU variant
-# -------------------------------------------------------
 echo ""
 
 EXTRA=""
@@ -89,9 +83,6 @@ echo ""
 ok "Selected: $BACKEND"
 ok "Source:   $CLI_PATH"
 
-# -------------------------------------------------------
-# Step 2: Ensure uv is installed
-# -------------------------------------------------------
 step "Checking for uv package manager..."
 
 if ! command -v uv &>/dev/null; then
@@ -107,9 +98,6 @@ if ! command -v uv &>/dev/null; then
 fi
 ok "uv is ready."
 
-# -------------------------------------------------------
-# Step 3: Install corridorkey-cli from local path
-# -------------------------------------------------------
 step "Installing from local workspace..."
 
 if ! uv tool install "$PACKAGE" --python 3.13; then
@@ -118,18 +106,12 @@ if ! uv tool install "$PACKAGE" --python 3.13; then
 fi
 ok "corridorkey-cli installed."
 
-# -------------------------------------------------------
-# Step 4: First-time setup
-# -------------------------------------------------------
 step "Running first-time setup..."
 echo "    You will be asked whether to download the inference model (~400 MB)."
 echo ""
 
 corridorkey init
 
-# -------------------------------------------------------
-# Step 5: Create Desktop launcher
-# -------------------------------------------------------
 step "Creating Desktop launcher..."
 
 DESKTOP_DIR=""
@@ -188,9 +170,6 @@ DESKTOP_EOF
     echo "    Drag a clips folder onto 'CorridorKey' on your Desktop to start."
 fi
 
-# -------------------------------------------------------
-# Done
-# -------------------------------------------------------
 echo ""
 echo -e "${GREEN}===================================================${RESET}"
 echo -e "${GREEN}    Setup complete! You are ready to key.${RESET}"

@@ -7,7 +7,7 @@ import pathlib
 import sys
 
 EXTENSIONS = ("*.md", "*.py", "*.toml")
-EXCLUDE = (".venv", "site", ".git", "__pycache__")
+EXCLUDE = (".venv", "site", ".git", "__pycache__", "Temp")
 
 
 def main() -> int:

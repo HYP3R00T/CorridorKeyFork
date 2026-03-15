@@ -790,7 +790,7 @@ class CorridorKeyService:
                     logger.debug("Clip '%s' frame %d: %.3fs", clip.name, i, time.monotonic() - t_frame)
 
                     # Wait for the previous write to finish, then immediately submit
-                    # the current frame — GPU starts next frame while disk writes.
+                    # the current frame - GPU starts next frame while disk writes.
                     _flush_pending(on_warning)
                     _res, _dirs, _stem, _name, _idx, _cfg = res, dirs, input_stem, clip.name, i, cfg
                     pending_write = write_executor.submit(self._write_outputs, _res, _dirs, _stem, _name, _idx, _cfg)
@@ -848,7 +848,217 @@ class CorridorKeyService:
             except Exception as e:
                 logger.warning("Clip '%s': state transition to COMPLETE failed: %s", clip.name, e)
 
+        # Stitch a comp preview video when the source was a video file.
+        if (
+            is_full_clip
+            and cfg.comp_enabled
+            and clip.input_asset is not None
+            and clip.input_asset.asset_type == "video"
+        ):
+            self._stitch_comp_video(clip, dirs["comp"], cfg.comp_format)
+
         return results
+
+    def _stitch_comp_video(self, clip: ClipEntry, comp_dir: str, comp_format: str) -> None:
+        """Stitch Comp frames into a preview MP4 alongside the output directory.
+
+        Only runs when FFmpeg is available. Failures are logged as warnings
+        and do not affect the processing result.
+
+        Args:
+            clip: The clip that was just processed.
+            comp_dir: Absolute path to the Comp output directory.
+            comp_format: File format of the comp frames ("png" or "exr").
+        """
+        from corridorkey.errors import FFmpegNotFoundError
+        from corridorkey.ffmpeg_tools import read_video_metadata, require_ffmpeg, stitch_video
+
+        try:
+            require_ffmpeg()
+        except FFmpegNotFoundError:
+            logger.debug("Clip '%s': FFmpeg not available, skipping comp video stitch", clip.name)
+            return
+
+        comp_frames = [f for f in os.listdir(comp_dir) if f.lower().endswith(f".{comp_format}")]
+        if not comp_frames:
+            logger.debug("Clip '%s': no comp frames found, skipping stitch", clip.name)
+            return
+
+        # Recover source fps from the video metadata sidecar written during extraction.
+        fps = 24.0
+        meta = read_video_metadata(clip.root_path)
+        if meta and "fps" in meta:
+            import contextlib
+
+            with contextlib.suppress(ValueError, TypeError):
+                fps = float(meta["fps"])
+
+        # Detect the frame pattern from the first comp filename.
+        import re as _re
+
+        first = sorted(comp_frames)[0]
+        stem = os.path.splitext(first)[0]
+        # Use a generic pattern that matches the actual padding width.
+        m = _re.search(r"(\d+)$", stem)
+        if m:
+            pad = len(m.group(1))
+            prefix = stem[:-pad]
+            pattern = f"{prefix}%0{pad}d.{comp_format}"
+        else:
+            pattern = f"frame_%06d.{comp_format}"
+
+        output_root = os.path.dirname(comp_dir)
+        comp_video_path = os.path.join(output_root, f"{clip.name}_comp.mp4")
+
+        try:
+            logger.info("Clip '%s': stitching comp video -> %s @ %.4f fps", clip.name, comp_video_path, fps)
+            stitch_video(comp_dir, comp_video_path, fps=fps, pattern=pattern)
+        except Exception as e:
+            logger.warning("Clip '%s': comp video stitch failed: %s", clip.name, e)
+
+    def stitch_clip_outputs(
+        self,
+        clip: ClipEntry,
+        outputs: list[str] | None = None,
+        fps: float | None = None,
+        codec: str = "libx264",
+        crf: int = 18,
+        on_progress: Callable[[str, int, int], None] | None = None,
+    ) -> dict[str, str]:
+        """Stitch output image sequences for a clip into MP4 video files.
+
+        Reads the run manifest to discover which outputs were produced and
+        what format they are in. Falls back to scanning the Output/
+        subdirectories directly when no manifest is present.
+
+        The source fps is recovered from the ``.video_metadata.json`` sidecar
+        written during extraction. When that sidecar is absent (e.g. the
+        source was an image sequence) the caller must supply *fps* explicitly.
+
+        Args:
+            clip: Clip whose Output/ directory contains frame sequences.
+            outputs: Subset of output names to stitch, e.g. ``["fg", "comp"]``.
+                Stitches all outputs found in the manifest when None.
+            fps: Frame rate for the output videos. Recovered from the video
+                metadata sidecar when None; falls back to 24.0 if unavailable.
+            codec: FFmpeg video codec identifier.
+            crf: Constant Rate Factor quality (0-51, lower = better).
+            on_progress: Called with (output_name, current_frame, total_frames).
+
+        Returns:
+            Dict mapping output name to the absolute path of the stitched MP4.
+            Only entries that were successfully stitched are included.
+
+        Raises:
+            FFmpegNotFoundError: If ffmpeg is not on PATH.
+        """
+        import contextlib
+        import re as _re
+
+        from corridorkey.ffmpeg_tools import read_video_metadata, require_ffmpeg, stitch_video
+
+        require_ffmpeg()
+
+        output_dir = os.path.join(clip.root_path, "Output")
+        manifest_path = os.path.join(output_dir, ".corridorkey_manifest.json")
+
+        # Read manifest to get enabled outputs and their formats.
+        enabled_formats: dict[str, str] = {}
+        if os.path.isfile(manifest_path):
+            try:
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                fmt_map = manifest.get("formats", {})
+                for name in manifest.get("enabled_outputs", []):
+                    enabled_formats[name] = fmt_map.get(name, "exr")
+            except Exception as e:
+                logger.warning("Could not read manifest for '%s': %s", clip.name, e)
+
+        # Fall back to scanning subdirectories when manifest is absent.
+        if not enabled_formats:
+            subdir_map = {"fg": "FG", "matte": "Matte", "comp": "Comp", "processed": "Processed"}
+            for name, subdir in subdir_map.items():
+                d = os.path.join(output_dir, subdir)
+                if not os.path.isdir(d):
+                    continue
+                files = os.listdir(d)
+                for ext in ("exr", "png"):
+                    if any(f.lower().endswith(f".{ext}") for f in files):
+                        enabled_formats[name] = ext
+                        break
+
+        # Filter to requested outputs.
+        if outputs is not None:
+            enabled_formats = {k: v for k, v in enabled_formats.items() if k in outputs}
+
+        if not enabled_formats:
+            logger.warning("Clip '%s': no output sequences found to stitch", clip.name)
+            return {}
+
+        # Resolve fps.
+        resolved_fps = fps
+        if resolved_fps is None:
+            meta = read_video_metadata(clip.root_path)
+            if meta and "fps" in meta:
+                with contextlib.suppress(ValueError, TypeError):
+                    resolved_fps = float(meta["fps"])
+        if resolved_fps is None:
+            resolved_fps = 24.0
+            logger.debug("Clip '%s': fps unknown, defaulting to 24.0", clip.name)
+
+        subdir_map = {"fg": "FG", "matte": "Matte", "comp": "Comp", "processed": "Processed"}
+        stitched: dict[str, str] = {}
+
+        for name, fmt in enabled_formats.items():
+            subdir = subdir_map.get(name, name.capitalize())
+            frames_dir = os.path.join(output_dir, subdir)
+            if not os.path.isdir(frames_dir):
+                logger.warning("Clip '%s': output dir missing for '%s', skipping", clip.name, name)
+                continue
+
+            frame_files = sorted(f for f in os.listdir(frames_dir) if f.lower().endswith(f".{fmt}"))
+            if not frame_files:
+                logger.warning("Clip '%s': no %s frames in %s, skipping", clip.name, fmt, frames_dir)
+                continue
+
+            # Detect padding from the first filename stem.
+            first_stem = os.path.splitext(frame_files[0])[0]
+            m = _re.search(r"(\d+)$", first_stem)
+            if m:
+                pad = len(m.group(1))
+                prefix = first_stem[:-pad]
+                pattern = f"{prefix}%0{pad}d.{fmt}"
+            else:
+                pattern = f"frame_%06d.{fmt}"
+
+            out_path = os.path.join(output_dir, f"{clip.name}_{name}.mp4")
+
+            def _prog(current: int, total: int, _name: str = name) -> None:
+                if on_progress:
+                    on_progress(_name, current, total)
+
+            try:
+                logger.info(
+                    "Clip '%s': stitching %s -> %s @ %.4f fps",
+                    clip.name,
+                    name,
+                    out_path,
+                    resolved_fps,
+                )
+                stitch_video(
+                    frames_dir,
+                    out_path,
+                    fps=resolved_fps,
+                    pattern=pattern,
+                    codec=codec,
+                    crf=crf,
+                    on_progress=_prog,
+                )
+                stitched[name] = out_path
+            except Exception as e:
+                logger.warning("Clip '%s': stitch failed for '%s': %s", clip.name, name, e)
+
+        return stitched
 
     def reprocess_single_frame(
         self,

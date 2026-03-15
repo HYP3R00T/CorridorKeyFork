@@ -91,7 +91,7 @@ class CorridorKeyEngine:  # pragma: no cover
         if sys.platform in ("linux", "win32"):
             try:
                 # Set cache dir BEFORE torch.compile so compiled kernels persist
-                # across runs — first run compiles once, subsequent runs skip it.
+                # across runs - first run compiles once, subsequent runs skip it.
                 cache_dir = Path.home() / ".cache" / "corridorkey" / "torch_compile"
                 cache_dir.mkdir(parents=True, exist_ok=True)
                 os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(cache_dir)
@@ -251,7 +251,7 @@ class CorridorKeyEngine:  # pragma: no cover
         if hook_handle:
             hook_handle.remove()
 
-        # Transfer at model resolution (2048²) — small tensors, fast DMA.
+        # Transfer at model resolution (2048x2048) - small tensors, fast DMA.
         # All post-processing runs at this resolution (~4x fewer pixels than 4K).
         # Only the final outputs are upsampled to original resolution.
         alpha_s = model_output["alpha"][0].permute(1, 2, 0).float().cpu().numpy()  # [S, S, 1]
@@ -261,13 +261,13 @@ class CorridorKeyEngine:  # pragma: no cover
         if auto_despeckle:
             alpha_s = clean_matte(alpha_s, area_threshold=despeckle_size, dilation=25, blur_size=5)
 
-        # Despill and linearise at model resolution — color-only ops, resolution-independent.
+        # Despill and linearise at model resolution - color-only ops, resolution-independent.
         fg_despilled_s = np.asarray(
             despill(fg_s, green_limit_mode="average", strength=despill_strength), dtype=np.float32
         )
         fg_linear_s = np.asarray(srgb_to_linear(fg_despilled_s), dtype=np.float32)
 
-        # Checkerboard composite for preview — cached after first frame.
+        # Checkerboard composite for preview - cached after first frame.
         cb_key = (self.img_size, self.img_size)
         if cb_key not in self._checkerboard_cache:
             cb_srgb = create_checkerboard(self.img_size, self.img_size, checker_size=64, color1=0.15, color2=0.55)

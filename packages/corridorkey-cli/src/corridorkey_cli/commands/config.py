@@ -26,8 +26,8 @@ def config_show() -> None:
 
     console.print(table)
     console.print(
-        "\n[dim]Sources (lowest to highest priority): defaults → "
-        "~/.config/corridorkey/corridorkey.yaml → ./corridorkey.yaml → "
+        "\n[dim]Sources (lowest to highest priority): defaults -> "
+        "~/.config/corridorkey/corridorkey.yaml -> ./corridorkey.yaml -> "
         "CORRIDORKEY_* env vars[/dim]"
     )
 

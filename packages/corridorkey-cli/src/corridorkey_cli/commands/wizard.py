@@ -42,8 +42,8 @@ def wizard(
         typer.Argument(help="Directory to process. Prompted interactively if omitted."),
     ] = None,
 ) -> None:
-    """Interactive wizard: scan → review → configure → process → re-scan."""
-    console.print(Panel("[bold cyan]CorridorKey — Wizard[/bold cyan]", expand=False))
+    """Interactive wizard: scan -> review -> configure -> process -> re-scan."""
+    console.print(Panel("[bold cyan]CorridorKey - Wizard[/bold cyan]", expand=False))
 
     # Resolve directory
     if clips_dir is None:
@@ -126,11 +126,11 @@ def _offer_organize(clips_dir: Path) -> None:
     if loose_videos:
         console.print(f"[yellow]{len(loose_videos)} loose video file(s) found:[/yellow]")
         for v in loose_videos:
-            console.print(f"  • {v}")
+            console.print(f"  - {v}")
     if unstructured_dirs:
         console.print(f"[yellow]{len(unstructured_dirs)} folder(s) with unstructured content:[/yellow]")
         for d in unstructured_dirs:
-            console.print(f"  • {d}")
+            console.print(f"  - {d}")
 
     console.print(
         "\n[dim]These will be restructured into clip folders with [bold]Input/[/bold] "

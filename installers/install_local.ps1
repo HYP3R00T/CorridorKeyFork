@@ -20,9 +20,6 @@ function Write-Fail([string]$msg) { Write-Host ""; Write-Host "    [ERROR] $msg"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $cliPath  = Join-Path $repoRoot "packages\corridorkey-cli"
 
-# -------------------------------------------------------
-# Banner
-# -------------------------------------------------------
 Write-Host ""
 Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host "    CorridorKey - AI Green Screen Keyer"           -ForegroundColor Cyan
@@ -39,9 +36,6 @@ if (-not (Test-Path $cliPath)) {
     exit 1
 }
 
-# -------------------------------------------------------
-# Step 1: Pick GPU variant
-# -------------------------------------------------------
 Write-Host ""
 Write-Host "Which GPU do you have?" -ForegroundColor White
 Write-Host ""
@@ -65,9 +59,6 @@ Write-Host ""
 Write-Ok "Selected: $backend"
 Write-Ok "Source:   $cliPath"
 
-# -------------------------------------------------------
-# Step 2: Ensure uv is installed
-# -------------------------------------------------------
 Write-Step "Checking for uv package manager..."
 
 $uvCmd = Get-Command "uv" -ErrorAction SilentlyContinue
@@ -93,9 +84,6 @@ if (-not $uvCmd) {
 }
 Write-Ok "uv is ready."
 
-# -------------------------------------------------------
-# Step 3: Install corridorkey-cli from local path
-# -------------------------------------------------------
 Write-Step "Installing from local workspace..."
 
 try {
@@ -108,18 +96,12 @@ try {
 }
 Write-Ok "corridorkey-cli installed."
 
-# -------------------------------------------------------
-# Step 4: First-time setup
-# -------------------------------------------------------
 Write-Step "Running first-time setup..."
 Write-Host "    You will be asked whether to download the inference model (~400 MB)."
 Write-Host ""
 
 & corridorkey init
 
-# -------------------------------------------------------
-# Step 5: Create Desktop launcher
-# -------------------------------------------------------
 Write-Step "Creating Desktop launcher..."
 
 $desktopPath = [System.Environment]::GetFolderPath("Desktop")
@@ -149,9 +131,6 @@ Set-Content -Path $launcherPath -Value $launcherContent -Encoding ASCII
 Write-Ok "Launcher created on Desktop: CorridorKey - Drop Clips Here.bat"
 Write-Host "    Drag a clips folder onto it to start." -ForegroundColor DarkGray
 
-# -------------------------------------------------------
-# Done
-# -------------------------------------------------------
 Write-Host ""
 Write-Host "===================================================" -ForegroundColor Green
 Write-Host "    Setup complete! You are ready to key."         -ForegroundColor Green

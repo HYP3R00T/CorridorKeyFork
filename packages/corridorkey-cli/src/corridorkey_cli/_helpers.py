@@ -82,7 +82,7 @@ class ProgressContext:
         if self._task is None:
             self._task = self._progress.add_task(f"[cyan]{clip_name}[/cyan]", total=total)
         else:
-            # On the first real frame, torch.compile fires — show a hint.
+            # On the first real frame, torch.compile fires - show a hint.
             description = (
                 f"[cyan]{clip_name}[/cyan] [dim](compiling kernels...)[/dim]"
                 if current == 0

@@ -22,18 +22,12 @@ fail() { echo -e "\n    ${RED}[ERROR]${RESET} $*"; }
 SYSTEM="$(uname -s)"
 ARCH="$(uname -m)"
 
-# -------------------------------------------------------
-# Banner
-# -------------------------------------------------------
 echo ""
 echo -e "${CYAN}===================================================${RESET}"
 echo -e "${CYAN}    CorridorKey - AI Green Screen Keyer${RESET}"
 echo -e "${CYAN}    Installer${RESET}"
 echo -e "${CYAN}===================================================${RESET}"
 
-# -------------------------------------------------------
-# Step 1: Pick GPU variant
-# -------------------------------------------------------
 echo ""
 
 # On Apple Silicon, MLX is the only sensible GPU option - skip the NVIDIA choice
@@ -72,9 +66,6 @@ fi
 echo ""
 ok "Selected: $BACKEND"
 
-# -------------------------------------------------------
-# Step 2: Ensure uv is installed
-# -------------------------------------------------------
 step "Checking for uv package manager..."
 
 if ! command -v uv &>/dev/null; then
@@ -90,9 +81,6 @@ if ! command -v uv &>/dev/null; then
 fi
 ok "uv is ready."
 
-# -------------------------------------------------------
-# Step 3: Install corridorkey-cli
-# -------------------------------------------------------
 step "Installing $PACKAGE..."
 
 if ! uv tool install "$PACKAGE" --python 3.13; then
@@ -102,18 +90,12 @@ if ! uv tool install "$PACKAGE" --python 3.13; then
 fi
 ok "corridorkey-cli installed."
 
-# -------------------------------------------------------
-# Step 4: First-time setup
-# -------------------------------------------------------
 step "Running first-time setup..."
 echo "    You will be asked whether to download the inference model (~400 MB)."
 echo ""
 
 corridorkey init
 
-# -------------------------------------------------------
-# Step 5: Create Desktop launcher
-# -------------------------------------------------------
 step "Creating Desktop launcher..."
 
 DESKTOP_DIR=""
@@ -180,9 +162,6 @@ DESKTOP_EOF
     fi
 fi
 
-# -------------------------------------------------------
-# Done
-# -------------------------------------------------------
 echo ""
 echo -e "${GREEN}===================================================${RESET}"
 echo -e "${GREEN}    Setup complete! You are ready to key.${RESET}"

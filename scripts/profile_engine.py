@@ -123,7 +123,6 @@ def main() -> None:
     print("Warm-up done")
     print()
 
-    # --- Wall-clock timing ---
     print(f"Timing {args.frames} frames...")
     times_ms: list[float] = []
     for _ in range(args.frames):
@@ -135,7 +134,6 @@ def main() -> None:
 
     _print_timing_summary(times_ms)
 
-    # --- torch.profiler breakdown ---
     print("Running torch.profiler (5 frames)...")
     activities = [ProfilerActivity.CPU, ProfilerActivity.CUDA]
 

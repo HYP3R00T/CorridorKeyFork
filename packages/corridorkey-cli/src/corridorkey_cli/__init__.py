@@ -11,6 +11,7 @@ from corridorkey_cli.commands.doctor import doctor
 from corridorkey_cli.commands.init import init
 from corridorkey_cli.commands.process import process
 from corridorkey_cli.commands.scan import scan
+from corridorkey_cli.commands.stitch import stitch
 from corridorkey_cli.commands.wizard import wizard
 
 app = typer.Typer(
@@ -25,6 +26,7 @@ app.command("doctor")(doctor)
 app.command("wizard")(wizard)
 app.command("process")(process)
 app.command("scan")(scan)
+app.command("stitch")(stitch)
 app.add_typer(config_app, name="config")
 
 
