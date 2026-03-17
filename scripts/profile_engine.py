@@ -105,7 +105,7 @@ def main() -> None:
         torch.compile = lambda model, **kwargs: model  # type: ignore[assignment]
         print("torch.compile disabled")
 
-    from corridorkey_core.inference_engine import CorridorKeyEngine
+    from corridorkey_core.pipeline.engine import CorridorKeyEngine
 
     print("Loading engine...")
     t0 = time.monotonic()
