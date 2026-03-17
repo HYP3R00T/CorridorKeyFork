@@ -6,7 +6,15 @@ from pathlib import Path
 from typing import Annotated
 
 import typer
-from corridorkey import InferenceParams, OutputConfig, PipelineResult, process_directory
+from corridorkey import (
+    CorridorKeyService,
+    InferenceParams,
+    OutputConfig,
+    PipelineResult,
+    process_directory,
+    validate_job_inputs,
+)
+from corridorkey.clip_state import ClipState
 from rich.table import Table
 
 from corridorkey_cli._helpers import ProgressContext, console, err_console, setup_logging
@@ -82,6 +90,22 @@ def process(
         processed_enabled=not no_processed,
         exr_compression=exr_compression,
     )
+
+    # Validate all READY clips before loading the engine.
+    _svc = CorridorKeyService()
+    _clips = _svc.scan_clips(str(clips_dir))
+    _ready = _svc.get_clips_by_state(_clips, ClipState.READY)
+    _validation_failed = False
+    for _clip in _ready:
+        _vr = validate_job_inputs(_clip)
+        for _warn in _vr.warnings:
+            err_console.print(f"[yellow]Warning:[/yellow] {_warn}")
+        if not _vr.ok:
+            for _err in _vr.errors:
+                err_console.print(f"[red]Validation error:[/red] {_err}")
+            _validation_failed = True
+    if _validation_failed:
+        raise typer.Exit(1)
 
     with ProgressContext() as prog:
         result = process_directory(
