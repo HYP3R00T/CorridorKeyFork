@@ -52,7 +52,7 @@ __all__ = [
     "InferenceParams",
     "OutputConfig",
     "FrameResult",
-    # Bridge helpers — convert application types to core stage contracts
+    # Bridge helpers -- convert application types to core stage contracts
     "inference_params_to_postprocess",
     "output_config_to_write_config",
     # Pipeline stages (I/O and orchestration)

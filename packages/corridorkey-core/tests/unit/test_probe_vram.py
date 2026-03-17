@@ -1,7 +1,7 @@
 """Unit tests for _probe_vram_gb in pipeline/engine.py.
 
-Tests all three resolution paths: pynvml success, pynvml unavailable → torch
-fallback, and both unavailable → 0.0. No GPU required.
+Tests all three resolution paths: pynvml success, pynvml unavailable -> torch
+fallback, and both unavailable -> 0.0. No GPU required.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from corridorkey_core.pipeline.engine import _probe_vram_gb
 
 
 class TestProbeVramGb:
-    """_probe_vram_gb — VRAM detection with pynvml and torch fallbacks."""
+    """_probe_vram_gb -- VRAM detection with pynvml and torch fallbacks."""
 
     def test_pynvml_success(self):
         """When pynvml is available and succeeds, must return total VRAM in GB."""

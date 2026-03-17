@@ -63,7 +63,7 @@ def _config(
 
 
 class TestInferenceParamsToPostprocess:
-    """inference_params_to_postprocess — field mapping."""
+    """inference_params_to_postprocess -- field mapping."""
 
     def test_all_fields_mapped(self):
         params = InferenceParams(
@@ -85,7 +85,7 @@ class TestInferenceParamsToPostprocess:
 
 
 class TestOutputConfigToWriteConfig:
-    """output_config_to_write_config — field mapping + dirs injection."""
+    """output_config_to_write_config -- field mapping + dirs injection."""
 
     def test_dirs_injected(self):
         cfg = OutputConfig(exr_compression="pxr24")
@@ -126,7 +126,7 @@ class TestDefaultParams:
 
 
 class TestDetectDevice:
-    """detect_device — resolves and stores the compute device."""
+    """detect_device -- resolves and stores the compute device."""
 
     def test_returns_resolved_device(self):
         service = CorridorKeyService(_config(device="cpu"))
@@ -144,7 +144,7 @@ class TestDetectDevice:
 
 
 class TestGetVramInfo:
-    """get_vram_info — returns empty dict when CUDA unavailable."""
+    """get_vram_info -- returns empty dict when CUDA unavailable."""
 
     def test_returns_empty_when_cuda_unavailable(self):
         service = CorridorKeyService(_config())
@@ -173,7 +173,7 @@ class TestGetVramInfo:
 
 
 class TestIsEngineLoaded:
-    """is_engine_loaded — reflects engine load state."""
+    """is_engine_loaded -- reflects engine load state."""
 
     def test_false_before_load(self):
         service = CorridorKeyService(_config())
@@ -193,7 +193,7 @@ class TestIsEngineLoaded:
 
 
 class TestScanClips:
-    """scan_clips — delegates to scan_clips_dir."""
+    """scan_clips -- delegates to scan_clips_dir."""
 
     def test_delegates_to_scan_clips_dir(self):
         service = CorridorKeyService(_config())
@@ -205,7 +205,7 @@ class TestScanClips:
 
 
 class TestGetClipsByState:
-    """get_clips_by_state — filters clips by state."""
+    """get_clips_by_state -- filters clips by state."""
 
     def _clips(self) -> list[ClipEntry]:
         return [
@@ -236,7 +236,7 @@ class TestGetClipsByState:
 
 
 class TestUnloadEngine:
-    """unload_engine — clears engine reference and calls cache clear."""
+    """unload_engine -- clears engine reference and calls cache clear."""
 
     def test_engine_cleared_after_unload(self):
         service = CorridorKeyService(_config())
@@ -265,7 +265,7 @@ class TestUnloadEngine:
 
 
 class TestJobQueue:
-    """job_queue property — lazy initialisation."""
+    """job_queue property -- lazy initialisation."""
 
     def test_lazy_init(self):
         service = CorridorKeyService(_config())

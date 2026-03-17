@@ -1,7 +1,7 @@
 """Frame output writer and mask generation stub.
 
-write_outputs   — write all enabled output images for one processed frame.
-generate_masks  — stage 2 placeholder; raises NotImplementedError until a
+write_outputs   -- write all enabled output images for one processed frame.
+generate_masks  -- stage 2 placeholder; raises NotImplementedError until a
                   generator package is wired in.
 """
 
@@ -43,7 +43,7 @@ def write_outputs(frame: ProcessedFrame, cfg: WriteConfig) -> None:
     """Write all enabled output images for one processed frame to disk.
 
     Handles dtype conversion: EXR expects float32, PNG expects uint8.
-    All colour-space conversions happened in stage 5 — this function only writes.
+    All colour-space conversions happened in stage 5 -- this function only writes.
 
     Args:
         frame: ProcessedFrame from stage_5_postprocess.
@@ -95,10 +95,10 @@ def generate_masks(
     Delegates to an external AlphaGenerator implementation. If the output
     directory is already populated the caller should skip this stage entirely.
 
-    Supported generators (future — install as separate packages):
+    Supported generators (future -- install as separate packages):
         corridorkey-gbm     Chroma key / GBM-based generator.
-        corridorkey-sam2    SAM2 — strongest temporal consistency.
-        corridorkey-gvm     GVM / VideoMaMa — handles difficult footage.
+        corridorkey-sam2    SAM2 -- strongest temporal consistency.
+        corridorkey-gvm     GVM / VideoMaMa -- handles difficult footage.
 
     Args:
         frames_dir: Directory containing the source frame sequence.

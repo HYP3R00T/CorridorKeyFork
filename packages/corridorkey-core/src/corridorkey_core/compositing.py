@@ -279,7 +279,7 @@ def apply_source_passthrough(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Blend original source pixels into opaque interior regions of the fg prediction.
 
-    Interior pixels (where alpha ≈ 1.0) are taken from the source frame untouched.
+    Interior pixels (where alpha ~= 1.0) are taken from the source frame untouched.
     The model's fg prediction is only used in the edge transition band where it
     handles green-screen separation, hair strands, and semi-transparency.
 

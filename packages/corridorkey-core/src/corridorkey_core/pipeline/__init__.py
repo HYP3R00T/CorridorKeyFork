@@ -1,4 +1,4 @@
-"""Pipeline subpackage — internal compute stages for corridorkey-core.
+"""Pipeline subpackage -- internal compute stages for corridorkey-core.
 
 Not part of the public API. Import create_engine from corridorkey_core instead.
 """

@@ -1,7 +1,7 @@
-"""Unit tests for processing/writer.py — write_outputs and generate_masks.
+"""Unit tests for processing/writer.py -- write_outputs and generate_masks.
 
 write_outputs writes all enabled output images for one processed frame.
-Tests use tmp_path and synthetic numpy arrays — no GPU, no model files.
+Tests use tmp_path and synthetic numpy arrays -- no GPU, no model files.
 """
 
 from __future__ import annotations
@@ -69,12 +69,12 @@ def _cfg(
 
 
 # ---------------------------------------------------------------------------
-# write_outputs — PNG path
+# write_outputs -- PNG path
 # ---------------------------------------------------------------------------
 
 
 class TestWriteOutputsPng:
-    """write_outputs with PNG format — all four outputs written to disk."""
+    """write_outputs with PNG format -- all four outputs written to disk."""
 
     def test_fg_written(self, tmp_path: Path):
         """FG PNG must be written to the fg directory."""
@@ -162,12 +162,12 @@ class TestWriteOutputsPng:
 
 
 # ---------------------------------------------------------------------------
-# write_outputs — EXR path
+# write_outputs -- EXR path
 # ---------------------------------------------------------------------------
 
 
 class TestWriteOutputsExr:
-    """write_outputs with EXR format — verifies the write path is exercised.
+    """write_outputs with EXR format -- verifies the write path is exercised.
 
     EXR support requires OPENCV_IO_ENABLE_OPENEXR=1 at import time. In CI
     environments where that env var is not set we mock cv2.imwrite so the
@@ -197,7 +197,7 @@ class TestWriteOutputsExr:
 
 
 # ---------------------------------------------------------------------------
-# write_outputs — missing dir key
+# write_outputs -- missing dir key
 # ---------------------------------------------------------------------------
 
 
@@ -225,7 +225,7 @@ class TestWriteOutputsMissingDir:
 
 
 class TestGenerateMasks:
-    """generate_masks — always raises NotImplementedError (stage 2 placeholder)."""
+    """generate_masks -- always raises NotImplementedError (stage 2 placeholder)."""
 
     def test_raises_without_generator(self, tmp_path: Path):
         """Calling generate_masks with no generator must raise NotImplementedError."""

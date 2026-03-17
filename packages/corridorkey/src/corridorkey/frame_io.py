@@ -189,13 +189,13 @@ class FrameData:
     """Output of load_frame. Input to the core engine's preprocessing stage.
 
     Attributes:
-        image: RGB float32 [H, W, 3] sRGB, values 0–1.
-        mask: Grayscale float32 [H, W, 1] linear, values 0–1.
+        image: RGB float32 [H, W, 3] sRGB, values 0-1.
+        mask: Grayscale float32 [H, W, 1] linear, values 0-1.
             0.0 = definite background, 1.0 = definite foreground, 0.5 = unknown.
         source_h: Original frame height in pixels.
         source_w: Original frame width in pixels.
         is_linear: True if the source image was originally in linear light (e.g. EXR).
-            The image field always contains sRGB — this flag records the origin.
+            The image field always contains sRGB -- this flag records the origin.
         stem: Filename stem of the source frame (e.g. "frame_000001").
     """
 

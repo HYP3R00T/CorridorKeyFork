@@ -201,7 +201,7 @@ class TestProcessDirectory:
 
 
 class TestProcessDirectoryOverrides:
-    """process_directory — device/optimization/precision overrides and on_clip_done."""
+    """process_directory -- device/optimization/precision overrides and on_clip_done."""
 
     def _patched_service(self, clips):
         instance = MagicMock()
@@ -275,7 +275,7 @@ class TestProcessDirectoryOverrides:
 
 
 class TestProcessClipExtractingPaths:
-    """_process_clip — EXTRACTING state branches."""
+    """_process_clip -- EXTRACTING state branches."""
 
     def _service(self) -> MagicMock:
         s = MagicMock()
@@ -293,7 +293,7 @@ class TestProcessClipExtractingPaths:
         assert summary.error == "extraction failed"
 
     def test_extracting_to_raw_without_generator_skipped(self):
-        """EXTRACTING → RAW with no generator must be skipped with a warning."""
+        """EXTRACTING -> RAW with no generator must be skipped with a warning."""
         clip = _make_clip("shot1", ClipState.EXTRACTING)
         service = self._service()
 
@@ -309,7 +309,7 @@ class TestProcessClipExtractingPaths:
         assert any("no alpha generator" in w for w in warnings)
 
     def test_extracting_to_raw_with_generator_runs_alpha(self):
-        """EXTRACTING → RAW with a generator must run alpha generation."""
+        """EXTRACTING -> RAW with a generator must run alpha generation."""
         clip = _make_clip("shot1", ClipState.EXTRACTING)
         service = self._service()
         generator = MagicMock()

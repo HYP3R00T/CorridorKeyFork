@@ -1,7 +1,7 @@
-"""CorridorKeyService — backend API for CLI and GUI consumers.
+"""CorridorKeyService -- backend API for CLI and GUI consumers.
 
 The single entry point for all processing. Consumers never call inference
-engines directly — they call methods here which handle validation, state
+engines directly -- they call methods here which handle validation, state
 transitions, and error reporting.
 
 Model Residency Policy:
@@ -73,7 +73,7 @@ def output_config_to_write_config(cfg: OutputConfig, dirs: dict[str, str]) -> Wr
 
 
 class CorridorKeyService:
-    """Main backend service — scan, validate, process, write.
+    """Main backend service -- scan, validate, process, write.
 
     Holds the loaded inference engine and GPU lock. Everything else
     (project management, frame I/O, validation) is handled by pure

@@ -1,4 +1,4 @@
-"""CorridorKey core library — pure compute, no filesystem dependencies.
+"""CorridorKey core library -- pure compute, no filesystem dependencies.
 
 Public API
 ----------

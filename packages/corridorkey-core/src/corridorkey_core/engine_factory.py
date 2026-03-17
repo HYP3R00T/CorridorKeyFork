@@ -291,17 +291,17 @@ def _resolve_precision(precision: str, device: str) -> torch.dtype:
     # Auto-detect: prefer BF16 on hardware that supports it natively.
     dev = torch.device(device)
     if dev.type == "mps":
-        logger.info("Precision auto → bf16 (Apple Silicon MPS)")
+        logger.info("Precision auto -> bf16 (Apple Silicon MPS)")
         return torch.bfloat16
     if dev.type == "cuda" and torch.cuda.is_available():
         props = torch.cuda.get_device_properties(dev)
         # BF16 hardware support was introduced with Ampere (compute capability 8.0).
         if props.major >= 8:
-            logger.info("Precision auto → bf16 (Ampere+ GPU: %s)", props.name)
+            logger.info("Precision auto -> bf16 (Ampere+ GPU: %s)", props.name)
             return torch.bfloat16
-        logger.info("Precision auto → fp16 (pre-Ampere GPU: %s)", props.name)
+        logger.info("Precision auto -> fp16 (pre-Ampere GPU: %s)", props.name)
         return torch.float16
-    logger.info("Precision auto → fp16 (default)")
+    logger.info("Precision auto -> fp16 (default)")
     return torch.float16
 
 
@@ -325,9 +325,9 @@ def create_engine(
         backend: "torch", "mlx", "auto", or None. Resolved via resolve_backend().
         device: Torch device string (e.g. "cuda", "cpu"). Torch only. Defaults to "cpu" when None.
         img_size: Square resolution the model runs at internally.
-        optimization_mode: Torch only — "auto", "speed", or "lowvram".
+        optimization_mode: Torch only -- "auto", "speed", or "lowvram".
             Controls CNN refiner tiling and torch.compile. See CorridorKeyEngine for details.
-        precision: Torch only — "auto", "fp16", "bf16", or "fp32".
+        precision: Torch only -- "auto", "fp16", "bf16", or "fp32".
             "auto" selects BF16 on Ampere+/Apple Silicon, FP16 otherwise.
         tile_size: MLX only - tile size for tiled inference. None = full-frame.
         overlap: MLX only - overlap pixels between tiles.

@@ -1,4 +1,4 @@
-"""Unit tests for validators.validate_job_inputs — Tier 1 and Tier 2 checks.
+"""Unit tests for validators.validate_job_inputs -- Tier 1 and Tier 2 checks.
 
 All tests use tmp_path and mock ClipEntry objects. No GPU, no model files,
 no network access required.
@@ -58,7 +58,7 @@ def _clip(
 
 
 # ---------------------------------------------------------------------------
-# Tier 1 — instant checks
+# Tier 1 -- instant checks
 # ---------------------------------------------------------------------------
 
 
@@ -140,7 +140,7 @@ class TestTier1VramCheck:
         with (
             patch("torch.cuda.is_available", return_value=True),
             patch("torch.cuda.get_device_properties", return_value=mock_props),
-            patch("torch.cuda.memory_reserved", return_value=3 * 1024**3),  # 3 GB reserved → 1 GB free
+            patch("torch.cuda.memory_reserved", return_value=3 * 1024**3),  # 3 GB reserved -> 1 GB free
             patch("shutil.disk_usage") as mock_du,
         ):
             mock_du.return_value = MagicMock(free=100 * 1024**3)
@@ -193,7 +193,7 @@ class TestTier1FrameCountMismatch:
 
 
 # ---------------------------------------------------------------------------
-# Tier 2 — sample decode
+# Tier 2 -- sample decode
 # ---------------------------------------------------------------------------
 
 
@@ -284,7 +284,7 @@ class TestTier2SampleDecode:
         ):
             mock_du.return_value = MagicMock(free=100 * 1024**3)
             result = validate_job_inputs(clip)
-        # Video assets skip Tier 1 frame count check and Tier 2 — should be ok
+        # Video assets skip Tier 1 frame count check and Tier 2 -- should be ok
         assert result.ok is True
 
 
@@ -294,7 +294,7 @@ class TestTier2SampleDecode:
 
 
 class TestValidationResult:
-    """ValidationResult — ok flag semantics."""
+    """ValidationResult -- ok flag semantics."""
 
     def test_ok_true_when_no_errors(self):
         r = ValidationResult(ok=True, errors=[], warnings=[])

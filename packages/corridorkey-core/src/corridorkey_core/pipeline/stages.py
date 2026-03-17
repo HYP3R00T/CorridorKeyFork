@@ -1,7 +1,7 @@
 """Standalone stage functions for pipeline stages 3, 4, and 5.
 
 These functions exist for tooling that needs to call individual stages
-independently — e.g. benchmarking, visualising intermediate outputs, or
+independently -- e.g. benchmarking, visualising intermediate outputs, or
 building a custom postprocessing step.
 
 In the hot path, all three stages run fused inside CorridorKeyEngine.process_frame.
@@ -32,7 +32,7 @@ from corridorkey_core.pipeline.contracts import (
     RawPrediction,
 )
 
-# ImageNet normalisation constants — the Hiera encoder was pretrained with these.
+# ImageNet normalisation constants -- the Hiera encoder was pretrained with these.
 _IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 1, 3)
 _IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 1, 3)
 
@@ -49,8 +49,8 @@ def stage_3_preprocess(
     """Stage 3: Resize, normalise, and stack image + mask into a model-ready tensor.
 
     Args:
-        image: RGB float32 [H, W, 3] sRGB, values 0–1.
-        mask: Grayscale float32 [H, W, 1] linear, values 0–1.
+        image: RGB float32 [H, W, 3] sRGB, values 0-1.
+        mask: Grayscale float32 [H, W, 1] linear, values 0-1.
         source_h: Original frame height in pixels.
         source_w: Original frame width in pixels.
         img_size: Square resolution to resize to (must match model training resolution).
@@ -138,7 +138,7 @@ def stage_5_postprocess(
 
     Args:
         raw: RawPrediction from stage_4_infer.
-        source_image: Original source frame [H, W, 3] float32 sRGB, values 0–1.
+        source_image: Original source frame [H, W, 3] float32 sRGB, values 0-1.
         source_is_linear: True if the source image was originally in linear light.
         params: PostprocessParams controlling each step. Defaults to PostprocessParams().
         stem: Filename stem to carry through to ProcessedFrame.

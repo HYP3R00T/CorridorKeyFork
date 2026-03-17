@@ -1,4 +1,4 @@
-"""Unit tests for pipeline/stages.py — stage_3_preprocess, stage_4_infer, stage_5_postprocess.
+"""Unit tests for pipeline/stages.py -- stage_3_preprocess, stage_4_infer, stage_5_postprocess.
 
 All three stage functions run on CPU with synthetic numpy arrays and mock
 engines. No GPU, no model files, no filesystem access required.
@@ -51,7 +51,7 @@ def _raw(img_size: int = 64, source_h: int = 64, source_w: int = 64) -> RawPredi
 
 
 class TestStage3Preprocess:
-    """stage_3_preprocess — resize, normalise, stack into a 4-channel tensor."""
+    """stage_3_preprocess -- resize, normalise, stack into a 4-channel tensor."""
 
     def test_returns_preprocessed_tensor(self):
         """Must return a PreprocessedTensor dataclass."""
@@ -87,7 +87,7 @@ class TestStage3Preprocess:
     def test_mask_2d_input_accepted(self):
         """A 2-D mask [H, W] must be accepted without error."""
         mask_2d = np.random.rand(64, 64).astype(np.float32)
-        # stage_3 expects [H, W, 1] — but let's verify it handles the slice correctly
+        # stage_3 expects [H, W, 1] -- but let's verify it handles the slice correctly
         mask_3d = mask_2d[:, :, np.newaxis]
         result = stage_3_preprocess(_rgb(), mask_3d, 64, 64, img_size=32, device="cpu")
         assert result.tensor.shape == (1, 4, 32, 32)
@@ -99,7 +99,7 @@ class TestStage3Preprocess:
         mask = np.ones((64, 64, 1), dtype=np.float32)
         result = stage_3_preprocess(white, mask, 64, 64, img_size=32, device="cpu")
         rgb_channels = result.tensor[0, :3]
-        # After normalisation, white (1.0) → (1.0 - mean) / std which is > 1.0 for most channels
+        # After normalisation, white (1.0) -> (1.0 - mean) / std which is > 1.0 for most channels
         assert rgb_channels.max().item() > 1.0
 
 
@@ -109,7 +109,7 @@ class TestStage3Preprocess:
 
 
 class TestStage4Infer:
-    """stage_4_infer — forward pass through a mock engine."""
+    """stage_4_infer -- forward pass through a mock engine."""
 
     def _make_engine(self, img_size: int = 32) -> MagicMock:
         engine = MagicMock()
@@ -184,7 +184,7 @@ class TestStage4Infer:
 
 
 class TestStage5Postprocess:
-    """stage_5_postprocess — despeckle, despill, composite, upsample."""
+    """stage_5_postprocess -- despeckle, despill, composite, upsample."""
 
     def _run(self, source_h: int = 64, source_w: int = 64, img_size: int = 32, **kwargs) -> ProcessedFrame:
         raw = _raw(img_size=img_size, source_h=source_h, source_w=source_w)
@@ -253,7 +253,7 @@ class TestStage5Postprocess:
         assert result.processed.shape == (64, 64, 4)
 
     def test_source_is_linear_conversion(self):
-        """source_is_linear=True must apply linear→sRGB conversion without crashing."""
+        """source_is_linear=True must apply linear->sRGB conversion without crashing."""
         raw = _raw()
         source = _rgb()
         result = stage_5_postprocess(raw, source, source_is_linear=True)
