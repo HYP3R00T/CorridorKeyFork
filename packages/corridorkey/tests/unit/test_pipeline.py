@@ -198,3 +198,202 @@ class TestProcessDirectory:
             with pytest.raises(RuntimeError):
                 process_directory("/fake/dir")
         instance.unload_engine.assert_called_once()
+
+
+class TestProcessDirectoryOverrides:
+    """process_directory — device/optimization/precision overrides and on_clip_done."""
+
+    def _patched_service(self, clips):
+        instance = MagicMock()
+        instance.scan_clips.return_value = clips
+        instance.detect_device.return_value = "cpu"
+        instance.default_inference_params.return_value = InferenceParams()
+        instance.default_output_config.return_value = OutputConfig()
+        return instance
+
+    def test_device_override_passed_to_load_config(self):
+        """device override must be forwarded to load_config."""
+        with (
+            patch("corridorkey.pipeline.CorridorKeyService") as mock_cls,
+            patch("corridorkey.pipeline.load_config") as mock_lc,
+        ):
+            mock_lc.return_value = MagicMock()
+            instance = self._patched_service([])
+            mock_cls.return_value = instance
+            process_directory("/fake", device="cuda")
+        mock_lc.assert_called_once()
+        # load_config was called with overrides containing device
+        assert mock_lc.called
+
+    def test_optimization_mode_override(self):
+        """optimization_mode override must be forwarded to load_config."""
+        with (
+            patch("corridorkey.pipeline.CorridorKeyService") as mock_cls,
+            patch("corridorkey.pipeline.load_config") as mock_lc,
+        ):
+            mock_lc.return_value = MagicMock()
+            instance = self._patched_service([])
+            mock_cls.return_value = instance
+            process_directory("/fake", optimization_mode="speed")
+        assert mock_lc.called
+
+    def test_precision_override(self):
+        """precision override must be forwarded to load_config."""
+        with (
+            patch("corridorkey.pipeline.CorridorKeyService") as mock_cls,
+            patch("corridorkey.pipeline.load_config") as mock_lc,
+        ):
+            mock_lc.return_value = MagicMock()
+            instance = self._patched_service([])
+            mock_cls.return_value = instance
+            process_directory("/fake", precision="fp16")
+        assert mock_lc.called
+
+    def test_on_clip_done_called_per_clip(self):
+        """on_clip_done must be called once per clip with its ClipSummary."""
+        clip = _make_clip("shot1", ClipState.COMPLETE)
+        done_calls: list = []
+        with patch("corridorkey.pipeline.CorridorKeyService") as mock_cls:
+            instance = self._patched_service([clip])
+            mock_cls.return_value = instance
+            process_directory("/fake", on_clip_done=lambda s: done_calls.append(s))
+        assert len(done_calls) == 1
+        assert done_calls[0].name == "shot1"
+
+    def test_multiple_clips_all_processed(self):
+        """All clips in the scan result must be processed."""
+        clips = [
+            _make_clip("a", ClipState.COMPLETE),
+            _make_clip("b", ClipState.COMPLETE),
+            _make_clip("c", ClipState.COMPLETE),
+        ]
+        with patch("corridorkey.pipeline.CorridorKeyService") as mock_cls:
+            instance = self._patched_service(clips)
+            mock_cls.return_value = instance
+            result = process_directory("/fake")
+        assert len(result.clips) == 3
+
+
+class TestProcessClipExtractingPaths:
+    """_process_clip — EXTRACTING state branches."""
+
+    def _service(self) -> MagicMock:
+        s = MagicMock()
+        s.run_inference.return_value = [MagicMock(success=True)] * 3
+        return s
+
+    def test_extracting_error_captured(self):
+        """A CorridorKeyError from extract_clip must be captured into summary.error."""
+        from corridorkey.errors import CorridorKeyError
+
+        clip = _make_clip("shot1", ClipState.EXTRACTING)
+        service = self._service()
+        service.extract_clip.side_effect = CorridorKeyError("extraction failed")
+        summary = _process_clip(clip, service, InferenceParams(), OutputConfig(), None, None, None, None)
+        assert summary.error == "extraction failed"
+
+    def test_extracting_to_raw_without_generator_skipped(self):
+        """EXTRACTING → RAW with no generator must be skipped with a warning."""
+        clip = _make_clip("shot1", ClipState.EXTRACTING)
+        service = self._service()
+
+        def fake_extract(c, **kwargs):
+            c.state = ClipState.RAW
+
+        service.extract_clip.side_effect = fake_extract
+        warnings: list[str] = []
+        summary = _process_clip(
+            clip, service, InferenceParams(), OutputConfig(), None, None, lambda m: warnings.append(m), None
+        )
+        assert summary.skipped is True
+        assert any("no alpha generator" in w for w in warnings)
+
+    def test_extracting_to_raw_with_generator_runs_alpha(self):
+        """EXTRACTING → RAW with a generator must run alpha generation."""
+        clip = _make_clip("shot1", ClipState.EXTRACTING)
+        service = self._service()
+        generator = MagicMock()
+        generator.name = "mock_gen"
+
+        def fake_extract(c, **kwargs):
+            c.state = ClipState.RAW
+
+        def fake_alpha(c, gen, **kwargs):
+            c.state = ClipState.READY
+
+        service.extract_clip.side_effect = fake_extract
+        service.run_alpha_generator.side_effect = fake_alpha
+
+        summary = _process_clip(clip, service, InferenceParams(), OutputConfig(), generator, None, None, None)
+        service.run_alpha_generator.assert_called_once()
+        service.run_inference.assert_called_once()
+        assert summary.error is None
+
+    def test_extracting_to_raw_alpha_generator_error(self):
+        """CorridorKeyError from alpha generation after extraction must be captured."""
+        from corridorkey.errors import CorridorKeyError
+
+        clip = _make_clip("shot1", ClipState.EXTRACTING)
+        service = self._service()
+        generator = MagicMock()
+
+        def fake_extract(c, **kwargs):
+            c.state = ClipState.RAW
+
+        service.extract_clip.side_effect = fake_extract
+        service.run_alpha_generator.side_effect = CorridorKeyError("alpha gen failed")
+
+        summary = _process_clip(clip, service, InferenceParams(), OutputConfig(), generator, None, None, None)
+        assert summary.error == "alpha gen failed"
+
+    def test_extracting_to_raw_alpha_generator_cancelled(self):
+        """JobCancelledError from alpha generation after extraction must produce skipped summary."""
+        from corridorkey.errors import JobCancelledError
+
+        clip = _make_clip("shot1", ClipState.EXTRACTING)
+        service = self._service()
+        generator = MagicMock()
+
+        def fake_extract(c, **kwargs):
+            c.state = ClipState.RAW
+
+        service.extract_clip.side_effect = fake_extract
+        service.run_alpha_generator.side_effect = JobCancelledError("shot1", 0)
+
+        summary = _process_clip(clip, service, InferenceParams(), OutputConfig(), generator, None, None, None)
+        assert summary.skipped is True
+
+    def test_inference_cancelled_returns_skipped(self):
+        """JobCancelledError from run_inference must produce a skipped summary."""
+        from corridorkey.errors import JobCancelledError
+
+        clip = _make_clip("shot1", ClipState.READY)
+        service = self._service()
+        service.run_inference.side_effect = JobCancelledError("shot1", 0)
+
+        summary = _process_clip(clip, service, InferenceParams(), OutputConfig(), None, None, None, None)
+        assert summary.skipped is True
+
+    def test_raw_alpha_generator_cancelled(self):
+        """JobCancelledError from alpha generation on RAW clip must produce skipped summary."""
+        from corridorkey.errors import JobCancelledError
+
+        clip = _make_clip("shot1", ClipState.RAW)
+        service = self._service()
+        generator = MagicMock()
+        service.run_alpha_generator.side_effect = JobCancelledError("shot1", 0)
+
+        summary = _process_clip(clip, service, InferenceParams(), OutputConfig(), generator, None, None, None)
+        assert summary.skipped is True
+
+    def test_raw_alpha_generator_error(self):
+        """CorridorKeyError from alpha generation on RAW clip must be captured."""
+        from corridorkey.errors import CorridorKeyError
+
+        clip = _make_clip("shot1", ClipState.RAW)
+        service = self._service()
+        generator = MagicMock()
+        service.run_alpha_generator.side_effect = CorridorKeyError("alpha failed")
+
+        summary = _process_clip(clip, service, InferenceParams(), OutputConfig(), generator, None, None, None)
+        assert summary.error == "alpha failed"

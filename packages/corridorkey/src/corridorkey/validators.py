@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -17,6 +19,9 @@ from corridorkey.errors import (
     MaskChannelError,
     WriteFailureError,
 )
+
+if TYPE_CHECKING:
+    from corridorkey.clip_state import ClipEntry
 
 logger = logging.getLogger(__name__)
 
@@ -173,3 +178,184 @@ def ensure_output_dirs(clip_root: str) -> dict[str, str]:
     for d in dirs.values():
         os.makedirs(d, exist_ok=True)
     return dirs
+
+
+# ---------------------------------------------------------------------------
+# Job-level input validation (Tier 1 + Tier 2)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ValidationResult:
+    """Outcome of validate_job_inputs.
+
+    Attributes:
+        ok: True if all checks passed and the job can proceed.
+        errors: Fatal problems that must be resolved before processing.
+        warnings: Non-fatal issues the user should be aware of.
+    """
+
+    ok: bool
+    errors: list[str]
+    warnings: list[str]
+
+
+def validate_job_inputs(
+    clip: ClipEntry,
+    min_vram_gb: float = 6.0,
+    expected_output_gb: float = 2.0,
+) -> ValidationResult:
+    """Validate a clip's inputs before loading the inference engine.
+
+    Runs two tiers of checks:
+
+    Tier 1 — instant (milliseconds):
+        - Input asset path exists and is readable.
+        - Alpha asset path exists and is readable (if present).
+        - Output directory can be created.
+        - Enough free disk space for expected output.
+        - GPU VRAM meets the minimum requirement (if CUDA is available).
+        - Mask file count matches frame count (directory listing only).
+
+    Tier 2 — sample decode (a few seconds):
+        - Decodes first, last, and one random middle frame.
+        - Verifies all three have consistent resolution and dtype.
+
+    Args:
+        clip: ClipEntry in READY state (has both input and alpha assets).
+        min_vram_gb: Minimum free VRAM in GB required to proceed.
+            Defaults to 6.0 GB (safe floor for the 2048-resolution model).
+        expected_output_gb: Estimated output size in GB used for disk space check.
+            Defaults to 2.0 GB as a conservative per-clip estimate.
+
+    Returns:
+        ValidationResult with ok=True if all checks passed.
+        Errors are fatal; warnings are informational.
+    """
+    import random
+
+    import cv2
+
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    # ------------------------------------------------------------------
+    # Tier 1 — instant checks
+    # ------------------------------------------------------------------
+
+    # 1a. Input asset exists
+    if clip.input_asset is None:
+        errors.append(f"Clip '{clip.name}': no input asset found.")
+        return ValidationResult(ok=False, errors=errors, warnings=warnings)
+
+    input_path = clip.input_asset.path
+    if not os.path.exists(input_path):
+        errors.append(f"Clip '{clip.name}': input path does not exist: {input_path}")
+
+    # 1b. Alpha asset exists (if present)
+    if clip.alpha_asset is not None:
+        alpha_path = clip.alpha_asset.path
+        if not os.path.exists(alpha_path):
+            errors.append(f"Clip '{clip.name}': alpha path does not exist: {alpha_path}")
+
+    # 1c. Output directory can be created
+    output_root = os.path.join(clip.root_path, "Output")
+    try:
+        os.makedirs(output_root, exist_ok=True)
+    except OSError as exc:
+        errors.append(f"Clip '{clip.name}': cannot create output directory '{output_root}': {exc}")
+
+    # 1d. Disk space
+    try:
+        stat = os.statvfs(clip.root_path) if hasattr(os, "statvfs") else None
+        if stat is not None:
+            free_gb = (stat.f_bavail * stat.f_frsize) / (1024**3)
+            if free_gb < expected_output_gb:
+                errors.append(
+                    f"Clip '{clip.name}': insufficient disk space — "
+                    f"{free_gb:.1f} GB free, need ~{expected_output_gb:.1f} GB."
+                )
+        else:
+            # Windows fallback via shutil
+            import shutil
+
+            free_gb = shutil.disk_usage(clip.root_path).free / (1024**3)
+            if free_gb < expected_output_gb:
+                errors.append(
+                    f"Clip '{clip.name}': insufficient disk space — "
+                    f"{free_gb:.1f} GB free, need ~{expected_output_gb:.1f} GB."
+                )
+    except Exception as exc:
+        warnings.append(f"Clip '{clip.name}': disk space check failed (skipped): {exc}")
+
+    # 1e. VRAM check
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            props = torch.cuda.get_device_properties(0)
+            reserved = torch.cuda.memory_reserved(0)
+            free_vram_gb = (props.total_mem - reserved) / (1024**3)
+            if free_vram_gb < min_vram_gb:
+                errors.append(
+                    f"Clip '{clip.name}': insufficient VRAM — {free_vram_gb:.1f} GB free, need ~{min_vram_gb:.1f} GB."
+                )
+    except Exception as exc:
+        warnings.append(f"Clip '{clip.name}': VRAM check failed (skipped): {exc}")
+
+    # 1f. Mask count vs frame count (sequence assets only)
+    if (
+        clip.input_asset is not None
+        and clip.alpha_asset is not None
+        and clip.input_asset.asset_type == "sequence"
+        and clip.alpha_asset.asset_type == "sequence"
+    ):
+        try:
+            input_files = clip.input_asset.get_frame_files()
+            alpha_files = clip.alpha_asset.get_frame_files()
+            if len(input_files) != len(alpha_files):
+                errors.append(
+                    f"Clip '{clip.name}': frame count mismatch — "
+                    f"{len(input_files)} input frames vs {len(alpha_files)} alpha frames."
+                )
+        except Exception as exc:
+            warnings.append(f"Clip '{clip.name}': frame count check failed (skipped): {exc}")
+
+    # Bail early if Tier 1 already has fatal errors — no point decoding.
+    if errors:
+        return ValidationResult(ok=False, errors=errors, warnings=warnings)
+
+    # ------------------------------------------------------------------
+    # Tier 2 — sample decode
+    # ------------------------------------------------------------------
+
+    if clip.input_asset.asset_type == "sequence":
+        try:
+            input_files = clip.input_asset.get_frame_files()
+            n = len(input_files)
+            if n == 0:
+                errors.append(f"Clip '{clip.name}': input sequence is empty.")
+                return ValidationResult(ok=False, errors=errors, warnings=warnings)
+
+            indices = sorted({0, n - 1, random.randint(0, n - 1)})
+            shapes: list[tuple[int, int]] = []
+            dtypes: list[str] = []
+
+            for idx in indices:
+                fpath = os.path.join(input_path, input_files[idx])
+                frame = cv2.imread(fpath, cv2.IMREAD_UNCHANGED)
+                if frame is None:
+                    errors.append(f"Clip '{clip.name}': could not decode frame '{input_files[idx]}'.")
+                    continue
+                shapes.append((frame.shape[0], frame.shape[1]))
+                dtypes.append(str(frame.dtype))
+
+            if len(set(shapes)) > 1:
+                errors.append(f"Clip '{clip.name}': inconsistent frame resolution across sample frames: {set(shapes)}.")
+            if len(set(dtypes)) > 1:
+                warnings.append(f"Clip '{clip.name}': mixed dtypes across sample frames: {set(dtypes)}.")
+        except Exception as exc:
+            warnings.append(f"Clip '{clip.name}': sample decode check failed (skipped): {exc}")
+
+    ok = len(errors) == 0
+    return ValidationResult(ok=ok, errors=errors, warnings=warnings)

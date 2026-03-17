@@ -1,8 +1,4 @@
-"""Backward-compatible re-export shim.
-
-All implementation has moved to corridorkey.processing.
-Import from there directly, or from corridorkey (the package __init__).
-"""
+"""Processing subpackage — inference contracts, output writing, and the service layer."""
 
 from corridorkey.processing.contracts import FrameResult, InferenceParams, OutputConfig, WriteConfig
 from corridorkey.processing.service import (

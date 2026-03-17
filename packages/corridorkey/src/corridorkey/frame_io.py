@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 
 import cv2
 import numpy as np
@@ -175,3 +177,109 @@ def read_video_mask_at(video_path: str, frame_index: int) -> np.ndarray | None:
         return frame[:, :, 2].astype(np.float32) / 255.0
     finally:
         cap.release()
+
+
+# ---------------------------------------------------------------------------
+# Stage 1 contract
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class FrameData:
+    """Output of load_frame. Input to the core engine's preprocessing stage.
+
+    Attributes:
+        image: RGB float32 [H, W, 3] sRGB, values 0–1.
+        mask: Grayscale float32 [H, W, 1] linear, values 0–1.
+            0.0 = definite background, 1.0 = definite foreground, 0.5 = unknown.
+        source_h: Original frame height in pixels.
+        source_w: Original frame width in pixels.
+        is_linear: True if the source image was originally in linear light (e.g. EXR).
+            The image field always contains sRGB — this flag records the origin.
+        stem: Filename stem of the source frame (e.g. "frame_000001").
+    """
+
+    image: np.ndarray
+    mask: np.ndarray
+    source_h: int
+    source_w: int
+    is_linear: bool = False
+    stem: str = ""
+
+
+def load_frame(
+    image_path: str | Path,
+    mask_path: str | Path,
+    input_is_linear: bool = False,
+    stem: str = "",
+) -> FrameData:
+    """Read one image frame and its corresponding mask from disk.
+
+    Normalises both to float32 in [0, 1]. If the source image is in linear
+    light it is converted to sRGB here so all downstream stages always
+    receive sRGB. The ``is_linear`` flag on the returned FrameData records
+    the original colour space for reference.
+
+    Args:
+        image_path: Path to the source image (PNG, EXR, TIFF, etc.).
+        mask_path: Path to the alpha hint mask (any single-channel image).
+        input_is_linear: True if the source is in linear light (e.g. EXR).
+        stem: Filename stem to carry through the pipeline for output naming.
+            Defaults to the image filename stem when not provided.
+
+    Returns:
+        FrameData with image [H, W, 3] sRGB float32 and mask [H, W, 1] float32.
+
+    Raises:
+        FileNotFoundError: If either path does not exist.
+        OSError: If either file cannot be decoded by OpenCV.
+    """
+    image_path = Path(image_path)
+    mask_path = Path(mask_path)
+
+    if not image_path.exists():
+        raise FileNotFoundError(f"Image not found: {image_path}")
+    if not mask_path.exists():
+        raise FileNotFoundError(f"Mask not found: {mask_path}")
+
+    is_exr = image_path.suffix.lower() == ".exr"
+    raw = cv2.imread(str(image_path), cv2.IMREAD_UNCHANGED)
+    if raw is None:
+        raise OSError(f"Could not decode image: {image_path}")
+
+    if raw.ndim == 3 and raw.shape[2] == 4:
+        raw = raw[:, :, :3]
+    img_rgb = cv2.cvtColor(raw, cv2.COLOR_BGR2RGB)
+
+    if is_exr:
+        image = np.maximum(img_rgb, 0.0).astype(np.float32)
+        if input_is_linear:
+            image = np.asarray(linear_to_srgb(image), dtype=np.float32)
+    else:
+        image = img_rgb.astype(np.float32) / 255.0
+
+    h, w = image.shape[:2]
+
+    mask_raw = cv2.imread(str(mask_path), cv2.IMREAD_ANYDEPTH | cv2.IMREAD_UNCHANGED)
+    if mask_raw is None:
+        raise OSError(f"Could not decode mask: {mask_path}")
+
+    if mask_raw.dtype == np.uint8:
+        mask_f = mask_raw.astype(np.float32) / 255.0
+    elif mask_raw.dtype == np.uint16:
+        mask_f = mask_raw.astype(np.float32) / 65535.0
+    else:
+        mask_f = mask_raw.astype(np.float32)
+
+    if mask_f.ndim == 3:
+        mask_f = mask_f[:, :, 0]
+    mask_f = mask_f[:, :, np.newaxis]
+
+    return FrameData(
+        image=image,
+        mask=mask_f,
+        source_h=h,
+        source_w=w,
+        is_linear=input_is_linear,
+        stem=stem or image_path.stem,
+    )

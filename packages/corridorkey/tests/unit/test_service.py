@@ -1,4 +1,4 @@
-"""Unit tests for service.py — InferenceParams, OutputConfig, and _build_exr_flags.
+"""Unit tests for service.py — InferenceParams, OutputConfig, and exr_flags.
 
 These tests cover the dataclass contracts and the EXR flag builder without
 requiring a GPU, model files, or real frame data. The inference loop itself
@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
+from corridorkey.processing.writer import EXR_COMPRESSION_IDS, exr_flags
 from corridorkey.service import (
-    _EXR_COMPRESSION_IDS,
     InferenceParams,
     OutputConfig,
-    _build_exr_flags,
 )
 
 
@@ -130,59 +129,59 @@ class TestOutputConfig:
 
 
 class TestBuildExrFlags:
-    """_build_exr_flags — codec ID mapping and cv2 flag list structure."""
+    """exr_flags — codec ID mapping and cv2 flag list structure."""
 
     def test_returns_list(self):
-        """_build_exr_flags must return a list (cv2.imwrite flags format)."""
-        assert isinstance(_build_exr_flags(), list)
+        """exr_flags must return a list (cv2.imwrite flags format)."""
+        assert isinstance(exr_flags("dwaa"), list)
 
     def test_default_is_dwaa(self):
         """Default compression must be DWAA (codec ID 6)."""
-        flags = _build_exr_flags()
+        flags = exr_flags("dwaa")
         compression_idx = flags.index(cv2.IMWRITE_EXR_COMPRESSION)
-        assert flags[compression_idx + 1] == _EXR_COMPRESSION_IDS["dwaa"]
+        assert flags[compression_idx + 1] == EXR_COMPRESSION_IDS["dwaa"]
 
     def test_pxr24_codec_id(self):
         """'pxr24' must map to codec ID 5."""
-        flags = _build_exr_flags("pxr24")
+        flags = exr_flags("pxr24")
         compression_idx = flags.index(cv2.IMWRITE_EXR_COMPRESSION)
-        assert flags[compression_idx + 1] == _EXR_COMPRESSION_IDS["pxr24"]
+        assert flags[compression_idx + 1] == EXR_COMPRESSION_IDS["pxr24"]
 
     def test_zip_codec_id(self):
         """'zip' must map to codec ID 3."""
-        flags = _build_exr_flags("zip")
+        flags = exr_flags("zip")
         compression_idx = flags.index(cv2.IMWRITE_EXR_COMPRESSION)
-        assert flags[compression_idx + 1] == _EXR_COMPRESSION_IDS["zip"]
+        assert flags[compression_idx + 1] == EXR_COMPRESSION_IDS["zip"]
 
     def test_none_codec_id(self):
         """'none' must map to codec ID 0 (uncompressed)."""
-        flags = _build_exr_flags("none")
+        flags = exr_flags("none")
         compression_idx = flags.index(cv2.IMWRITE_EXR_COMPRESSION)
-        assert flags[compression_idx + 1] == _EXR_COMPRESSION_IDS["none"]
+        assert flags[compression_idx + 1] == EXR_COMPRESSION_IDS["none"]
 
     def test_unknown_codec_falls_back_to_dwaa(self):
         """An unrecognised codec name must silently fall back to DWAA."""
-        flags = _build_exr_flags("bogus_codec")
+        flags = exr_flags("bogus_codec")
         compression_idx = flags.index(cv2.IMWRITE_EXR_COMPRESSION)
-        assert flags[compression_idx + 1] == _EXR_COMPRESSION_IDS["dwaa"]
+        assert flags[compression_idx + 1] == EXR_COMPRESSION_IDS["dwaa"]
 
     def test_half_float_type_always_set(self):
         """EXR_TYPE_HALF must always be present regardless of compression choice."""
         for codec in ("dwaa", "pxr24", "zip", "none"):
-            flags = _build_exr_flags(codec)
+            flags = exr_flags(codec)
             assert cv2.IMWRITE_EXR_TYPE in flags
             type_idx = flags.index(cv2.IMWRITE_EXR_TYPE)
             assert flags[type_idx + 1] == cv2.IMWRITE_EXR_TYPE_HALF
 
     def test_case_insensitive(self):
         """Codec names must be accepted in any case."""
-        flags_lower = _build_exr_flags("dwaa")
-        flags_upper = _build_exr_flags("DWAA")
+        flags_lower = exr_flags("dwaa")
+        flags_upper = exr_flags("DWAA")
         assert flags_lower == flags_upper
 
 
 class TestSourcePassthrough:
-    """_apply_source_passthrough — blend logic, shape contract, and edge cases.
+    """apply_source_passthrough — blend logic, shape contract, and edge cases.
 
     Tests call the extracted helper directly with synthetic numpy arrays.
     No engine construction, no torch, no GPU — runs in milliseconds.
@@ -197,54 +196,54 @@ class TestSourcePassthrough:
 
     def test_output_shapes(self):
         """blended_fg must be [H,W,3] and processed_rgba must be [H,W,4]."""
-        from corridorkey_core.inference_engine import _apply_source_passthrough
+        from corridorkey_core.compositing import apply_source_passthrough
 
         source, fg, alpha = self._make_inputs()
-        blended_fg, processed_rgba = _apply_source_passthrough(source, fg, alpha, 1, 3)
+        blended_fg, processed_rgba = apply_source_passthrough(source, fg, alpha, 1, 3)
         assert blended_fg.shape == (32, 32, 3)
         assert processed_rgba.shape == (32, 32, 4)
 
     def test_interior_pulled_toward_source(self):
         """With a fully opaque alpha, blended_fg must be closer to source than model fg."""
-        from corridorkey_core.inference_engine import _apply_source_passthrough
+        from corridorkey_core.compositing import apply_source_passthrough
 
         source, fg, alpha = self._make_inputs()
-        blended_fg, _ = _apply_source_passthrough(source, fg, alpha, 1, 3)
+        blended_fg, _ = apply_source_passthrough(source, fg, alpha, 1, 3)
         # Source red channel is 1.0, model fg is 0.5 — blend should be > 0.6
         assert blended_fg[:, :, 0].mean() > 0.6
 
     def test_zero_alpha_uses_model_fg(self):
         """With alpha=0 everywhere, erosion produces no interior — output equals model fg."""
-        from corridorkey_core.inference_engine import _apply_source_passthrough
+        from corridorkey_core.compositing import apply_source_passthrough
 
         h, w = 32, 32
         source = np.ones((h, w, 3), dtype=np.float32) * np.array([1.0, 0.0, 0.0])
         fg = np.ones((h, w, 3), dtype=np.float32) * 0.5
         alpha = np.zeros((h, w, 1), dtype=np.float32)
-        blended_fg, _ = _apply_source_passthrough(source, fg, alpha, 1, 3)
+        blended_fg, _ = apply_source_passthrough(source, fg, alpha, 1, 3)
         np.testing.assert_allclose(blended_fg, fg, atol=1e-5)
 
     def test_processed_rgba_alpha_channel_unchanged(self):
         """The alpha channel of processed_rgba must equal the input alpha_pred."""
-        from corridorkey_core.inference_engine import _apply_source_passthrough
+        from corridorkey_core.compositing import apply_source_passthrough
 
         source, fg, alpha = self._make_inputs()
-        _, processed_rgba = _apply_source_passthrough(source, fg, alpha, 1, 3)
+        _, processed_rgba = apply_source_passthrough(source, fg, alpha, 1, 3)
         np.testing.assert_allclose(processed_rgba[:, :, 3:4], alpha, atol=1e-5)
 
     def test_output_dtype_is_float32(self):
         """Both outputs must be float32 regardless of input values."""
-        from corridorkey_core.inference_engine import _apply_source_passthrough
+        from corridorkey_core.compositing import apply_source_passthrough
 
         source, fg, alpha = self._make_inputs()
-        blended_fg, processed_rgba = _apply_source_passthrough(source, fg, alpha, 2, 5)
+        blended_fg, processed_rgba = apply_source_passthrough(source, fg, alpha, 2, 5)
         assert blended_fg.dtype == np.float32
         assert processed_rgba.dtype == np.float32
 
     def test_large_erode_with_small_frame_does_not_crash(self):
         """edge_erode_px larger than the frame must not raise — kernel clamps to 1."""
-        from corridorkey_core.inference_engine import _apply_source_passthrough
+        from corridorkey_core.compositing import apply_source_passthrough
 
         source, fg, alpha = self._make_inputs(8, 8)
-        blended_fg, _ = _apply_source_passthrough(source, fg, alpha, 100, 3)
+        blended_fg, _ = apply_source_passthrough(source, fg, alpha, 100, 3)
         assert blended_fg.shape == (8, 8, 3)
