@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import signal
+import threading
 import time
 from pathlib import Path
 from typing import Annotated
@@ -18,6 +20,7 @@ from corridorkey import (
     load_config,
     organize_clips,
 )
+from corridorkey.errors import JobCancelledError
 from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt, Prompt
 from rich.table import Table
@@ -370,6 +373,16 @@ def _run_inference(
     from rich.progress import SpinnerColumn, TextColumn
 
     failed: list[str] = []
+    cancel_event = threading.Event()
+
+    previous_sigint = signal.getsignal(signal.SIGINT)
+
+    def _request_cancel(_sig: int, _frame: object) -> None:
+        if not cancel_event.is_set():
+            cancel_event.set()
+            console.print("\n[yellow]Cancellation requested. Stopping after current frame...[/yellow]")
+
+    signal.signal(signal.SIGINT, _request_cancel)
 
     active_device, active_opt_mode, active_precision = service.configure_engine_settings(
         device=device,
@@ -381,81 +394,94 @@ def _run_inference(
         f"device={active_device}, optimization={active_opt_mode}, precision={active_precision}[/dim]"
     )
 
-    for clip in clips:
-        if clip.state != ClipState.EXTRACTING:
-            continue
-        total = clip.input_asset.frame_count if clip.input_asset else 0
-        console.print(f"\nClip [cyan]{clip.name}[/cyan]")
-        console.print(f"  {_stage(1, f'Extracting frames ({total} frames)')}")
-        with ProgressContext() as prog:
-            try:
-                service.extract_clip(clip, on_progress=prog.on_progress)
-            except Exception as e:
-                console.print(f"  [red]Extraction failed:[/red] {e}")
-                failed.append(clip.name)
+    try:
+        for clip in clips:
+            if clip.state != ClipState.EXTRACTING:
+                continue
+            total = clip.input_asset.frame_count if clip.input_asset else 0
+            console.print(f"\nClip [cyan]{clip.name}[/cyan]")
+            console.print(f"  {_stage(1, f'Extracting frames ({total} frames)')}")
+            with ProgressContext() as prog:
+                try:
+                    service.extract_clip(clip, on_progress=prog.on_progress)
+                except Exception as e:
+                    console.print(f"  [red]Extraction failed:[/red] {e}")
+                    failed.append(clip.name)
+            if cancel_event.is_set():
+                break
 
-    ready_clips = [c for c in clips if c.state == ClipState.READY]
-    if not ready_clips:
-        if failed:
-            console.print(f"\n[red]Failed clips:[/red] {', '.join(failed)}")
-        else:
-            console.print("\n[yellow]No READY clips after extraction.[/yellow]")
-        return
+        ready_clips = [c for c in clips if c.state == ClipState.READY]
+        if not ready_clips:
+            if failed:
+                console.print(f"\n[red]Failed clips:[/red] {', '.join(failed)}")
+            else:
+                console.print("\n[yellow]No READY clips after extraction.[/yellow]")
+            return
 
-    if not service.is_engine_loaded():
-        with RichProgress(
-            SpinnerColumn(),
-            TextColumn("[cyan]Loading model (first run compiles kernels, ~1 min)...[/cyan]"),
-            console=console,
-            transient=True,
-        ) as spin:
-            spin.add_task("")
-            service.load_engine()
+        if not service.is_engine_loaded():
+            with RichProgress(
+                SpinnerColumn(),
+                TextColumn("[cyan]Loading model (first run compiles kernels, ~1 min)...[/cyan]"),
+                console=console,
+                transient=True,
+            ) as spin:
+                spin.add_task("")
+                service.load_engine()
 
-    runtime_cfg = service.get_engine_runtime_config()
-    if runtime_cfg is not None:
-        console.print(
-            "[dim]Engine resolved: "
-            f"backend={runtime_cfg['backend']}, "
-            f"device={runtime_cfg['device']}, "
-            f"optimization={runtime_cfg['optimization_mode']}, "
-            f"precision={runtime_cfg['precision']}[/dim]"
-        )
-        if runtime_cfg["device"] == "cpu":
+        runtime_cfg = service.get_engine_runtime_config()
+        if runtime_cfg is not None:
             console.print(
-                "[yellow]CPU mode detected: inference will be significantly slower than CUDA/MPS.[/yellow]"
+                "[dim]Engine resolved: "
+                f"backend={runtime_cfg['backend']}, "
+                f"device={runtime_cfg['device']}, "
+                f"optimization={runtime_cfg['optimization_mode']}, "
+                f"precision={runtime_cfg['precision']}, "
+                f"img_size={runtime_cfg.get('img_size', 'unknown')}[/dim]"
             )
-
-    for clip in ready_clips:
-        total = clip.input_asset.frame_count if clip.input_asset else 0
-        has_alpha = clip.alpha_asset is not None and (clip.alpha_asset.frame_count or 0) > 0
-        console.print(f"\nClip [cyan]{clip.name}[/cyan]  ({total} frames)")
-        console.print(f"  {_stage(1, f'Loading frames ({total} frames)')}")
-        console.print(
-            f"  {_stage(2, 'alpha hints present', skipped=has_alpha) if has_alpha else _stage(2, 'Generating alpha hints')}"
-        )
-        console.print(f"  {_stage(3, 'Preprocessing')}  /  {_stage(4, 'Inference')}  /  {_stage(5, 'Postprocessing')}")
-        with ProgressContext() as prog:
-            t0 = time.monotonic()
-            try:
-                results = service.run_inference(
-                    clip,
-                    params,
-                    on_progress=prog.on_progress,
-                    on_warning=prog.on_warning,
-                    output_config=output_config,
-                )
-                elapsed = time.monotonic() - t0
-                ok = sum(1 for r in results if r.success)
-                fps_rate = ok / elapsed if elapsed > 0 else 0
-                console.print(f"  {_stage(6, 'Writing outputs')}")
+            if runtime_cfg["device"] == "cpu":
                 console.print(
-                    f"  [green]✓ Done:[/green] {ok}/{len(results)} frames  "
-                    f"[dim]{elapsed:.1f}s  ({fps_rate:.2f} fps)[/dim]"
+                    "[yellow]CPU mode detected: inference will be significantly slower than CUDA/MPS.[/yellow]"
                 )
-            except Exception as e:
-                console.print(f"  [red]Failed:[/red] {e}")
-                failed.append(clip.name)
+
+        for clip in ready_clips:
+            total = clip.input_asset.frame_count if clip.input_asset else 0
+            has_alpha = clip.alpha_asset is not None and (clip.alpha_asset.frame_count or 0) > 0
+            console.print(f"\nClip [cyan]{clip.name}[/cyan]  ({total} frames)")
+            console.print(f"  {_stage(1, f'Loading frames ({total} frames)')}")
+            console.print(
+                f"  {_stage(2, 'alpha hints present', skipped=has_alpha) if has_alpha else _stage(2, 'Generating alpha hints')}"
+            )
+            console.print(f"  {_stage(3, 'Preprocessing')}  /  {_stage(4, 'Inference')}  /  {_stage(5, 'Postprocessing')}")
+            with ProgressContext() as prog:
+                t0 = time.monotonic()
+                try:
+                    results = service.run_inference(
+                        clip,
+                        params,
+                        on_progress=prog.on_progress,
+                        on_warning=prog.on_warning,
+                        output_config=output_config,
+                        cancel_event=cancel_event,
+                    )
+                    elapsed = time.monotonic() - t0
+                    ok = sum(1 for r in results if r.success)
+                    fps_rate = ok / elapsed if elapsed > 0 else 0
+                    console.print(f"  {_stage(6, 'Writing outputs')}")
+                    console.print(
+                        f"  [green]✓ Done:[/green] {ok}/{len(results)} frames  "
+                        f"[dim]{elapsed:.1f}s  ({fps_rate:.2f} fps)[/dim]"
+                    )
+                except JobCancelledError:
+                    console.print("  [yellow]Cancelled by user.[/yellow]")
+                    failed.append(clip.name)
+                    break
+                except Exception as e:
+                    console.print(f"  [red]Failed:[/red] {e}")
+                    failed.append(clip.name)
+            if cancel_event.is_set():
+                break
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint)
 
     if failed:
         console.print(f"\n[red]Failed clips:[/red] {', '.join(failed)}")
