@@ -252,6 +252,9 @@ class CorridorKeyService:
             auto_despeckle=self._config.auto_despeckle,
             despeckle_size=self._config.despeckle_size,
             refiner_scale=self._config.refiner_scale,
+            source_passthrough=self._config.source_passthrough,
+            edge_erode_px=self._config.edge_erode_px,
+            edge_blur_px=self._config.edge_blur_px,
         )
 
     def default_output_config(self) -> OutputConfig:
@@ -265,6 +268,7 @@ class CorridorKeyService:
             matte_format=self._config.matte_format,
             comp_format=self._config.comp_format,
             processed_format=self._config.processed_format,
+            exr_compression=self._config.exr_compression,
         )
 
     @property
@@ -350,6 +354,8 @@ class CorridorKeyService:
         self._engine = create_engine(
             checkpoint_dir=self._config.checkpoint_dir,
             device=self._device,
+            optimization_mode=self._config.optimization_mode,
+            precision=self._config.precision,
         )
         self._engine_loaded = True
         logger.info("Engine loaded in %.1fs", time.monotonic() - t0)

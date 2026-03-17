@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from corridorkey.clip_state import ClipEntry, ClipState
-from corridorkey.config import CorridorKeyConfig
+from corridorkey.config import CorridorKeyConfig, load_config
 from corridorkey.errors import CorridorKeyError, JobCancelledError
 from corridorkey.protocols import AlphaGenerator
 from corridorkey.service import CorridorKeyService, InferenceParams, OutputConfig
@@ -57,6 +57,8 @@ def process_directory(
     alpha_generator: AlphaGenerator | None = None,
     config: CorridorKeyConfig | None = None,
     device: str | None = None,
+    optimization_mode: str | None = None,
+    precision: str | None = None,
     on_progress: Callable[[str, int, int], None] | None = None,
     on_warning: Callable[[str], None] | None = None,
     on_clip_start: Callable[[str, str], None] | None = None,
@@ -74,12 +76,16 @@ def process_directory(
 
     Args:
         clips_dir: Path to scan for clips.
-        params: Inference parameters. Defaults to InferenceParams().
-        output_config: Output format config. Defaults to OutputConfig().
+        params: Inference parameters. Defaults to service.default_inference_params().
+        output_config: Output format config. Defaults to service.default_output_config().
         alpha_generator: Optional AlphaGenerator for RAW/MASKED clips.
         config: CorridorKeyConfig instance. Loaded from disk if None.
         device: Compute device override ("cuda", "mps", "cpu", "auto").
             Overrides config.device when provided.
+        optimization_mode: CNN refiner tiling strategy override ("auto", "speed",
+            "lowvram"). Overrides config.optimization_mode when provided.
+        precision: Inference float format override ("auto", "fp16", "bf16", "fp32").
+            Overrides config.precision when provided.
         on_progress: Called with (clip_name, current_frame, total_frames).
         on_warning: Called with non-fatal warning messages.
         on_clip_start: Called with (clip_name, state) before processing each clip.
@@ -88,8 +94,22 @@ def process_directory(
     Returns:
         PipelineResult with per-clip summaries.
     """
+    # Apply runtime overrides on top of the resolved config so the service
+    # picks them up when it lazy-loads the engine.
+    if config is None:
+        overrides: dict = {}
+        if device is not None:
+            overrides["device"] = device
+        if optimization_mode is not None:
+            overrides["optimization_mode"] = optimization_mode
+        if precision is not None:
+            overrides["precision"] = precision
+        config = load_config(overrides=overrides or None)
+
     service = CorridorKeyService(config)
-    service.detect_device(device)
+    # device is already baked into config above; detect_device resolves the
+    # final torch device string from config.device.
+    service.detect_device(None)
 
     params = params or service.default_inference_params()
     output_config = output_config or service.default_output_config()

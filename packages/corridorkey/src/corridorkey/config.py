@@ -59,15 +59,28 @@ class CorridorKeyConfig(BaseModel):
             Only change this if you are hosting a renamed build.
         device: Compute device to use. One of "auto", "cuda", "mps", "cpu".
             "auto" selects the best available device at runtime.
+        optimization_mode: CNN refiner tiling strategy. One of "auto", "speed",
+            "lowvram". "auto" probes VRAM and selects the best mode.
+        precision: Floating point format for inference. One of "auto", "fp16",
+            "bf16", "fp32". "auto" selects BF16 on Ampere+/Apple Silicon,
+            FP16 otherwise.
         despill_strength: Default green-spill suppression strength (0.0-1.0).
         auto_despeckle: Enable automatic matte despeckling by default.
         despeckle_size: Maximum speckle area in pixels to remove.
         refiner_scale: Scale factor for the optional refiner stage.
         input_is_linear: Treat input frames as linear light (e.g. EXR) by default.
+        source_passthrough: In opaque interior regions, use original source pixels
+            instead of the model's fg prediction. Preserves full source colour
+            fidelity in faces, clothing, etc.
+        edge_erode_px: Pixels to erode the interior mask inward before blending.
+            Safety buffer to avoid using source pixels near green-spill edges.
+        edge_blur_px: Gaussian blur radius for the source/model fg transition seam.
         fg_format: Default foreground output format ("exr" or "png").
         matte_format: Default matte output format ("exr" or "png").
         comp_format: Default composite preview format ("exr" or "png").
         processed_format: Default processed input format ("exr" or "png").
+        exr_compression: EXR compression codec applied to all EXR outputs.
+            One of "dwaa", "piz", "zip", "none".
     """
 
     # Paths
@@ -78,8 +91,10 @@ class CorridorKeyConfig(BaseModel):
     model_download_url: str | None = None
     model_filename: str | None = None
 
-    # Device
+    # Device and engine
     device: str = "auto"
+    optimization_mode: str = "auto"
+    precision: str = "auto"
 
     # Default inference params
     despill_strength: float = 1.0
@@ -87,12 +102,16 @@ class CorridorKeyConfig(BaseModel):
     despeckle_size: int = 400
     refiner_scale: float = 1.0
     input_is_linear: bool = False
+    source_passthrough: bool = False
+    edge_erode_px: int = 3
+    edge_blur_px: int = 7
 
     # Default output formats
     fg_format: str = "exr"
     matte_format: str = "exr"
     comp_format: str = "png"
     processed_format: str = "png"
+    exr_compression: str = "dwaa"
 
     @field_validator("app_dir", "checkpoint_dir", mode="before")
     @classmethod
