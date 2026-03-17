@@ -11,6 +11,7 @@ import logging
 import math
 import os
 import sys
+import time
 from pathlib import Path
 
 import cv2
@@ -118,6 +119,7 @@ class CorridorKeyEngine:  # pragma: no cover
             self.mixed_precision = False
 
         self.model_precision = model_precision
+        self._resolved_optimization_mode = "speed"
 
         # Resolve optimization mode - env var overrides argument.
         env_mode = os.environ.get(OPT_MODE_ENV_VAR, "").lower()
@@ -134,6 +136,7 @@ class CorridorKeyEngine:  # pragma: no cover
         if optimization_mode == "speed":
             self._tile_refiner = False
             self._use_compile = True
+            self._resolved_optimization_mode = "speed"
             logger.info("Optimization: speed (full-frame refiner, torch.compile)")
         elif optimization_mode == "lowvram":
             self._tile_refiner = True
@@ -142,6 +145,7 @@ class CorridorKeyEngine:  # pragma: no cover
             # compiled submodule, once via the hook closure) and raises
             # "already tracked for mutation". Eager mode is correct here.
             self._use_compile = False
+            self._resolved_optimization_mode = "lowvram"
             logger.info(
                 "Optimization: lowvram (tiled refiner %dx%d, %dpx overlap, eager mode)",
                 _REFINER_TILE_SIZE,
@@ -153,6 +157,7 @@ class CorridorKeyEngine:  # pragma: no cover
             if 0 < vram_gb < _VRAM_TILE_THRESHOLD_GB:
                 self._tile_refiner = True
                 self._use_compile = False  # hooks + compile incompatible, see lowvram note above
+                self._resolved_optimization_mode = "lowvram"
                 logger.info(
                     "Optimization: auto -> lowvram (%.1f GB < %.0f GB threshold, eager mode)",
                     vram_gb,
@@ -161,6 +166,7 @@ class CorridorKeyEngine:  # pragma: no cover
             else:
                 self._tile_refiner = False
                 self._use_compile = True
+                self._resolved_optimization_mode = "speed"
                 logger.info(
                     "Optimization: auto -> speed (%.1f GB >= %.0f GB threshold)", vram_gb, _VRAM_TILE_THRESHOLD_GB
                 )
@@ -213,6 +219,20 @@ class CorridorKeyEngine:  # pragma: no cover
                 self.model = model
         else:
             self.model = model
+
+    def runtime_config(self) -> dict[str, str]:
+        """Return resolved runtime configuration for user-facing reporting."""
+        precision_map = {
+            torch.float16: "fp16",
+            torch.bfloat16: "bf16",
+            torch.float32: "fp32",
+        }
+        return {
+            "backend": "torch",
+            "device": self.device.type,
+            "optimization_mode": self._resolved_optimization_mode,
+            "precision": precision_map.get(self.model_precision, str(self.model_precision)),
+        }
 
     def _load_model(self) -> GreenFormer:
         """Load and return a GreenFormer model from the configured checkpoint path."""
@@ -382,6 +402,7 @@ class CorridorKeyEngine:  # pragma: no cover
         Returns:
             Dict with keys "alpha", "fg", "comp", "processed" - all at source resolution.
         """
+        t_pre_start = time.monotonic()
         if image.dtype == np.uint8:
             image = image.astype(np.float32) / 255.0
         if mask_linear.dtype == np.uint8:
@@ -407,6 +428,7 @@ class CorridorKeyEngine:  # pragma: no cover
         model_input = (
             torch.from_numpy(model_input_np.transpose((2, 0, 1))).unsqueeze(0).to(self.model_precision).to(self.device)
         )
+        preprocess_ms = (time.monotonic() - t_pre_start) * 1000.0
 
         hook_handle = None
         if self._tile_refiner and self.model.refiner is not None:
@@ -432,14 +454,17 @@ class CorridorKeyEngine:  # pragma: no cover
         else:
             pre_handle = None
 
+        t_model_start = time.monotonic()
         with torch.autocast(device_type=self.device.type, dtype=torch.float16, enabled=self.mixed_precision):
             model_output = self.model(model_input)
+        model_ms = (time.monotonic() - t_model_start) * 1000.0
 
         if hook_handle:
             hook_handle.remove()
         if pre_handle:
             pre_handle.remove()
 
+        t_post_start = time.monotonic()
         alpha_s = model_output["alpha"][0].permute(1, 2, 0).float().cpu().numpy()
         fg_s = model_output["fg"][0].permute(1, 2, 0).float().cpu().numpy()
 
@@ -476,6 +501,15 @@ class CorridorKeyEngine:  # pragma: no cover
             fg_pred, output_rgba = apply_source_passthrough(
                 source_srgb, fg_pred, alpha_pred, edge_erode_px, edge_blur_px
             )
+
+        postprocess_ms = (time.monotonic() - t_post_start) * 1000.0
+        logger.debug(
+            "engine_frame_timing preprocess_ms=%.1f model_ms=%.1f postprocess_ms=%.1f total_ms=%.1f",
+            preprocess_ms,
+            model_ms,
+            postprocess_ms,
+            preprocess_ms + model_ms + postprocess_ms,
+        )
 
         return {
             "alpha": alpha_pred,

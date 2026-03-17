@@ -7,7 +7,9 @@ generate_masks  - stage 2 placeholder; raises NotImplementedError until a
 
 from __future__ import annotations
 
+import logging
 import os
+import time
 from typing import TYPE_CHECKING, Any
 
 import cv2
@@ -15,6 +17,8 @@ import numpy as np
 
 from corridorkey.contracts import WriteConfig
 from corridorkey.errors import WriteFailureError
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from corridorkey_core.contracts import ProcessedFrame
@@ -55,6 +59,7 @@ def write_outputs(frame: ProcessedFrame, cfg: WriteConfig) -> None:
     flags = exr_flags(cfg.exr_compression)
 
     def _write(img: np.ndarray, path: str, fmt: str, clip_name: str = "", frame_index: int = 0) -> None:
+        t_write = time.monotonic()
         if fmt == "exr":
             arr = img if img.dtype == np.float32 else img.astype(np.float32)
             ok = cv2.imwrite(path, arr, flags)
@@ -63,6 +68,13 @@ def write_outputs(frame: ProcessedFrame, cfg: WriteConfig) -> None:
             ok = cv2.imwrite(path, arr)
         if not ok:
             raise WriteFailureError(clip_name, frame_index, path)
+        logger.debug(
+            "frame_write stem=%s fmt=%s path=%s write_ms=%.1f",
+            stem,
+            fmt,
+            path,
+            (time.monotonic() - t_write) * 1000.0,
+        )
 
     if cfg.fg_enabled and "fg" in cfg.dirs:
         fg_bgr = cv2.cvtColor(frame.fg, cv2.COLOR_RGB2BGR)

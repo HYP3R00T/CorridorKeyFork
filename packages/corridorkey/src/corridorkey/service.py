@@ -175,6 +175,21 @@ class CorridorKeyService:
 
         return self._device, self._config.optimization_mode, self._config.precision
 
+    def get_engine_runtime_config(self) -> dict[str, str] | None:
+        """Return resolved runtime settings from the loaded engine, if available."""
+        if not self.is_engine_loaded() or self._engine is None:
+            return None
+        runtime_fn = getattr(self._engine, "runtime_config", None)
+        if callable(runtime_fn):
+            cfg = runtime_fn()
+            return {
+                "backend": str(cfg.get("backend", "unknown")),
+                "device": str(cfg.get("device", "unknown")),
+                "optimization_mode": str(cfg.get("optimization_mode", "unknown")),
+                "precision": str(cfg.get("precision", "unknown")),
+            }
+        return None
+
     def get_vram_info(self) -> dict[str, float | str]:
         """Return GPU VRAM info in GB. Empty dict if CUDA is unavailable."""
         try:
@@ -236,6 +251,15 @@ class CorridorKeyService:
         )
         self._engine_loaded = True
         logger.info("Engine loaded in %.1fs", time.monotonic() - t0)
+        runtime_cfg = self.get_engine_runtime_config()
+        if runtime_cfg is not None:
+            logger.info(
+                "Engine resolved config: backend=%s, device=%s, optimization=%s, precision=%s",
+                runtime_cfg["backend"],
+                runtime_cfg["device"],
+                runtime_cfg["optimization_mode"],
+                runtime_cfg["precision"],
+            )
         return self._engine
 
     def load_engine(self) -> None:
@@ -490,46 +514,67 @@ class CorridorKeyService:
         write_executor = ThreadPoolExecutor(max_workers=1)
         pending_write: Future | None = None
 
-        def _flush_pending(warn_cb: Any) -> None:
+        stage_totals_ms: dict[str, float] = {
+            "read": 0.0,
+            "infer": 0.0,
+            "write_wait": 0.0,
+            "write_enqueue": 0.0,
+            "frame_total": 0.0,
+        }
+        progress_interval = max(1, min(10, range_count // 5 if range_count > 5 else 1))
+
+        def _flush_pending(warn_cb: Any) -> float:
             nonlocal pending_write
+            waited_s = 0.0
             if pending_write is not None:
+                t_wait = time.monotonic()
                 try:
                     pending_write.result()
                 except WriteFailureError as exc:
                     logger.error(str(exc))
                     if warn_cb:
                         warn_cb(str(exc))
+                waited_s = time.monotonic() - t_wait
                 pending_write = None
+            return waited_s
 
         try:
             for progress_i, i in enumerate(frame_indices):
+                t_frame_total = time.monotonic()
                 if job and job.is_cancelled:
-                    _flush_pending(on_warning)
+                    stage_totals_ms["write_wait"] += _flush_pending(on_warning) * 1000.0
                     raise JobCancelledError(clip.name, i)
                 if on_progress:
                     on_progress(clip.name, progress_i, range_count)
                 try:
+                    t_read = time.monotonic()
                     img, input_stem, is_linear = self._read_input_frame(
                         clip, i, input_files, input_cap, params.input_is_linear
                     )
+                    read_ms = (time.monotonic() - t_read) * 1000.0
+                    stage_totals_ms["read"] += read_ms
                     if img is None:
-                        _flush_pending(on_warning)
+                        stage_totals_ms["write_wait"] += _flush_pending(on_warning) * 1000.0
                         skipped.append(i)
                         results.append(FrameResult(i, f"{i:05d}", False, "video read failed"))
                         continue
                     if input_stem in skip_stems:
                         results.append(FrameResult(i, input_stem, True, "resumed (skipped)"))
                         continue
+                    t_alpha = time.monotonic()
                     mask = self._read_alpha_frame(clip, i, alpha_files, alpha_cap)
+                    alpha_read_ms = (time.monotonic() - t_alpha) * 1000.0
+                    read_ms += alpha_read_ms
+                    stage_totals_ms["read"] += alpha_read_ms
                     if mask is None:
-                        _flush_pending(on_warning)
+                        stage_totals_ms["write_wait"] += _flush_pending(on_warning) * 1000.0
                         skipped.append(i)
                         results.append(FrameResult(i, input_stem, False, "alpha read failed"))
                         continue
                     if mask.shape[:2] != img.shape[:2]:
                         mask = cv2.resize(mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
 
-                    t_frame = time.monotonic()
+                    t_infer = time.monotonic()
                     with self._gpu_lock:
                         res = engine.process_frame(
                             img,
@@ -544,9 +589,11 @@ class CorridorKeyService:
                             edge_erode_px=params.edge_erode_px,
                             edge_blur_px=params.edge_blur_px,
                         )
-                    logger.debug("Clip '%s' frame %d: %.3fs", clip.name, i, time.monotonic() - t_frame)
+                    infer_ms = (time.monotonic() - t_infer) * 1000.0
+                    stage_totals_ms["infer"] += infer_ms
 
-                    _flush_pending(on_warning)
+                    wait_ms = _flush_pending(on_warning) * 1000.0
+                    stage_totals_ms["write_wait"] += wait_ms
                     write_cfg = output_config_to_write_config(cfg, dirs)
                     frame_out = ProcessedFrame(
                         alpha=res["alpha"],
@@ -557,7 +604,43 @@ class CorridorKeyService:
                         source_w=img.shape[1],
                         stem=input_stem,
                     )
+                    t_enqueue = time.monotonic()
                     pending_write = write_executor.submit(write_outputs, frame_out, write_cfg)
+                    enqueue_ms = (time.monotonic() - t_enqueue) * 1000.0
+                    stage_totals_ms["write_enqueue"] += enqueue_ms
+
+                    frame_total_ms = (time.monotonic() - t_frame_total) * 1000.0
+                    stage_totals_ms["frame_total"] += frame_total_ms
+
+                    logger.debug(
+                        "frame_timing clip=%s frame=%d stem=%s read_ms=%.1f infer_ms=%.1f write_wait_ms=%.1f "
+                        "write_enqueue_ms=%.1f total_ms=%.1f",
+                        clip.name,
+                        i,
+                        input_stem,
+                        read_ms,
+                        infer_ms,
+                        wait_ms,
+                        enqueue_ms,
+                        frame_total_ms,
+                    )
+
+                    processed_so_far = sum(1 for r in results if r.success) + 1
+                    if (
+                        processed_so_far % progress_interval == 0
+                        or processed_so_far == range_count
+                        or processed_so_far == 1
+                    ):
+                        elapsed = time.monotonic() - t_start
+                        fps = processed_so_far / elapsed if elapsed > 0 else 0.0
+                        logger.info(
+                            "Clip '%s': progress %d/%d (%.2f fps)",
+                            clip.name,
+                            processed_so_far,
+                            range_count,
+                            fps,
+                        )
+
                     results.append(FrameResult(i, input_stem, True))
                 except FrameReadError as e:
                     logger.warning(str(e))
@@ -571,11 +654,11 @@ class CorridorKeyService:
                     if on_warning:
                         on_warning(str(e))
 
-            _flush_pending(on_warning)
+            stage_totals_ms["write_wait"] += _flush_pending(on_warning) * 1000.0
             if on_progress:
                 on_progress(clip.name, range_count, range_count)
         finally:
-            _flush_pending(on_warning)
+            stage_totals_ms["write_wait"] += _flush_pending(on_warning) * 1000.0
             write_executor.shutdown(wait=True)
             if input_cap:
                 input_cap.release()
@@ -600,6 +683,17 @@ class CorridorKeyService:
             t_total,
             t_total / max(processed, 1),
         )
+        if processed > 0:
+            logger.info(
+                "Clip '%s': stage totals avg/frame read=%.1fms infer=%.1fms write_wait=%.1fms "
+                "write_enqueue=%.1fms total=%.1fms",
+                clip.name,
+                stage_totals_ms["read"] / processed,
+                stage_totals_ms["infer"] / processed,
+                stage_totals_ms["write_wait"] / processed,
+                stage_totals_ms["write_enqueue"] / processed,
+                stage_totals_ms["frame_total"] / processed,
+            )
 
         is_full_clip = frame_range is None or (frame_range[0] == 0 and frame_range[1] >= num_frames - 1)
         if processed == range_count and is_full_clip:

@@ -377,12 +377,9 @@ def _run_inference(
         precision=precision,
     )
     console.print(
-        f"[dim]Engine settings: device={active_device}, optimization={active_opt_mode}, precision={active_precision}[/dim]"
+        "[dim]Engine request: "
+        f"device={active_device}, optimization={active_opt_mode}, precision={active_precision}[/dim]"
     )
-    if active_device == "cpu":
-        console.print(
-            "[yellow]CPU mode detected: inference will be significantly slower than CUDA/MPS.[/yellow]"
-        )
 
     for clip in clips:
         if clip.state != ClipState.EXTRACTING:
@@ -414,6 +411,20 @@ def _run_inference(
         ) as spin:
             spin.add_task("")
             service.load_engine()
+
+    runtime_cfg = service.get_engine_runtime_config()
+    if runtime_cfg is not None:
+        console.print(
+            "[dim]Engine resolved: "
+            f"backend={runtime_cfg['backend']}, "
+            f"device={runtime_cfg['device']}, "
+            f"optimization={runtime_cfg['optimization_mode']}, "
+            f"precision={runtime_cfg['precision']}[/dim]"
+        )
+        if runtime_cfg["device"] == "cpu":
+            console.print(
+                "[yellow]CPU mode detected: inference will be significantly slower than CUDA/MPS.[/yellow]"
+            )
 
     for clip in ready_clips:
         total = clip.input_asset.frame_count if clip.input_asset else 0

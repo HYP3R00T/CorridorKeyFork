@@ -206,7 +206,19 @@ class _MLXEngineAdapter:  # pragma: no cover
 
     def __init__(self, mlx_engine) -> None:
         self._engine = mlx_engine
+        self._tile_size = getattr(mlx_engine, "tile_size", None)
+        self._overlap = getattr(mlx_engine, "overlap", None)
         logger.info("MLX adapter active: despill and despeckle are handled by the adapter, not native MLX")
+
+    def runtime_config(self) -> dict[str, str]:
+        """Return resolved runtime configuration for user-facing reporting."""
+        opt_mode = "tiled" if self._tile_size else "full-frame"
+        return {
+            "backend": "mlx",
+            "device": "apple-silicon",
+            "optimization_mode": opt_mode,
+            "precision": "mlx-default",
+        }
 
     def process_frame(
         self,
@@ -357,7 +369,7 @@ def create_engine(
     resolved_device = device or "cpu"
     model_dtype = _resolve_precision(precision, resolved_device)
     logger.info(  # pragma: no cover
-        "Torch engine loaded: %s (device=%s, optimization=%s, precision=%s)",
+        "Torch engine request: %s (device=%s, optimization=%s, precision=%s)",
         ckpt.name,
         resolved_device,
         optimization_mode,
