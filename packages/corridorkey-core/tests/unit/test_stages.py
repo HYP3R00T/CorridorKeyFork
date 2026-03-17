@@ -22,10 +22,6 @@ from corridorkey_core.pipeline.stages import (
     stage_5_postprocess,
 )
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _rgb(h: int = 64, w: int = 64) -> np.ndarray:
     return np.random.rand(h, w, 3).astype(np.float32)
@@ -43,11 +39,6 @@ def _raw(img_size: int = 64, source_h: int = 64, source_w: int = 64) -> RawPredi
         source_h=source_h,
         source_w=source_w,
     )
-
-
-# ---------------------------------------------------------------------------
-# stage_3_preprocess
-# ---------------------------------------------------------------------------
 
 
 class TestStage3Preprocess:
@@ -101,11 +92,6 @@ class TestStage3Preprocess:
         rgb_channels = result.tensor[0, :3]
         # After normalisation, white (1.0) -> (1.0 - mean) / std which is > 1.0 for most channels
         assert rgb_channels.max().item() > 1.0
-
-
-# ---------------------------------------------------------------------------
-# stage_4_infer
-# ---------------------------------------------------------------------------
 
 
 class TestStage4Infer:
@@ -176,11 +162,6 @@ class TestStage4Infer:
         pre = self._make_preprocessed(32)
         stage_4_infer(engine, pre, refiner_scale=1.0)
         engine.model.refiner.register_forward_hook.assert_not_called()
-
-
-# ---------------------------------------------------------------------------
-# stage_5_postprocess
-# ---------------------------------------------------------------------------
 
 
 class TestStage5Postprocess:

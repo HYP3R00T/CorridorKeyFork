@@ -179,11 +179,6 @@ def read_video_mask_at(video_path: str, frame_index: int) -> np.ndarray | None:
         cap.release()
 
 
-# ---------------------------------------------------------------------------
-# Stage 1 contract
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class FrameData:
     """Output of load_frame. Input to the core engine's preprocessing stage.

@@ -20,12 +20,6 @@ from corridorkey.model_manager import (
 def _config(checkpoint_dir: str) -> CorridorKeyConfig:
     return CorridorKeyConfig(checkpoint_dir=Path(checkpoint_dir))
 
-
-# ---------------------------------------------------------------------------
-# is_model_present
-# ---------------------------------------------------------------------------
-
-
 class TestIsModelPresent:
     """is_model_present -- checks for .pth or .safetensors in checkpoint_dir."""
 
@@ -52,12 +46,6 @@ class TestIsModelPresent:
         (tmp_path / "config.yaml").touch()
         cfg = _config(str(tmp_path))
         assert is_model_present(cfg) is False
-
-
-# ---------------------------------------------------------------------------
-# download_model -- error path
-# ---------------------------------------------------------------------------
-
 
 class TestDownloadModelError:
     """download_model -- network failure must raise RuntimeError and clean up tmp."""
@@ -153,12 +141,6 @@ class TestDownloadModelError:
         with patch("urllib.request.urlopen", return_value=mock_response):
             download_model(cfg, url="https://example.com/model.pth", filename="model.pth", checksum="")
         assert new_dir.is_dir()
-
-
-# ---------------------------------------------------------------------------
-# _sha256
-# ---------------------------------------------------------------------------
-
 
 class TestSha256:
     """_sha256 -- computes correct hex digest."""

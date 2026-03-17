@@ -12,10 +12,6 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 from corridorkey.validators import ValidationResult, validate_job_inputs
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _asset(path: str, asset_type: str = "sequence", frame_count: int = 10) -> MagicMock:
     asset = MagicMock()
@@ -55,11 +51,6 @@ def _clip(
     clip.alpha_asset.get_frame_files.return_value = [f"{i:05d}.png" for i in range(alpha_frame_count)]
 
     return clip
-
-
-# ---------------------------------------------------------------------------
-# Tier 1 -- instant checks
-# ---------------------------------------------------------------------------
 
 
 class TestTier1NoInputAsset:
@@ -192,11 +183,6 @@ class TestTier1FrameCountMismatch:
         assert result.ok is True
 
 
-# ---------------------------------------------------------------------------
-# Tier 2 -- sample decode
-# ---------------------------------------------------------------------------
-
-
 class TestTier2SampleDecode:
     """Tier 2: sample decode checks on sequence assets."""
 
@@ -286,11 +272,6 @@ class TestTier2SampleDecode:
             result = validate_job_inputs(clip)
         # Video assets skip Tier 1 frame count check and Tier 2 -- should be ok
         assert result.ok is True
-
-
-# ---------------------------------------------------------------------------
-# ValidationResult
-# ---------------------------------------------------------------------------
 
 
 class TestValidationResult:

@@ -15,10 +15,6 @@ from corridorkey.processing.contracts import WriteConfig
 from corridorkey.processing.writer import generate_masks, write_outputs
 from corridorkey_core.pipeline.contracts import ProcessedFrame
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _frame(h: int = 16, w: int = 16, stem: str = "frame_00001") -> ProcessedFrame:
     return ProcessedFrame(
@@ -31,7 +27,6 @@ def _frame(h: int = 16, w: int = 16, stem: str = "frame_00001") -> ProcessedFram
         stem=stem,
     )
 
-
 def _dirs(tmp_path: Path) -> dict[str, str]:
     dirs = {}
     for name in ("fg", "matte", "comp", "processed"):
@@ -39,7 +34,6 @@ def _dirs(tmp_path: Path) -> dict[str, str]:
         d.mkdir()
         dirs[name] = str(d)
     return dirs
-
 
 def _cfg(
     tmp_path: Path,
@@ -66,12 +60,6 @@ def _cfg(
         exr_compression=exr_compression,
         dirs=dirs if dirs is not None else _dirs(tmp_path),
     )
-
-
-# ---------------------------------------------------------------------------
-# write_outputs -- PNG path
-# ---------------------------------------------------------------------------
-
 
 class TestWriteOutputsPng:
     """write_outputs with PNG format -- all four outputs written to disk."""
@@ -160,12 +148,6 @@ class TestWriteOutputsPng:
         assert img is not None
         assert img.ndim == 2
 
-
-# ---------------------------------------------------------------------------
-# write_outputs -- EXR path
-# ---------------------------------------------------------------------------
-
-
 class TestWriteOutputsExr:
     """write_outputs with EXR format -- verifies the write path is exercised.
 
@@ -195,12 +177,6 @@ class TestWriteOutputsExr:
         cfg = _cfg(tmp_path, processed_format="exr")
         self._write_with_mock(cfg)
 
-
-# ---------------------------------------------------------------------------
-# write_outputs -- missing dir key
-# ---------------------------------------------------------------------------
-
-
 class TestWriteOutputsMissingDir:
     """write_outputs with a missing dir key must skip that output silently."""
 
@@ -217,12 +193,6 @@ class TestWriteOutputsMissingDir:
             dirs=dirs,
         )
         write_outputs(_frame(), cfg)  # must not raise
-
-
-# ---------------------------------------------------------------------------
-# generate_masks
-# ---------------------------------------------------------------------------
-
 
 class TestGenerateMasks:
     """generate_masks -- always raises NotImplementedError (stage 2 placeholder)."""

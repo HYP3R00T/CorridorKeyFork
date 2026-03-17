@@ -180,11 +180,6 @@ def ensure_output_dirs(clip_root: str) -> dict[str, str]:
     return dirs
 
 
-# ---------------------------------------------------------------------------
-# Job-level input validation (Tier 1 + Tier 2)
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class ValidationResult:
     """Outcome of validate_job_inputs.
@@ -239,9 +234,7 @@ def validate_job_inputs(
     errors: list[str] = []
     warnings: list[str] = []
 
-    # ------------------------------------------------------------------
-    # Tier 1 -- instant checks
-    # ------------------------------------------------------------------
+    # Tier 1: instant checks
 
     # 1a. Input asset exists
     if clip.input_asset is None:
@@ -325,9 +318,7 @@ def validate_job_inputs(
     if errors:
         return ValidationResult(ok=False, errors=errors, warnings=warnings)
 
-    # ------------------------------------------------------------------
-    # Tier 2 -- sample decode
-    # ------------------------------------------------------------------
+    # Tier 2: sample decode
 
     if clip.input_asset.asset_type == "sequence":
         try:
