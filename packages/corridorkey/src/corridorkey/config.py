@@ -380,13 +380,24 @@ def export_config(config: CorridorKeyConfig, path: str | Path | None = None) -> 
 
         value = getattr(config, field_name)
         if isinstance(value, Path):
-            value = str(value)
+            # Use forward slashes — safe on all platforms and avoids YAML
+            # escape issues with Windows backslashes inside quoted strings.
+            value = value.as_posix()
         if value is None:
             lines.append(f"{field_name}: null")
         elif isinstance(value, bool):
             lines.append(f"{field_name}: {'true' if value else 'false'}")
         elif isinstance(value, str):
-            lines.append(f'{field_name}: "{value}"')
+            # Only quote strings that contain YAML-special characters.
+            # Plain unquoted strings are safer on Windows (no backslash escaping).
+            needs_quotes = any(
+                c in value
+                for c in (": ", "#", "[", "]", "{", "}", ",", "&", "*", "?", "|", "<", ">", "=", "!", "%", "@", "`")
+            )
+            if needs_quotes:
+                lines.append(f"{field_name}: '{value}'")
+            else:
+                lines.append(f"{field_name}: {value}")
         else:
             lines.append(f"{field_name}: {value}")
         lines.append("")

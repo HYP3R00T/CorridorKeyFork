@@ -1,5 +1,10 @@
 """CorridorKey - application layer for the CorridorKey AI chroma keying pipeline."""
 
+import os
+
+# Must be set before cv2 is imported anywhere in the process.
+os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
+
 from corridorkey.clip_state import (
     ClipAsset,
     ClipEntry,

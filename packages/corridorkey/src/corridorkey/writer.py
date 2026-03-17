@@ -45,7 +45,7 @@ def write_outputs(frame: ProcessedFrame, cfg: WriteConfig) -> None:
     All colour-space conversions happened in stage 5 - this function only writes.
 
     Args:
-        frame: ProcessedFrame from stage_5_postprocess.
+        frame: ProcessedFrame from stage 5 postprocessing.
         cfg: WriteConfig controlling which outputs to write and where.
 
     Raises:

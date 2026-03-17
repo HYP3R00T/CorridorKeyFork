@@ -97,12 +97,12 @@ class TestExportConfig:
             assert ": True" not in line, f"Python-cased bool in: {line}"
             assert ": False" not in line, f"Python-cased bool in: {line}"
 
-    def test_string_values_quoted(self, tmp_path: Path):
-        """String values must be quoted in YAML format."""
+    def test_string_values_unquoted(self, tmp_path: Path):
+        """Simple string values are written unquoted (valid YAML, avoids escape issues)."""
         config = _config(tmp_path, device="cpu")
         dest = export_config(config, path=tmp_path / "out.yaml")
         content = dest.read_text()
-        assert 'device: "cpu"' in content
+        assert "device: cpu" in content
 
     def test_creates_parent_dirs(self, tmp_path: Path):
         """export_config must create any missing parent directories."""

@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 
 
 def inference_params_to_postprocess(params: InferenceParams):
-    """Convert InferenceParams to a PostprocessParams for stage_5_postprocess."""
+    """Convert InferenceParams to PostprocessParams for stage 5 postprocessing."""
     from corridorkey_core.contracts import PostprocessParams
 
     return PostprocessParams(
@@ -135,6 +135,45 @@ class CorridorKeyService:
         self._device = device_utils.resolve_device(requested or self._config.device)
         logger.info("Compute device: %s", self._device)
         return self._device
+
+    def configure_engine_settings(
+        self,
+        device: str | None = None,
+        optimization_mode: str | None = None,
+        precision: str | None = None,
+    ) -> tuple[str, str, str]:
+        """Apply runtime engine settings and unload engine if they changed.
+
+        Returns:
+            Tuple of (resolved_device, optimization_mode, precision) now active.
+        """
+        current_opt = self._config.optimization_mode
+        current_precision = self._config.precision
+        target_opt = optimization_mode or current_opt
+        target_precision = precision or current_precision
+        target_device = self._device if device is None else device_utils.resolve_device(device)
+
+        changed = (
+            target_device != self._device
+            or target_opt != self._config.optimization_mode
+            or target_precision != self._config.precision
+        )
+
+        self._device = target_device
+        self._config.device = target_device
+        self._config.optimization_mode = target_opt
+        self._config.precision = target_precision
+
+        if changed and self.is_engine_loaded():
+            logger.info(
+                "Engine settings changed (device=%s, optimization=%s, precision=%s) - reloading engine",
+                self._device,
+                self._config.optimization_mode,
+                self._config.precision,
+            )
+            self.unload_engine()
+
+        return self._device, self._config.optimization_mode, self._config.precision
 
     def get_vram_info(self) -> dict[str, float | str]:
         """Return GPU VRAM info in GB. Empty dict if CUDA is unavailable."""

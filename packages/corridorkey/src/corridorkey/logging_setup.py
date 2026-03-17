@@ -4,21 +4,22 @@ Every CLI session calls ``setup_logging()`` once at startup. It wires two
 handlers onto the root logger:
 
 - ``RichHandler``  - console, WARNING+ by default (DEBUG when verbose=True).
-- ``RotatingFileHandler`` - log file, INFO+ by default (or config.log_level).
+- ``RotatingFileHandler`` - session log file, INFO+ by default (or config.log_level).
   Writes newline-delimited JSON so logs are machine-readable and easy to grep.
 
 Log files live in ``config.log_dir`` (default ``~/.config/corridorkey/logs``).
-The active file is always ``corridorkey.log``. Up to 5 rotations of 5 MB each
-are kept, giving ~25 MB of history before the oldest is discarded.
+Each session creates a new file named ``YYMMDD_HHMMSS_corridorkey.log``, so
+runs never overwrite each other. Up to 5 rotations of 5 MB each are kept per
+session file before the oldest rotation is discarded.
 
 Sharing a bug report:
-    The file to share is ``~/.config/corridorkey/logs/corridorkey.log``.
-    It contains the full session history including platform info, config,
-    clip details, frame counts, timing, and any errors.
+    Share the session file printed at startup, e.g.
+    ``~/.config/corridorkey/logs/260317_142301_corridorkey.log``.
 """
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import logging.handlers
@@ -34,9 +35,6 @@ if TYPE_CHECKING:
 # Sentinel so setup_logging is idempotent within a process.
 _LOGGING_CONFIGURED = False
 
-# Log filename inside log_dir.
-_LOG_FILENAME = "corridorkey.log"
-
 # Rotation policy.
 _MAX_BYTES = 5 * 1024 * 1024  # 5 MB per file
 _BACKUP_COUNT = 5  # keep 5 rotations (~25 MB total)
@@ -46,7 +44,7 @@ class _JsonFormatter(logging.Formatter):
     """Format each log record as a single-line JSON object.
 
     Fields emitted:
-        ts      ISO-8601 timestamp (UTC)
+        ts      ISO-8601 timestamp with milliseconds (UTC)
         level   Log level name
         logger  Logger name (module path)
         msg     Formatted message string
@@ -54,8 +52,13 @@ class _JsonFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
+        ts = (
+            datetime.datetime.fromtimestamp(record.created, tz=datetime.timezone.utc)
+            .strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+            + "Z"
+        )
         obj: dict = {
-            "ts": self.formatTime(record, "%Y-%m-%dT%H:%M:%S"),
+            "ts": ts,
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),
@@ -80,7 +83,7 @@ def setup_logging(
             ``~/.config/corridorkey/logs`` and INFO level.
 
     Returns:
-        Path to the active log file, or None if file logging could not
+        Path to the session log file, or None if file logging could not
         be initialised (e.g. permission error on the log directory).
     """
     global _LOGGING_CONFIGURED
@@ -105,7 +108,7 @@ def setup_logging(
     console_handler.setLevel(console_level)
 
     # ------------------------------------------------------------------ #
-    # File handler - rotating JSON, INFO+ by default                      #
+    # File handler - session-named JSON log                               #
     # ------------------------------------------------------------------ #
     log_path: Path | None = None
     file_handler: logging.Handler | None = None
@@ -116,7 +119,8 @@ def setup_logging(
 
     try:
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / _LOG_FILENAME
+        session_ts = datetime.datetime.now().strftime("%y%m%d_%H%M%S")
+        log_path = (log_dir / f"{session_ts}_corridorkey.log").resolve()
         rotating = logging.handlers.RotatingFileHandler(
             log_path,
             maxBytes=_MAX_BYTES,
