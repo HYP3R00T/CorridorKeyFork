@@ -11,13 +11,16 @@ All tests run in the fast suite.
 """
 
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
+import torch
 from corridorkey_core.engine_factory import (
     BACKEND_ENV_VAR,
     MLX_EXT,
     TORCH_EXT,
+    VALID_PRECISIONS,
+    _resolve_precision,
     discover_checkpoint,
     resolve_backend,
 )
@@ -168,3 +171,73 @@ class TestDiscoverCheckpoint:
         (tmp_path / "model.pth").touch()
         result = discover_checkpoint(tmp_path, TORCH_EXT)
         assert result.suffix == TORCH_EXT
+
+
+class TestResolvePrecision:
+    """_resolve_precision — dtype selection from string, including auto-detection.
+
+    The precision parameter controls model weight dtype. A wrong dtype either
+    wastes VRAM (fp32 on a GPU that supports bf16) or causes silent numerical
+    issues (bf16 on a GPU that doesn't support it natively).
+    """
+
+    def test_explicit_fp16(self):
+        """'fp16' must always return float16 regardless of hardware."""
+        assert _resolve_precision("fp16", "cpu") == torch.float16
+
+    def test_explicit_bf16(self):
+        """'bf16' must always return bfloat16 regardless of hardware."""
+        assert _resolve_precision("bf16", "cpu") == torch.bfloat16
+
+    def test_explicit_fp32(self):
+        """'fp32' must always return float32 regardless of hardware."""
+        assert _resolve_precision("fp32", "cpu") == torch.float32
+
+    def test_unknown_precision_raises(self):
+        """An unrecognised precision string must raise ValueError immediately."""
+        with pytest.raises(ValueError, match="Unknown precision"):
+            _resolve_precision("int8", "cpu")
+
+    def test_valid_precisions_constant_covers_all(self):
+        """VALID_PRECISIONS must include all accepted string values."""
+        assert set(VALID_PRECISIONS) == {"auto", "fp16", "bf16", "fp32"}
+
+    def test_auto_on_cpu_returns_fp16(self):
+        """'auto' on CPU must fall back to fp16 (no BF16 hardware detection on CPU)."""
+        result = _resolve_precision("auto", "cpu")
+        assert result == torch.float16
+
+    def test_auto_on_mps_returns_bf16(self):
+        """'auto' on MPS must return bfloat16 (Apple Silicon supports BF16 natively)."""
+        result = _resolve_precision("auto", "mps")
+        assert result == torch.bfloat16
+
+    def test_auto_on_cuda_ampere_returns_bf16(self):
+        """'auto' on an Ampere+ GPU (compute capability >= 8.0) must return bfloat16."""
+        mock_props = MagicMock()
+        mock_props.major = 8
+        mock_props.name = "NVIDIA A100"
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.cuda.get_device_properties", return_value=mock_props),
+        ):
+            result = _resolve_precision("auto", "cuda")
+        assert result == torch.bfloat16
+
+    def test_auto_on_cuda_pre_ampere_returns_fp16(self):
+        """'auto' on a pre-Ampere GPU (compute capability < 8.0) must return float16."""
+        mock_props = MagicMock()
+        mock_props.major = 7
+        mock_props.name = "NVIDIA V100"
+        with (
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.cuda.get_device_properties", return_value=mock_props),
+        ):
+            result = _resolve_precision("auto", "cuda")
+        assert result == torch.float16
+
+    def test_auto_on_cuda_unavailable_returns_fp16(self):
+        """'auto' when CUDA reports unavailable must fall back to fp16."""
+        with patch("torch.cuda.is_available", return_value=False):
+            result = _resolve_precision("auto", "cuda")
+        assert result == torch.float16
