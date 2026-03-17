@@ -21,6 +21,7 @@ from corridorkey import (
     organize_clips,
 )
 from corridorkey.errors import JobCancelledError
+from rich import box
 from rich.panel import Panel
 from rich.prompt import Confirm, IntPrompt, Prompt
 from rich.table import Table
@@ -38,7 +39,19 @@ _STATE_COLOURS: dict[str, str] = {
     "ERROR": "red",
 }
 
-_ENGINE_PRESET_CHOICES: list[str] = ["manual", "speed", "balanced", "quality", "max_quality", "lowvram"]
+_ENGINE_PRESET_CHOICES: list[str] = ["speed", "balanced", "quality", "max_quality", "lowvram", "manual"]
+_ENGINE_PRESET_ALIASES: dict[str, str] = {
+    "d": "speed",
+    "default": "speed",
+    "s": "speed",
+    "b": "balanced",
+    "q": "quality",
+    "mq": "max_quality",
+    "max": "max_quality",
+    "l": "lowvram",
+    "m": "manual",
+    "man": "manual",
+}
 
 
 @app.callback(invoke_without_command=True)
@@ -78,10 +91,12 @@ def wizard(
 
     config = load_config()
     service = CorridorKeyService(config)
+    offered_organize = False
 
     while True:
-        if not yes:
+        if not yes and not offered_organize:
             _offer_organize(clips_dir)
+            offered_organize = True
 
         clips = service.scan_clips(str(clips_dir))
         _print_state_table(clips, clips_dir)
@@ -133,15 +148,25 @@ def wizard(
 
             params, output_config, device, opt_mode, precision, img_size = _prompt_settings(config)
 
-        _run_inference(service, actionable, params, output_config, device, opt_mode, precision, img_size)
+        had_success, cancelled = _run_inference(
+            service,
+            actionable,
+            params,
+            output_config,
+            device,
+            opt_mode,
+            precision,
+            img_size,
+        )
 
-        if output_config.stitch_enabled or (not yes and Confirm.ask("\nStitch outputs to video?", default=True)):
+        if cancelled:
+            continue
+
+        if had_success and (output_config.stitch_enabled or (not yes and Confirm.ask("\nStitch outputs to video?", default=True))):
             _run_stitch(service, actionable, output_config)
 
         if yes:
             break
-
-        Prompt.ask("\nPress Enter to re-scan")
 
     console.print("\n[bold green]Done.[/bold green]")
 
@@ -183,8 +208,9 @@ def _prompt_settings(
     # Group 1: Device & Engine
     console.print()
     console.print(Panel("[bold]Device & Engine[/bold]", border_style="cyan", expand=False))
+    preset_options = " / ".join(_ENGINE_PRESET_CHOICES)
     _show_group([
-        ("engine_preset", "manual", "manual / speed / balanced / quality / max_quality / lowvram"),
+        ("engine_preset", "speed", preset_options),
         ("device", config.device, "auto / cuda / mps / cpu"),
         ("optimization_mode", config.optimization_mode, "auto / speed / lowvram"),
         ("precision", config.precision, "auto / fp16 / bf16 / fp32"),
@@ -194,26 +220,20 @@ def _prompt_settings(
             "auto / 1024 / 1536 / 2048 / 2560",
         ),
     ])
-    preset_choice = Prompt.ask("engine preset", choices=_ENGINE_PRESET_CHOICES, default="manual")
+    preset_choice = _ask_engine_preset()
     if preset_choice != "manual":
         device, opt_mode, precision, img_size = _resolve_engine_preset(preset_choice, config.device)
         _show_group([
-            ("preset", preset_choice, ""),
-            ("device", device, ""),
-            ("optimization_mode", opt_mode, ""),
-            ("precision", precision, ""),
-            ("img_size", str(img_size) if img_size is not None else "auto", ""),
+            ("preset", preset_choice, "selected"),
+            ("device", device, "resolved"),
+            ("optimization_mode", opt_mode, "resolved"),
+            ("precision", precision, "resolved"),
+            ("img_size", str(img_size) if img_size is not None else "auto", "resolved"),
         ])
         if not Confirm.ask("Use preset values?", default=True):
             device, opt_mode, precision, img_size = _prompt_manual_engine_settings(config)
-    elif Confirm.ask("Accept device settings?", default=True):
-        device, opt_mode, precision, img_size = (
-            config.device,
-            config.optimization_mode,
-            config.precision,
-            config.img_size,
-        )
     else:
+        # Manual means the user wants to edit values immediately.
         device, opt_mode, precision, img_size = _prompt_manual_engine_settings(config)
 
     # Group 2: Inference & Postprocess
@@ -307,12 +327,17 @@ def _prompt_settings(
 
 
 def _show_group(rows: list[tuple[str, str, str]]) -> None:
-    table = Table(show_header=True, header_style="bold", box=None, padding=(0, 2))
+    show_options = any(options.strip() for _, _, options in rows)
+    table = Table(show_header=True, header_style="bold", box=box.SIMPLE, padding=(0, 2), pad_edge=True)
     table.add_column("Setting")
     table.add_column("Current")
-    table.add_column("Options", style="dim")
+    if show_options:
+        table.add_column("Options", style="dim")
     for name, value, options in rows:
-        table.add_row(name, f"[cyan]{value}[/cyan]", options)
+        if show_options:
+            table.add_row(name, f"[cyan]{value}[/cyan]", options)
+        else:
+            table.add_row(name, f"[cyan]{value}[/cyan]")
     console.print(table)
 
 
@@ -327,6 +352,21 @@ def _prompt_manual_engine_settings(config: CorridorKeyConfig) -> tuple[str, str,
     )
     img_size = None if img_size_text == "auto" else int(img_size_text)
     return device, opt_mode, precision, img_size
+
+
+def _ask_engine_preset() -> str:
+    choices_text = "/".join(_ENGINE_PRESET_CHOICES)
+    while True:
+        raw = Prompt.ask(f"engine preset [{choices_text}]", default="speed").strip().lower()
+        if raw in _ENGINE_PRESET_CHOICES:
+            return raw
+        if raw in _ENGINE_PRESET_ALIASES:
+            return _ENGINE_PRESET_ALIASES[raw]
+        console.print(
+            "[yellow]Invalid preset.[/yellow] "
+            "Use one of: speed, balanced, quality, max_quality, lowvram, manual "
+            "(aliases: d/s, b, q, mq, l, m)."
+        )
 
 
 def _resolve_engine_preset(preset: str, default_device: str = "auto") -> tuple[str, str, str, int | None]:
@@ -416,12 +456,14 @@ def _run_inference(
     optimization_mode: str,
     precision: str,
     img_size: int | None,
-) -> None:
+) -> tuple[bool, bool]:
     from rich.progress import Progress as RichProgress
     from rich.progress import SpinnerColumn, TextColumn
 
     failed: list[str] = []
     cancel_event = threading.Event()
+    had_success = False
+    cancelled = False
 
     previous_sigint = signal.getsignal(signal.SIGINT)
 
@@ -438,10 +480,9 @@ def _run_inference(
         precision=precision,
         img_size=img_size,
     )
-    console.print(
-        "[dim]Engine request: "
+    request_details = (
         f"device={active_device}, optimization={active_opt_mode}, precision={active_precision}, "
-        f"img_size={active_img_size if active_img_size is not None else 'auto'}[/dim]"
+        f"img_size={active_img_size if active_img_size is not None else 'auto'}"
     )
 
     try:
@@ -466,7 +507,7 @@ def _run_inference(
                 console.print(f"\n[red]Failed clips:[/red] {', '.join(failed)}")
             else:
                 console.print("\n[yellow]No READY clips after extraction.[/yellow]")
-            return
+            return False, cancelled
 
         if not service.is_engine_loaded():
             with RichProgress(
@@ -480,18 +521,28 @@ def _run_inference(
 
         runtime_cfg = service.get_engine_runtime_config()
         if runtime_cfg is not None:
-            console.print(
-                "[dim]Engine resolved: "
-                f"backend={runtime_cfg['backend']}, "
-                f"device={runtime_cfg['device']}, "
-                f"optimization={runtime_cfg['optimization_mode']}, "
-                f"precision={runtime_cfg['precision']}, "
-                f"img_size={runtime_cfg.get('img_size', 'unknown')}[/dim]"
-            )
+            console.print()
+            _show_group([
+                ("engine_request", request_details, ""),
+                (
+                    "engine_resolved",
+                    (
+                        f"backend={runtime_cfg['backend']}, "
+                        f"device={runtime_cfg['device']}, "
+                        f"optimization={runtime_cfg['optimization_mode']}, "
+                        f"precision={runtime_cfg['precision']}, "
+                        f"img_size={runtime_cfg.get('img_size', 'unknown')}"
+                    ),
+                    "",
+                ),
+            ])
             if runtime_cfg["device"] == "cpu":
                 console.print(
                     "[yellow]CPU mode detected: inference will be significantly slower than CUDA/MPS.[/yellow]"
                 )
+        else:
+            console.print()
+            _show_group([("engine_request", request_details, "")])
 
         for clip in ready_clips:
             total = clip.input_asset.frame_count if clip.input_asset else 0
@@ -516,6 +567,7 @@ def _run_inference(
                     elapsed = time.monotonic() - t0
                     ok = sum(1 for r in results if r.success)
                     fps_rate = ok / elapsed if elapsed > 0 else 0
+                    had_success = had_success or ok > 0
                     console.print(f"  {_stage(6, 'Writing outputs')}")
                     console.print(
                         f"  [green]✓ Done:[/green] {ok}/{len(results)} frames  "
@@ -524,11 +576,13 @@ def _run_inference(
                 except JobCancelledError:
                     console.print("  [yellow]Cancelled by user.[/yellow]")
                     failed.append(clip.name)
+                    cancelled = True
                     break
                 except Exception as e:
                     console.print(f"  [red]Failed:[/red] {e}")
                     failed.append(clip.name)
             if cancel_event.is_set():
+                cancelled = True
                 break
     finally:
         signal.signal(signal.SIGINT, previous_sigint)
@@ -537,6 +591,7 @@ def _run_inference(
         console.print(f"\n[red]Failed clips:[/red] {', '.join(failed)}")
     else:
         console.print("\n[green]All clips processed successfully.[/green]")
+    return had_success, cancelled
 
 
 def _run_stitch(

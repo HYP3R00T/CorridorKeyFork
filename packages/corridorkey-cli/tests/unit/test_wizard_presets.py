@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from corridorkey_cli.commands.wizard import _resolve_engine_preset
+from corridorkey_cli.commands.wizard import _ENGINE_PRESET_ALIASES, _ENGINE_PRESET_CHOICES, _resolve_engine_preset
 
 
 @pytest.mark.parametrize(
@@ -31,3 +31,24 @@ def test_resolve_engine_preset_uses_device_override() -> None:
 def test_resolve_engine_preset_invalid() -> None:
     with pytest.raises(ValueError, match="Unknown preset"):
         _resolve_engine_preset("manual")
+
+
+def test_engine_preset_choices_order() -> None:
+    assert _ENGINE_PRESET_CHOICES == ["speed", "balanced", "quality", "max_quality", "lowvram", "manual"]
+
+
+@pytest.mark.parametrize(
+    ("alias", "expected"),
+    [
+        ("d", "speed"),
+        ("default", "speed"),
+        ("s", "speed"),
+        ("b", "balanced"),
+        ("q", "quality"),
+        ("mq", "max_quality"),
+        ("l", "lowvram"),
+        ("m", "manual"),
+    ],
+)
+def test_engine_preset_aliases(alias: str, expected: str) -> None:
+    assert _ENGINE_PRESET_ALIASES[alias] == expected
