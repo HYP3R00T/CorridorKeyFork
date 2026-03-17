@@ -174,7 +174,7 @@ class TestDiscoverCheckpoint:
 
 
 class TestResolvePrecision:
-    """_resolve_precision -- dtype selection from string, including auto-detection.
+    """_resolve_precision - dtype selection from string, including auto-detection.
 
     The precision parameter controls model weight dtype. A wrong dtype either
     wastes VRAM (fp32 on a GPU that supports bf16) or causes silent numerical

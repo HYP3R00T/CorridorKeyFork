@@ -1,7 +1,7 @@
-"""Unit tests for processing/writer.py -- write_outputs and generate_masks.
+"""Unit tests for processing/writer.py - write_outputs and generate_masks.
 
 write_outputs writes all enabled output images for one processed frame.
-Tests use tmp_path and synthetic numpy arrays -- no GPU, no model files.
+Tests use tmp_path and synthetic numpy arrays - no GPU, no model files.
 """
 
 from __future__ import annotations
@@ -11,9 +11,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from corridorkey.processing.contracts import WriteConfig
-from corridorkey.processing.writer import generate_masks, write_outputs
-from corridorkey_core.pipeline.contracts import ProcessedFrame
+from corridorkey.contracts import WriteConfig
+from corridorkey.writer import generate_masks, write_outputs
+from corridorkey_core.contracts import ProcessedFrame
 
 
 def _frame(h: int = 16, w: int = 16, stem: str = "frame_00001") -> ProcessedFrame:
@@ -27,6 +27,7 @@ def _frame(h: int = 16, w: int = 16, stem: str = "frame_00001") -> ProcessedFram
         stem=stem,
     )
 
+
 def _dirs(tmp_path: Path) -> dict[str, str]:
     dirs = {}
     for name in ("fg", "matte", "comp", "processed"):
@@ -34,6 +35,7 @@ def _dirs(tmp_path: Path) -> dict[str, str]:
         d.mkdir()
         dirs[name] = str(d)
     return dirs
+
 
 def _cfg(
     tmp_path: Path,
@@ -61,8 +63,9 @@ def _cfg(
         dirs=dirs if dirs is not None else _dirs(tmp_path),
     )
 
+
 class TestWriteOutputsPng:
-    """write_outputs with PNG format -- all four outputs written to disk."""
+    """write_outputs with PNG format - all four outputs written to disk."""
 
     def test_fg_written(self, tmp_path: Path):
         """FG PNG must be written to the fg directory."""
@@ -148,8 +151,9 @@ class TestWriteOutputsPng:
         assert img is not None
         assert img.ndim == 2
 
+
 class TestWriteOutputsExr:
-    """write_outputs with EXR format -- verifies the write path is exercised.
+    """write_outputs with EXR format - verifies the write path is exercised.
 
     EXR support requires OPENCV_IO_ENABLE_OPENEXR=1 at import time. In CI
     environments where that env var is not set we mock cv2.imwrite so the
@@ -177,6 +181,7 @@ class TestWriteOutputsExr:
         cfg = _cfg(tmp_path, processed_format="exr")
         self._write_with_mock(cfg)
 
+
 class TestWriteOutputsMissingDir:
     """write_outputs with a missing dir key must skip that output silently."""
 
@@ -194,8 +199,9 @@ class TestWriteOutputsMissingDir:
         )
         write_outputs(_frame(), cfg)  # must not raise
 
+
 class TestGenerateMasks:
-    """generate_masks -- always raises NotImplementedError (stage 2 placeholder)."""
+    """generate_masks - always raises NotImplementedError (stage 2 placeholder)."""
 
     def test_raises_without_generator(self, tmp_path: Path):
         """Calling generate_masks with no generator must raise NotImplementedError."""

@@ -1,7 +1,7 @@
-"""CorridorKeyEngine -- loads the GreenFormer model and runs per-frame inference.
+"""CorridorKeyEngine - loads the GreenFormer model and runs per-frame inference.
 
 This is the hot path. Stages 3, 4, and 5 run fused here in a single optimised
-call. The standalone stage functions in pipeline.stages exist for tooling that
+call. The standalone stage functions in stages.py exist for tooling that
 needs to call individual stages independently.
 """
 
@@ -93,9 +93,9 @@ class CorridorKeyEngine:  # pragma: no cover
             mixed_precision: Whether to run inference in fp16 autocast.
             model_precision: Weight dtype for the model (float32 or float16).
             optimization_mode: Refiner execution strategy.
-                "auto"    -- probe VRAM via pynvml; < 12 GB -> lowvram, else -> speed.
-                "speed"   -- full 2048x2048 refiner pass + torch.compile.
-                "lowvram" -- tiled refiner (512x512, 128px overlap) + torch.compile.
+                "auto"    - probe VRAM via pynvml; < 12 GB -> lowvram, else -> speed.
+                "speed"   - full 2048x2048 refiner pass + torch.compile.
+                "lowvram" - tiled refiner (512x512, 128px overlap) + torch.compile.
                 MPS always forces "lowvram" (Triton does not support Metal).
                 Override via CORRIDORKEY_OPT_MODE environment variable.
         """
@@ -118,17 +118,17 @@ class CorridorKeyEngine:  # pragma: no cover
 
         self.model_precision = model_precision
 
-        # Resolve optimization mode -- env var overrides argument.
+        # Resolve optimization mode - env var overrides argument.
         env_mode = os.environ.get(OPT_MODE_ENV_VAR, "").lower()
         if env_mode in VALID_OPT_MODES:
             optimization_mode = env_mode
             logger.info("Optimization mode override from env: %s", env_mode)
 
-        # MPS always forces lowvram -- Triton/inductor does not support Metal.
+        # MPS always forces lowvram - Triton/inductor does not support Metal.
         is_mps = self.device.type == "mps"
         if is_mps:
             optimization_mode = "lowvram"
-            logger.info("MPS device detected -- forcing lowvram mode (no torch.compile on Metal)")
+            logger.info("MPS device detected - forcing lowvram mode (no torch.compile on Metal)")
 
         if optimization_mode == "speed":
             self._tile_refiner = False
@@ -174,7 +174,7 @@ class CorridorKeyEngine:  # pragma: no cover
                 del dummy
                 logger.info("Warm-up complete.")
             except Exception as e:
-                logger.warning("torch.compile failed (%s) -- falling back to eager mode.", e)
+                logger.warning("torch.compile failed (%s) - falling back to eager mode.", e)
                 if self.device.type == "cuda":
                     torch.cuda.empty_cache()
                 elif self.device.type == "mps":
@@ -260,9 +260,6 @@ class CorridorKeyEngine:  # pragma: no cover
 
         stride = tile_size - overlap
 
-        # overlap must be < tile_size // 2 so the flat centre region has positive length.
-        # Clamp silently rather than crash -- the blend will still be correct, just without
-        # a flat centre region when overlap is very large relative to tile_size.
         safe_overlap = min(overlap, tile_size // 2 - 1)
         flat_len = tile_size - 2 * safe_overlap
         ramp = torch.linspace(0.0, 1.0, safe_overlap, device=rgb_input.device)
@@ -337,7 +334,7 @@ class CorridorKeyEngine:  # pragma: no cover
             edge_blur_px: Gaussian blur radius for the transition blend seam.
 
         Returns:
-            Dict with keys "alpha", "fg", "comp", "processed" -- all at source resolution.
+            Dict with keys "alpha", "fg", "comp", "processed" - all at source resolution.
         """
         if image.dtype == np.uint8:
             image = image.astype(np.float32) / 255.0

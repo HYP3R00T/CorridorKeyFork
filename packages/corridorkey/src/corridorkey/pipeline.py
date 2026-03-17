@@ -12,9 +12,10 @@ from dataclasses import dataclass, field
 
 from corridorkey.clip_state import ClipEntry, ClipState
 from corridorkey.config import CorridorKeyConfig, load_config
+from corridorkey.contracts import InferenceParams, OutputConfig
 from corridorkey.errors import CorridorKeyError, JobCancelledError
 from corridorkey.protocols import AlphaGenerator
-from corridorkey.service import CorridorKeyService, InferenceParams, OutputConfig
+from corridorkey.service import CorridorKeyService
 
 logger = logging.getLogger(__name__)
 

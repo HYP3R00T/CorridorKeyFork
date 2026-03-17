@@ -12,7 +12,7 @@ from corridorkey_cli._helpers import console
 
 
 def reset(
-    yes: Annotated[bool, typer.Option("--yes", "-y", help="Skip confirmation prompt.")] = False,
+    yes: Annotated[bool, typer.Option("-yes", "-y", help="Skip confirmation prompt.")] = False,
 ) -> None:
     """Delete the CorridorKey config directory and all its contents.
 

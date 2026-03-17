@@ -7,23 +7,23 @@ readme = "README.md"
 authors = [{ name = "Corridor Digital" }]
 maintainers = [{ name = "Rajesh Das", email = "rajesh@hyperoot.dev" }]
 classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Developers",
-  "Intended Audience :: Science/Research",
-  "Topic :: Multimedia :: Video",
-  "Topic :: Scientific/Engineering :: Artificial Intelligence",
-  "Topic :: Scientific/Engineering :: Image Processing",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.13",
-  "Operating System :: OS Independent",
-  "Typing :: Typed",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
 ]
 
 dependencies = [
-  "torch==2.10.0",
-  "torchvision==0.25.0",
-  "opencv-python>=4.13.0.92",
-  "timm>=1.0.25",
+    "torch==2.10.0",
+    "torchvision==0.25.0",
+    "opencv-python>=4.13.0.92",
+    "timm>=1.0.25",
 ]
 
 [dependency-groups]
@@ -55,11 +55,11 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-  "gpu: requires CUDA GPU (skipped in CI)",
-  "slow: long-running test",
-  "mlx: requires Apple Silicon with MLX installed",
+    "gpu: requires CUDA GPU (skipped in CI)",
+    "slow: long-running test",
+    "mlx: requires Apple Silicon with MLX installed",
 ]
-addopts = "--tb=short --cov-config=packages/corridorkey-core/pyproject.toml"
+addopts = "-tb=short -cov-config=packages/corridorkey-core/pyproject.toml"
 
 [tool.coverage.run]
 omit = ["*/inference_engine.py", "*\\inference_engine.py"]

@@ -204,7 +204,7 @@ def validate_job_inputs(
 
     Runs two tiers of checks:
 
-    Tier 1 -- instant (milliseconds):
+    Tier 1 - instant (milliseconds):
         - Input asset path exists and is readable.
         - Alpha asset path exists and is readable (if present).
         - Output directory can be created.
@@ -212,7 +212,7 @@ def validate_job_inputs(
         - GPU VRAM meets the minimum requirement (if CUDA is available).
         - Mask file count matches frame count (directory listing only).
 
-    Tier 2 -- sample decode (a few seconds):
+    Tier 2 - sample decode (a few seconds):
         - Decodes first, last, and one random middle frame.
         - Verifies all three have consistent resolution and dtype.
 
@@ -265,7 +265,7 @@ def validate_job_inputs(
             free_gb = (stat.f_bavail * stat.f_frsize) / (1024**3)
             if free_gb < expected_output_gb:
                 errors.append(
-                    f"Clip '{clip.name}': insufficient disk space -- "
+                    f"Clip '{clip.name}': insufficient disk space - "
                     f"{free_gb:.1f} GB free, need ~{expected_output_gb:.1f} GB."
                 )
         else:
@@ -275,7 +275,7 @@ def validate_job_inputs(
             free_gb = shutil.disk_usage(clip.root_path).free / (1024**3)
             if free_gb < expected_output_gb:
                 errors.append(
-                    f"Clip '{clip.name}': insufficient disk space -- "
+                    f"Clip '{clip.name}': insufficient disk space - "
                     f"{free_gb:.1f} GB free, need ~{expected_output_gb:.1f} GB."
                 )
     except Exception as exc:
@@ -291,7 +291,7 @@ def validate_job_inputs(
             free_vram_gb = (props.total_mem - reserved) / (1024**3)
             if free_vram_gb < min_vram_gb:
                 errors.append(
-                    f"Clip '{clip.name}': insufficient VRAM -- {free_vram_gb:.1f} GB free, need ~{min_vram_gb:.1f} GB."
+                    f"Clip '{clip.name}': insufficient VRAM - {free_vram_gb:.1f} GB free, need ~{min_vram_gb:.1f} GB."
                 )
     except Exception as exc:
         warnings.append(f"Clip '{clip.name}': VRAM check failed (skipped): {exc}")
@@ -308,13 +308,13 @@ def validate_job_inputs(
             alpha_files = clip.alpha_asset.get_frame_files()
             if len(input_files) != len(alpha_files):
                 errors.append(
-                    f"Clip '{clip.name}': frame count mismatch -- "
+                    f"Clip '{clip.name}': frame count mismatch - "
                     f"{len(input_files)} input frames vs {len(alpha_files)} alpha frames."
                 )
         except Exception as exc:
             warnings.append(f"Clip '{clip.name}': frame count check failed (skipped): {exc}")
 
-    # Bail early if Tier 1 already has fatal errors -- no point decoding.
+    # Bail early if Tier 1 already has fatal errors - no point decoding.
     if errors:
         return ValidationResult(ok=False, errors=errors, warnings=warnings)
 

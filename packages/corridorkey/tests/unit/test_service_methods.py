@@ -14,8 +14,8 @@ from unittest.mock import MagicMock, patch
 
 from corridorkey.clip_state import ClipEntry, ClipState
 from corridorkey.config import CorridorKeyConfig
-from corridorkey.processing.contracts import InferenceParams, OutputConfig
-from corridorkey.processing.service import (
+from corridorkey.contracts import InferenceParams, OutputConfig
+from corridorkey.service import (
     CorridorKeyService,
     inference_params_to_postprocess,
     output_config_to_write_config,
@@ -63,7 +63,7 @@ def _config(
 
 
 class TestInferenceParamsToPostprocess:
-    """inference_params_to_postprocess -- field mapping."""
+    """inference_params_to_postprocess - field mapping."""
 
     def test_all_fields_mapped(self):
         params = InferenceParams(
@@ -85,7 +85,7 @@ class TestInferenceParamsToPostprocess:
 
 
 class TestOutputConfigToWriteConfig:
-    """output_config_to_write_config -- field mapping + dirs injection."""
+    """output_config_to_write_config - field mapping + dirs injection."""
 
     def test_dirs_injected(self):
         cfg = OutputConfig(exr_compression="pxr24")
@@ -126,30 +126,30 @@ class TestDefaultParams:
 
 
 class TestDetectDevice:
-    """detect_device -- resolves and stores the compute device."""
+    """detect_device - resolves and stores the compute device."""
 
     def test_returns_resolved_device(self):
         service = CorridorKeyService(_config(device="cpu"))
-        with patch("corridorkey.processing.service.device_utils") as mock_du:
+        with patch("corridorkey.service.device_utils") as mock_du:
             mock_du.resolve_device.return_value = "cpu"
             result = service.detect_device("cpu")
         assert result == "cpu"
 
     def test_stores_device(self):
         service = CorridorKeyService(_config(device="cpu"))
-        with patch("corridorkey.processing.service.device_utils") as mock_du:
+        with patch("corridorkey.service.device_utils") as mock_du:
             mock_du.resolve_device.return_value = "cpu"
             service.detect_device("cpu")
         assert service._device == "cpu"
 
 
 class TestGetVramInfo:
-    """get_vram_info -- returns empty dict when CUDA unavailable."""
+    """get_vram_info - returns empty dict when CUDA unavailable."""
 
     def test_returns_empty_when_cuda_unavailable(self):
         service = CorridorKeyService(_config())
         with (
-            patch("corridorkey.processing.service.device_utils"),
+            patch("corridorkey.service.device_utils"),
             patch("torch.cuda.is_available", return_value=False),
         ):
             result = service.get_vram_info()
@@ -173,7 +173,7 @@ class TestGetVramInfo:
 
 
 class TestIsEngineLoaded:
-    """is_engine_loaded -- reflects engine load state."""
+    """is_engine_loaded - reflects engine load state."""
 
     def test_false_before_load(self):
         service = CorridorKeyService(_config())
@@ -193,19 +193,19 @@ class TestIsEngineLoaded:
 
 
 class TestScanClips:
-    """scan_clips -- delegates to scan_clips_dir."""
+    """scan_clips - delegates to scan_clips_dir."""
 
     def test_delegates_to_scan_clips_dir(self):
         service = CorridorKeyService(_config())
         mock_clips = [MagicMock()]
-        with patch("corridorkey.processing.service.scan_clips_dir", return_value=mock_clips) as mock_scan:
+        with patch("corridorkey.service.scan_clips_dir", return_value=mock_clips) as mock_scan:
             result = service.scan_clips("/some/dir")
         mock_scan.assert_called_once_with("/some/dir", allow_standalone_videos=True)
         assert result == mock_clips
 
 
 class TestGetClipsByState:
-    """get_clips_by_state -- filters clips by state."""
+    """get_clips_by_state - filters clips by state."""
 
     def _clips(self) -> list[ClipEntry]:
         return [
@@ -236,13 +236,13 @@ class TestGetClipsByState:
 
 
 class TestUnloadEngine:
-    """unload_engine -- clears engine reference and calls cache clear."""
+    """unload_engine - clears engine reference and calls cache clear."""
 
     def test_engine_cleared_after_unload(self):
         service = CorridorKeyService(_config())
         service._engine = MagicMock()
         service._engine_loaded = True
-        with patch("corridorkey.processing.service.device_utils") as mock_du:
+        with patch("corridorkey.service.device_utils") as mock_du:
             mock_du.clear_device_cache = MagicMock()
             service.unload_engine()
         assert service._engine is None
@@ -252,20 +252,20 @@ class TestUnloadEngine:
         service = CorridorKeyService(_config())
         service._engine = MagicMock()
         service._engine_loaded = True
-        with patch("corridorkey.processing.service.device_utils") as mock_du:
+        with patch("corridorkey.service.device_utils") as mock_du:
             mock_du.clear_device_cache = MagicMock()
             service.unload_engine()
         mock_du.clear_device_cache.assert_called_once()
 
     def test_unload_when_no_engine_does_not_crash(self):
         service = CorridorKeyService(_config())
-        with patch("corridorkey.processing.service.device_utils") as mock_du:
+        with patch("corridorkey.service.device_utils") as mock_du:
             mock_du.clear_device_cache = MagicMock()
             service.unload_engine()  # must not raise
 
 
 class TestJobQueue:
-    """job_queue property -- lazy initialisation."""
+    """job_queue property - lazy initialisation."""
 
     def test_lazy_init(self):
         service = CorridorKeyService(_config())

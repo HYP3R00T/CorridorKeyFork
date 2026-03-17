@@ -1,7 +1,7 @@
 """Standalone stage functions for pipeline stages 3, 4, and 5.
 
 These functions exist for tooling that needs to call individual stages
-independently -- e.g. benchmarking, visualising intermediate outputs, or
+independently - e.g. benchmarking, visualising intermediate outputs, or
 building a custom postprocessing step.
 
 In the hot path, all three stages run fused inside CorridorKeyEngine.process_frame.
@@ -25,14 +25,14 @@ from corridorkey_core.compositing import (
     premultiply,
     srgb_to_linear,
 )
-from corridorkey_core.pipeline.contracts import (
+from corridorkey_core.contracts import (
     PostprocessParams,
     PreprocessedTensor,
     ProcessedFrame,
     RawPrediction,
 )
 
-# ImageNet normalisation constants -- the Hiera encoder was pretrained with these.
+# ImageNet normalisation constants - the Hiera encoder was pretrained with these.
 _IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 1, 3)
 _IMAGENET_STD = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 1, 3)
 

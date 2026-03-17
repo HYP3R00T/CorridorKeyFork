@@ -1,7 +1,7 @@
 """Integration tests for CorridorKeyEngine.
 
 These tests require a real checkpoint file and a CUDA GPU. They are skipped
-by default and must be opted into with --run-gpu.
+by default and must be opted into with -run-gpu.
 
 Set the checkpoint path via the CK_CHECKPOINT_PATH environment variable:
 
@@ -30,7 +30,7 @@ def _checkpoint_path() -> Path | None:
 @pytest.fixture(scope="module")
 def engine():
     """Load CorridorKeyEngine once for the entire module."""
-    from corridorkey_core.pipeline.engine import CorridorKeyEngine
+    from corridorkey_core.engine import CorridorKeyEngine
 
     ckpt = _checkpoint_path()
     if ckpt is None:

@@ -1,9 +1,9 @@
 """Data contracts for the corridorkey processing layer.
 
-InferenceParams  -- parameters for a single inference job.
-OutputConfig     -- which output types to produce and their format.
-FrameResult      -- per-frame result summary (no numpy arrays).
-WriteConfig      -- parameters controlling write_outputs.
+InferenceParams  - parameters for a single inference job.
+OutputConfig     - which output types to produce and their format.
+FrameResult      - per-frame result summary (no numpy arrays).
+WriteConfig      - parameters controlling write_outputs.
 """
 
 from __future__ import annotations
@@ -59,10 +59,10 @@ class OutputConfig:
         processed_enabled: Write pre-processed input frames.
         processed_format: File format for processed frames ("exr" or "png").
         exr_compression: EXR compression codec for all EXR outputs.
-            "dwaa" -- lossy DCT, visually lossless, ~5x faster writes (default).
-            "pxr24" -- lossless 24-bit, larger files, slower.
-            "zip" -- lossless ZIP deflate, widely compatible.
-            "none" -- uncompressed, maximum compatibility, largest files.
+            "dwaa" - lossy DCT, visually lossless, ~5x faster writes (default).
+            "pxr24" - lossless 24-bit, larger files, slower.
+            "zip" - lossless ZIP deflate, widely compatible.
+            "none" - uncompressed, maximum compatibility, largest files.
     """
 
     fg_enabled: bool = True

@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-from corridorkey_core.pipeline.engine import _probe_vram_gb
+from corridorkey_core.engine import _probe_vram_gb
 
 
 class TestProbeVramGb:
-    """_probe_vram_gb -- VRAM detection with pynvml and torch fallbacks."""
+    """_probe_vram_gb - VRAM detection with pynvml and torch fallbacks."""
 
     def test_pynvml_success(self):
         """When pynvml is available and succeeds, must return total VRAM in GB."""

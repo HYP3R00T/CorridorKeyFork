@@ -1,7 +1,7 @@
 """Data contracts flowing between pipeline stages 3 -> 4 -> 5.
 
 These dataclasses are the typed boundaries between each compute stage.
-Nothing outside corridorkey-core needs to import these directly -- the
+Nothing outside corridorkey-core needs to import these directly - the
 public API is create_engine() in corridorkey_core.__init__.
 """
 
@@ -22,11 +22,11 @@ class PreprocessedTensor:
             Channels 0-2 = ImageNet-normalised image, channel 3 = mask.
         img_size: Square resolution the tensor was prepared at.
         device: Torch device string the tensor lives on.
-        source_h: Original frame height -- carried through for upsampling in stage 5.
-        source_w: Original frame width -- carried through for upsampling in stage 5.
+        source_h: Original frame height - carried through for upsampling in stage 5.
+        source_w: Original frame width - carried through for upsampling in stage 5.
     """
 
-    tensor: Any  # torch.Tensor -- Any avoids a hard torch import at module level
+    tensor: Any  # torch.Tensor - Any avoids a hard torch import at module level
     img_size: int
     device: str
     source_h: int

@@ -28,7 +28,7 @@ uv add corridorkey-core
 For CUDA support:
 
 ```bash
-uv add corridorkey-core --extra cuda
+uv add corridorkey-core -extra cuda
 ```
 
 ## Usage

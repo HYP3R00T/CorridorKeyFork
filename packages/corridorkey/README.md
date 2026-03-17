@@ -29,13 +29,13 @@ uv add corridorkey
 For CUDA support:
 
 ```bash
-uv add corridorkey --extra cuda
+uv add corridorkey -extra cuda
 ```
 
 For Apple Silicon (MLX):
 
 ```bash
-uv add corridorkey --extra mlx
+uv add corridorkey -extra mlx
 ```
 
 ## Usage
@@ -60,7 +60,7 @@ This package is the Application Layer of the CorridorKey architecture. It sits b
 the UI (CLI/GUI) and `corridorkey-core` (model inference), handling all pipeline
 orchestration, state management, and I/O.
 
-```
+```text
 CLI / GUI
     |
 corridorkey          (this package - pipeline, state, I/O)

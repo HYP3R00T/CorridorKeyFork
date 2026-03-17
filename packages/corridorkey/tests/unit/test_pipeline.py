@@ -19,8 +19,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from corridorkey.clip_state import ClipEntry, ClipState
+from corridorkey.contracts import InferenceParams, OutputConfig
 from corridorkey.pipeline import ClipSummary, PipelineResult, _process_clip, process_directory
-from corridorkey.service import InferenceParams, OutputConfig
 
 
 def _make_clip(name: str, state: ClipState, error_message: str | None = None) -> ClipEntry:
@@ -201,7 +201,7 @@ class TestProcessDirectory:
 
 
 class TestProcessDirectoryOverrides:
-    """process_directory -- device/optimization/precision overrides and on_clip_done."""
+    """process_directory - device/optimization/precision overrides and on_clip_done."""
 
     def _patched_service(self, clips):
         instance = MagicMock()
@@ -275,7 +275,7 @@ class TestProcessDirectoryOverrides:
 
 
 class TestProcessClipExtractingPaths:
-    """_process_clip -- EXTRACTING state branches."""
+    """_process_clip - EXTRACTING state branches."""
 
     def _service(self) -> MagicMock:
         s = MagicMock()

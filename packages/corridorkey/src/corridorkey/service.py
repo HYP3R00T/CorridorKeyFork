@@ -1,25 +1,764 @@
-"""Backward-compatible re-export shim.
+"""CorridorKeyService - backend API for CLI and GUI consumers.
 
-All implementation has moved to corridorkey.processing.
-Import from there directly, or from corridorkey (the package __init__).
+The single entry point for all processing. Consumers never call inference
+engines directly - they call methods here which handle validation, state
+transitions, and error reporting.
+
+Model Residency Policy:
+    Only ONE engine is loaded at a time. Unload before loading a new one
+    to free VRAM via device_utils.clear_device_cache().
 """
 
-from corridorkey.processing.contracts import FrameResult, InferenceParams, OutputConfig, WriteConfig
-from corridorkey.processing.service import (
-    CorridorKeyService,
-    inference_params_to_postprocess,
-    output_config_to_write_config,
-)
-from corridorkey.processing.writer import generate_masks, write_outputs
+from __future__ import annotations
 
-__all__ = [
-    "CorridorKeyService",
-    "FrameResult",
-    "InferenceParams",
-    "OutputConfig",
-    "WriteConfig",
-    "generate_masks",
-    "inference_params_to_postprocess",
-    "output_config_to_write_config",
-    "write_outputs",
-]
+import json
+import logging
+import os
+import threading
+import time
+from collections.abc import Callable
+from typing import Any
+
+import numpy as np
+
+# Enable OpenEXR support (must be before cv2 import)
+os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
+import cv2
+from corridorkey_core.contracts import ProcessedFrame
+from corridorkey_core.engine_factory import create_engine
+
+from corridorkey import device_utils
+from corridorkey.clip_state import ClipEntry, ClipState, scan_clips_dir
+from corridorkey.config import CorridorKeyConfig, load_config
+from corridorkey.contracts import FrameResult, InferenceParams, OutputConfig, WriteConfig
+from corridorkey.errors import CorridorKeyError, FrameReadError, JobCancelledError, WriteFailureError
+from corridorkey.frame_io import read_image_frame, read_mask_frame, read_video_frame_at, read_video_mask_at
+from corridorkey.job_queue import GPUJob, GPUJobQueue
+from corridorkey.protocols import AlphaGenerator
+from corridorkey.validators import ensure_output_dirs, validate_frame_counts, validate_frame_read, validate_write
+from corridorkey.writer import exr_flags, write_outputs
+
+logger = logging.getLogger(__name__)
+
+
+def inference_params_to_postprocess(params: InferenceParams):
+    """Convert InferenceParams to a PostprocessParams for stage_5_postprocess."""
+    from corridorkey_core.contracts import PostprocessParams
+
+    return PostprocessParams(
+        despill_strength=params.despill_strength,
+        auto_despeckle=params.auto_despeckle,
+        despeckle_size=params.despeckle_size,
+        source_passthrough=params.source_passthrough,
+        edge_erode_px=params.edge_erode_px,
+        edge_blur_px=params.edge_blur_px,
+        fg_is_straight=True,
+    )
+
+
+def output_config_to_write_config(cfg: OutputConfig, dirs: dict[str, str]) -> WriteConfig:
+    """Convert OutputConfig + resolved dirs to a WriteConfig for write_outputs."""
+    return WriteConfig(
+        fg_enabled=cfg.fg_enabled,
+        fg_format=cfg.fg_format,
+        matte_enabled=cfg.matte_enabled,
+        matte_format=cfg.matte_format,
+        comp_enabled=cfg.comp_enabled,
+        comp_format=cfg.comp_format,
+        processed_enabled=cfg.processed_enabled,
+        processed_format=cfg.processed_format,
+        exr_compression=cfg.exr_compression,
+        dirs=dirs,
+    )
+
+
+class CorridorKeyService:
+    """Main backend service - scan, validate, process, write.
+
+    Holds the loaded inference engine and GPU lock. Everything else
+    (project management, frame I/O, validation) is handled by pure
+    functions in their respective modules.
+
+    Usage (CLI):
+        config = load_config()
+        service = CorridorKeyService(config)
+        clips = service.scan_clips("/path/to/clips")
+        for clip in service.get_clips_by_state(clips, ClipState.READY):
+            service.run_inference(clip, InferenceParams())
+
+    Usage (GUI):
+        config = load_config(overrides={"device": "cuda"})
+        service = CorridorKeyService(config)
+        queue = service.job_queue  # GPUJobQueue for async job management
+    """
+
+    def __init__(self, config: CorridorKeyConfig | None = None) -> None:
+        self._config = config or load_config()
+        self._engine = None
+        self._engine_loaded = False
+        self._device: str = device_utils.resolve_device(self._config.device)
+        self._job_queue: GPUJobQueue | None = None
+        self._gpu_lock = threading.Lock()
+
+    def default_inference_params(self) -> InferenceParams:
+        """Build InferenceParams seeded from the loaded config."""
+        return InferenceParams(
+            input_is_linear=self._config.input_is_linear,
+            despill_strength=self._config.despill_strength,
+            auto_despeckle=self._config.auto_despeckle,
+            despeckle_size=self._config.despeckle_size,
+            refiner_scale=self._config.refiner_scale,
+            source_passthrough=self._config.source_passthrough,
+            edge_erode_px=self._config.edge_erode_px,
+            edge_blur_px=self._config.edge_blur_px,
+        )
+
+    def default_output_config(self) -> OutputConfig:
+        """Build OutputConfig seeded from the loaded config."""
+        return OutputConfig(
+            fg_format=self._config.fg_format,
+            matte_format=self._config.matte_format,
+            comp_format=self._config.comp_format,
+            processed_format=self._config.processed_format,
+            exr_compression=self._config.exr_compression,
+        )
+
+    @property
+    def job_queue(self) -> GPUJobQueue:
+        """Lazy-init GPU job queue."""
+        if self._job_queue is None:
+            self._job_queue = GPUJobQueue()
+        return self._job_queue
+
+    def detect_device(self, requested: str | None = None) -> str:
+        """Resolve and store the compute device."""
+        self._device = device_utils.resolve_device(requested or self._config.device)
+        logger.info("Compute device: %s", self._device)
+        return self._device
+
+    def get_vram_info(self) -> dict[str, float | str]:
+        """Return GPU VRAM info in GB. Empty dict if CUDA is unavailable."""
+        try:
+            import torch
+
+            if not torch.cuda.is_available():
+                return {}
+            props = torch.cuda.get_device_properties(0)
+            total = props.total_mem
+            reserved = torch.cuda.memory_reserved(0)
+            return {
+                "total": total / (1024**3),
+                "reserved": reserved / (1024**3),
+                "allocated": torch.cuda.memory_allocated(0) / (1024**3),
+                "free": (total - reserved) / (1024**3),
+                "name": torch.cuda.get_device_name(0),
+            }
+        except Exception as e:
+            logger.debug("VRAM query failed: %s", e)
+            return {}
+
+    @staticmethod
+    def _vram_allocated_mb() -> float:
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                return torch.cuda.memory_allocated(0) / (1024**2)
+        except Exception:
+            pass
+        return 0.0
+
+    @staticmethod
+    def _safe_offload(obj: Any) -> None:
+        if obj is None:
+            return
+        logger.debug("Offloading model: %s", type(obj).__name__)
+        try:
+            if hasattr(obj, "unload"):
+                obj.unload()
+            elif hasattr(obj, "to"):
+                obj.to("cpu")
+            elif hasattr(obj, "cpu"):
+                obj.cpu()
+        except Exception as e:
+            logger.debug("Model offload warning: %s", e)
+
+    def _get_engine(self):
+        """Lazy-load the inference engine."""
+        if self._engine is not None:
+            return self._engine
+        logger.info("Loading inference engine (device=%s)...", self._device)
+        t0 = time.monotonic()
+        self._engine = create_engine(
+            checkpoint_dir=self._config.checkpoint_dir,
+            device=self._device,
+            optimization_mode=self._config.optimization_mode,
+            precision=self._config.precision,
+        )
+        self._engine_loaded = True
+        logger.info("Engine loaded in %.1fs", time.monotonic() - t0)
+        return self._engine
+
+    def load_engine(self) -> None:
+        """Eagerly load the inference engine into VRAM."""
+        self._get_engine()
+
+    def unload_engine(self) -> None:
+        """Free GPU memory by unloading the inference engine."""
+        vram_before = self._vram_allocated_mb()
+        self._safe_offload(self._engine)
+        self._engine = None
+        self._engine_loaded = False
+        import gc
+
+        gc.collect()
+        device_utils.clear_device_cache(self._device)
+        logger.info("Engine unloaded. VRAM before: %.0fMB, after: %.0fMB", vram_before, self._vram_allocated_mb())
+
+    def is_engine_loaded(self) -> bool:
+        """True if the inference engine is loaded in VRAM."""
+        return self._engine_loaded and self._engine is not None
+
+    def run_alpha_generator(
+        self,
+        clip: ClipEntry,
+        generator: AlphaGenerator,
+        job: GPUJob | None = None,
+        on_progress: Callable[[str, int, int], None] | None = None,
+        on_warning: Callable[[str], None] | None = None,
+    ) -> None:
+        """Run any AlphaGenerator implementation against a clip."""
+        if clip.input_asset is None:
+            raise CorridorKeyError(f"Clip '{clip.name}' has no input asset")
+        logger.info("Running alpha generator '%s' for clip '%s'", generator.name, clip.name)
+
+        def _progress(clip_name: str, current: int, total: int) -> None:
+            if job and job.is_cancelled:
+                raise JobCancelledError(clip_name, current)
+            if on_progress:
+                on_progress(clip_name, current, total)
+
+        try:
+            generator.generate(clip, on_progress=_progress, on_warning=on_warning)
+        except JobCancelledError:
+            raise
+        except Exception as e:
+            if job and job.is_cancelled:
+                raise JobCancelledError(clip.name, 0) from None
+            raise CorridorKeyError(f"Alpha generator '{generator.name}' failed for '{clip.name}': {e}") from e
+
+    def extract_clip(
+        self,
+        clip: ClipEntry,
+        on_progress: Callable[[str, int, int], None] | None = None,
+        cancel_event: threading.Event | None = None,
+    ) -> None:
+        """Extract a video clip's frames to disk so it can proceed to RAW state."""
+        from corridorkey.ffmpeg_tools import extract_frames, probe_video, write_video_metadata
+
+        if clip.input_asset is None or clip.input_asset.asset_type != "video":
+            raise CorridorKeyError(f"Clip '{clip.name}' has no video input asset to extract")
+
+        video_path = clip.input_asset.path
+        frames_dir = os.path.join(clip.root_path, "Frames")
+        alpha_dir = os.path.join(clip.root_path, "AlphaHint")
+
+        try:
+            info = probe_video(video_path)
+            total = info.get("frame_count", 0)
+            write_video_metadata(clip.root_path, info)
+        except Exception as e:
+            logger.warning("Clip '%s': video probe failed: %s", clip.name, e)
+            total = 0
+
+        def _progress(current: int, total_frames: int) -> None:
+            if on_progress:
+                on_progress(clip.name, current, total_frames)
+
+        try:
+            extract_frames(video_path, frames_dir, on_progress=_progress, cancel_event=cancel_event, total_frames=total)
+        except Exception as e:
+            raise CorridorKeyError(f"Clip '{clip.name}': frame extraction failed: {e}") from e
+
+        if cancel_event and cancel_event.is_set():
+            logger.info("Clip '%s': extraction cancelled", clip.name)
+            return
+
+        if clip.alpha_asset is not None and clip.alpha_asset.asset_type == "video":
+            try:
+                extract_frames(clip.alpha_asset.path, alpha_dir, cancel_event=cancel_event, total_frames=total)
+            except Exception as e:
+                logger.warning("Clip '%s': alpha extraction failed (continuing): %s", clip.name, e)
+
+        try:
+            clip.find_assets()
+        except Exception as e:
+            raise CorridorKeyError(f"Clip '{clip.name}': re-scan after extraction failed: {e}") from e
+
+        logger.info("Clip '%s': extraction complete, state=%s", clip.name, clip.state.value)
+
+    def scan_clips(self, clips_dir: str, allow_standalone_videos: bool = True) -> list[ClipEntry]:
+        """Scan a directory for clip folders."""
+        return scan_clips_dir(clips_dir, allow_standalone_videos=allow_standalone_videos)
+
+    def get_clips_by_state(self, clips: list[ClipEntry], state: ClipState) -> list[ClipEntry]:
+        """Filter clips by state."""
+        return [c for c in clips if c.state == state]
+
+    def _read_input_frame(
+        self,
+        clip: ClipEntry,
+        frame_index: int,
+        input_files: list[str],
+        input_cap: Any | None,
+        input_is_linear: bool,
+    ) -> tuple[np.ndarray | None, str, bool]:
+        input_stem = f"{frame_index:05d}"
+        if input_cap:
+            ret, frame = input_cap.read()
+            if not ret:
+                return None, input_stem, False
+            img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            return img_rgb.astype(np.float32) / 255.0, input_stem, input_is_linear
+        if frame_index >= len(input_files):
+            logger.warning(
+                "Clip '%s': frame_index %d out of range (have %d frames)", clip.name, frame_index, len(input_files)
+            )
+            return None, f"{frame_index:05d}", input_is_linear
+        fpath = os.path.join(clip.input_asset.path, input_files[frame_index])  # type: ignore[union-attr]
+        input_stem = os.path.splitext(input_files[frame_index])[0]
+        img = read_image_frame(fpath)
+        validate_frame_read(img, clip.name, frame_index, fpath)
+        return img, input_stem, input_is_linear
+
+    def _read_alpha_frame(
+        self,
+        clip: ClipEntry,
+        frame_index: int,
+        alpha_files: list[str],
+        alpha_cap: Any | None,
+    ) -> np.ndarray | None:
+        if alpha_cap:
+            ret, frame = alpha_cap.read()
+            if not ret:
+                return None
+            return frame[:, :, 2].astype(np.float32) / 255.0
+        fpath = os.path.join(clip.alpha_asset.path, alpha_files[frame_index])  # type: ignore[union-attr]
+        mask = read_mask_frame(fpath, clip.name, frame_index)
+        validate_frame_read(mask, clip.name, frame_index, fpath)
+        return mask
+
+    def _write_image(
+        self, img: np.ndarray, path: str, fmt: str, clip_name: str, frame_index: int, exr_compression: str = "dwaa"
+    ) -> None:
+        if fmt == "exr":
+            if img.dtype != np.float32:
+                img = img.astype(np.float32) / 255.0 if img.dtype == np.uint8 else img.astype(np.float32)
+            validate_write(cv2.imwrite(path, img, exr_flags(exr_compression)), clip_name, frame_index, path)
+        else:
+            if img.dtype != np.uint8:
+                img = (np.clip(img, 0.0, 1.0) * 255.0).astype(np.uint8)
+            validate_write(cv2.imwrite(path, img), clip_name, frame_index, path)
+
+    def _write_manifest(self, output_root: str, output_config: OutputConfig, params: InferenceParams) -> None:
+        manifest = {
+            "version": 1,
+            "enabled_outputs": output_config.enabled_outputs,
+            "formats": {
+                "fg": output_config.fg_format,
+                "matte": output_config.matte_format,
+                "comp": output_config.comp_format,
+                "processed": output_config.processed_format,
+            },
+            "params": params.to_dict(),
+        }
+        manifest_path = os.path.join(output_root, ".corridorkey_manifest.json")
+        tmp_path = manifest_path + ".tmp"
+        try:
+            with open(tmp_path, "w") as f:
+                json.dump(manifest, f, indent=2)
+            os.replace(tmp_path, manifest_path)
+        except Exception as e:
+            logger.warning("Failed to write manifest: %s", e)
+
+    def run_inference(
+        self,
+        clip: ClipEntry,
+        params: InferenceParams,
+        job: GPUJob | None = None,
+        on_progress: Callable[[str, int, int], None] | None = None,
+        on_warning: Callable[[str], None] | None = None,
+        skip_stems: set[str] | None = None,
+        output_config: OutputConfig | None = None,
+        frame_range: tuple[int, int] | None = None,
+    ) -> list[FrameResult]:
+        """Run inference on a single clip.
+
+        Args:
+            clip: Must be READY or COMPLETE with input_asset and alpha_asset.
+            params: Inference parameters.
+            job: Optional GPUJob for cancel checking.
+            on_progress: Called with (clip_name, current, total).
+            on_warning: Called with non-fatal warning messages.
+            skip_stems: Frame stems to skip (resume support).
+            output_config: Which outputs to write and their formats.
+            frame_range: Optional (start, end) inclusive frame indices.
+
+        Returns:
+            List of FrameResult per frame.
+        """
+        from concurrent.futures import Future, ThreadPoolExecutor
+
+        if clip.input_asset is None or clip.alpha_asset is None:
+            raise CorridorKeyError(f"Clip '{clip.name}' missing input or alpha asset")
+
+        t_start = time.monotonic()
+        with self._gpu_lock:
+            engine = self._get_engine()
+
+        cfg = output_config or OutputConfig()
+        dirs = ensure_output_dirs(clip.root_path)
+        self._write_manifest(dirs["root"], cfg, params)
+        num_frames = validate_frame_counts(clip.name, clip.input_asset.frame_count, clip.alpha_asset.frame_count)
+
+        input_cap = alpha_cap = None
+        input_files: list[str] = []
+        alpha_files: list[str] = []
+
+        if clip.input_asset.asset_type == "video":
+            input_cap = cv2.VideoCapture(clip.input_asset.path)
+        else:
+            input_files = clip.input_asset.get_frame_files()
+
+        if clip.alpha_asset.asset_type == "video":
+            alpha_cap = cv2.VideoCapture(clip.alpha_asset.path)
+        else:
+            alpha_files = clip.alpha_asset.get_frame_files()
+
+        results: list[FrameResult] = []
+        skipped: list[int] = []
+        skip_stems = skip_stems or set()
+
+        if frame_range is not None:
+            range_start = max(0, frame_range[0])
+            range_end = min(num_frames - 1, frame_range[1])
+            frame_indices = range(range_start, range_end + 1)
+            range_count = range_end - range_start + 1
+        else:
+            frame_indices = range(num_frames)
+            range_count = num_frames
+
+        write_executor = ThreadPoolExecutor(max_workers=1)
+        pending_write: Future | None = None
+
+        def _flush_pending(warn_cb: Any) -> None:
+            nonlocal pending_write
+            if pending_write is not None:
+                try:
+                    pending_write.result()
+                except WriteFailureError as exc:
+                    logger.error(str(exc))
+                    if warn_cb:
+                        warn_cb(str(exc))
+                pending_write = None
+
+        try:
+            for progress_i, i in enumerate(frame_indices):
+                if job and job.is_cancelled:
+                    _flush_pending(on_warning)
+                    raise JobCancelledError(clip.name, i)
+                if on_progress:
+                    on_progress(clip.name, progress_i, range_count)
+                try:
+                    img, input_stem, is_linear = self._read_input_frame(
+                        clip, i, input_files, input_cap, params.input_is_linear
+                    )
+                    if img is None:
+                        _flush_pending(on_warning)
+                        skipped.append(i)
+                        results.append(FrameResult(i, f"{i:05d}", False, "video read failed"))
+                        continue
+                    if input_stem in skip_stems:
+                        results.append(FrameResult(i, input_stem, True, "resumed (skipped)"))
+                        continue
+                    mask = self._read_alpha_frame(clip, i, alpha_files, alpha_cap)
+                    if mask is None:
+                        _flush_pending(on_warning)
+                        skipped.append(i)
+                        results.append(FrameResult(i, input_stem, False, "alpha read failed"))
+                        continue
+                    if mask.shape[:2] != img.shape[:2]:
+                        mask = cv2.resize(mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
+
+                    t_frame = time.monotonic()
+                    with self._gpu_lock:
+                        res = engine.process_frame(
+                            img,
+                            mask,
+                            input_is_linear=is_linear,
+                            fg_is_straight=True,
+                            despill_strength=params.despill_strength,
+                            auto_despeckle=params.auto_despeckle,
+                            despeckle_size=params.despeckle_size,
+                            refiner_scale=params.refiner_scale,
+                            source_passthrough=params.source_passthrough,
+                            edge_erode_px=params.edge_erode_px,
+                            edge_blur_px=params.edge_blur_px,
+                        )
+                    logger.debug("Clip '%s' frame %d: %.3fs", clip.name, i, time.monotonic() - t_frame)
+
+                    _flush_pending(on_warning)
+                    write_cfg = output_config_to_write_config(cfg, dirs)
+                    frame_out = ProcessedFrame(
+                        alpha=res["alpha"],
+                        fg=res["fg"],
+                        comp=res["comp"],
+                        processed=res["processed"],
+                        source_h=img.shape[0],
+                        source_w=img.shape[1],
+                        stem=input_stem,
+                    )
+                    pending_write = write_executor.submit(write_outputs, frame_out, write_cfg)
+                    results.append(FrameResult(i, input_stem, True))
+                except FrameReadError as e:
+                    logger.warning(str(e))
+                    skipped.append(i)
+                    results.append(FrameResult(i, f"{i:05d}", False, str(e)))
+                    if on_warning:
+                        on_warning(str(e))
+                except WriteFailureError as e:
+                    logger.error(str(e))
+                    results.append(FrameResult(i, f"{i:05d}", False, str(e)))
+                    if on_warning:
+                        on_warning(str(e))
+
+            _flush_pending(on_warning)
+            if on_progress:
+                on_progress(clip.name, range_count, range_count)
+        finally:
+            _flush_pending(on_warning)
+            write_executor.shutdown(wait=True)
+            if input_cap:
+                input_cap.release()
+            if alpha_cap:
+                alpha_cap.release()
+
+        processed = sum(1 for r in results if r.success)
+        if skipped:
+            msg = f"Clip '{clip.name}': {len(skipped)} frame(s) skipped: {skipped[:20]}{'...' if len(skipped) > 20 else ''}"
+            logger.warning(msg)
+            if on_warning:
+                on_warning(msg)
+
+        t_total = time.monotonic() - t_start
+        range_label = f" (range {frame_range[0]}-{frame_range[1]})" if frame_range else ""
+        logger.info(
+            "Clip '%s': inference complete%s. %d/%d frames in %.1fs (%.2fs/frame avg)",
+            clip.name,
+            range_label,
+            processed,
+            range_count,
+            t_total,
+            t_total / max(processed, 1),
+        )
+
+        is_full_clip = frame_range is None or (frame_range[0] == 0 and frame_range[1] >= num_frames - 1)
+        if processed == range_count and is_full_clip:
+            try:
+                clip.transition_to(ClipState.COMPLETE)
+            except Exception as e:
+                logger.warning("Clip '%s': state transition to COMPLETE failed: %s", clip.name, e)
+
+        if (
+            is_full_clip
+            and cfg.comp_enabled
+            and clip.input_asset is not None
+            and clip.input_asset.asset_type == "video"
+        ):
+            self._stitch_comp_video(clip, dirs["comp"], cfg.comp_format)
+
+        return results
+
+    def _stitch_comp_video(self, clip: ClipEntry, comp_dir: str, comp_format: str) -> None:
+        from corridorkey.errors import FFmpegNotFoundError
+        from corridorkey.ffmpeg_tools import read_video_metadata, require_ffmpeg, stitch_video
+
+        try:
+            require_ffmpeg()
+        except FFmpegNotFoundError:
+            logger.debug("Clip '%s': FFmpeg not available, skipping comp video stitch", clip.name)
+            return
+
+        comp_frames = [f for f in os.listdir(comp_dir) if f.lower().endswith(f".{comp_format}")]
+        if not comp_frames:
+            return
+
+        fps = 24.0
+        meta = read_video_metadata(clip.root_path)
+        if meta and "fps" in meta:
+            import contextlib
+
+            with contextlib.suppress(ValueError, TypeError):
+                fps = float(meta["fps"])
+
+        import re as _re
+
+        first = sorted(comp_frames)[0]
+        stem = os.path.splitext(first)[0]
+        m = _re.search(r"(\d+)$", stem)
+        pattern = f"{stem[: -len(m.group(1))]}%0{len(m.group(1))}d.{comp_format}" if m else f"frame_%06d.{comp_format}"
+
+        comp_video_path = os.path.join(os.path.dirname(comp_dir), f"{clip.name}_comp.mp4")
+        try:
+            logger.info("Clip '%s': stitching comp video -> %s @ %.4f fps", clip.name, comp_video_path, fps)
+            stitch_video(comp_dir, comp_video_path, fps=fps, pattern=pattern)
+        except Exception as e:
+            logger.warning("Clip '%s': comp video stitch failed: %s", clip.name, e)
+
+    def stitch_clip_outputs(
+        self,
+        clip: ClipEntry,
+        outputs: list[str] | None = None,
+        fps: float | None = None,
+        codec: str = "libx264",
+        crf: int = 18,
+        on_progress: Callable[[str, int, int], None] | None = None,
+    ) -> dict[str, str]:
+        """Stitch output image sequences for a clip into MP4 video files."""
+        import contextlib
+        import re as _re
+
+        from corridorkey.ffmpeg_tools import read_video_metadata, require_ffmpeg, stitch_video
+
+        require_ffmpeg()
+
+        output_dir = os.path.join(clip.root_path, "Output")
+        manifest_path = os.path.join(output_dir, ".corridorkey_manifest.json")
+
+        enabled_formats: dict[str, str] = {}
+        if os.path.isfile(manifest_path):
+            try:
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                fmt_map = manifest.get("formats", {})
+                for name in manifest.get("enabled_outputs", []):
+                    enabled_formats[name] = fmt_map.get(name, "exr")
+            except Exception as e:
+                logger.warning("Could not read manifest for '%s': %s", clip.name, e)
+
+        if not enabled_formats:
+            subdir_map = {"fg": "FG", "matte": "Matte", "comp": "Comp", "processed": "Processed"}
+            for name, subdir in subdir_map.items():
+                d = os.path.join(output_dir, subdir)
+                if not os.path.isdir(d):
+                    continue
+                for ext in ("exr", "png"):
+                    if any(f.lower().endswith(f".{ext}") for f in os.listdir(d)):
+                        enabled_formats[name] = ext
+                        break
+
+        if outputs is not None:
+            enabled_formats = {k: v for k, v in enabled_formats.items() if k in outputs}
+        if not enabled_formats:
+            logger.warning("Clip '%s': no output sequences found to stitch", clip.name)
+            return {}
+
+        resolved_fps = fps
+        if resolved_fps is None:
+            meta = read_video_metadata(clip.root_path)
+            if meta and "fps" in meta:
+                with contextlib.suppress(ValueError, TypeError):
+                    resolved_fps = float(meta["fps"])
+        if resolved_fps is None:
+            resolved_fps = 24.0
+
+        subdir_map = {"fg": "FG", "matte": "Matte", "comp": "Comp", "processed": "Processed"}
+        stitched: dict[str, str] = {}
+
+        for name, fmt in enabled_formats.items():
+            frames_dir = os.path.join(output_dir, subdir_map.get(name, name.capitalize()))
+            if not os.path.isdir(frames_dir):
+                continue
+            frame_files = sorted(f for f in os.listdir(frames_dir) if f.lower().endswith(f".{fmt}"))
+            if not frame_files:
+                continue
+            first_stem = os.path.splitext(frame_files[0])[0]
+            m = _re.search(r"(\d+)$", first_stem)
+            pattern = f"{first_stem[: -len(m.group(1))]}%0{len(m.group(1))}d.{fmt}" if m else f"frame_%06d.{fmt}"
+            out_path = os.path.join(output_dir, f"{clip.name}_{name}.mp4")
+
+            def _prog(current: int, total: int, _name: str = name) -> None:
+                if on_progress:
+                    on_progress(_name, current, total)
+
+            try:
+                logger.info("Clip '%s': stitching %s -> %s @ %.4f fps", clip.name, name, out_path, resolved_fps)
+                stitch_video(
+                    frames_dir, out_path, fps=resolved_fps, pattern=pattern, codec=codec, crf=crf, on_progress=_prog
+                )
+                stitched[name] = out_path
+            except Exception as e:
+                logger.warning("Clip '%s': stitch failed for '%s': %s", clip.name, name, e)
+
+        return stitched
+
+    def reprocess_single_frame(
+        self,
+        clip: ClipEntry,
+        params: InferenceParams,
+        frame_index: int,
+        job: GPUJob | None = None,
+    ) -> dict | None:
+        """Reprocess a single frame in memory. Does not write to disk. Used for live preview."""
+        if clip.input_asset is None or clip.alpha_asset is None:
+            return None
+        if job and job.is_cancelled:
+            return None
+
+        t_start = time.monotonic()
+        with self._gpu_lock:
+            engine = self._get_engine()
+
+        if clip.input_asset.asset_type == "video":
+            img = read_video_frame_at(clip.input_asset.path, frame_index)
+        else:
+            input_files = clip.input_asset.get_frame_files()
+            if frame_index >= len(input_files):
+                return None
+            img = read_image_frame(os.path.join(clip.input_asset.path, input_files[frame_index]))
+        if img is None:
+            return None
+
+        if clip.alpha_asset.asset_type == "video":
+            mask = read_video_mask_at(clip.alpha_asset.path, frame_index)
+        else:
+            alpha_files = clip.alpha_asset.get_frame_files()
+            if frame_index >= len(alpha_files):
+                return None
+            mask = read_mask_frame(
+                os.path.join(clip.alpha_asset.path, alpha_files[frame_index]), clip.name, frame_index
+            )
+        if mask is None:
+            return None
+
+        if mask.shape[:2] != img.shape[:2]:
+            mask = cv2.resize(mask, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_LINEAR)
+        if job and job.is_cancelled:
+            return None
+
+        with self._gpu_lock:
+            res = engine.process_frame(
+                img,
+                mask,
+                input_is_linear=params.input_is_linear,
+                fg_is_straight=True,
+                despill_strength=params.despill_strength,
+                auto_despeckle=params.auto_despeckle,
+                despeckle_size=params.despeckle_size,
+                refiner_scale=params.refiner_scale,
+                source_passthrough=params.source_passthrough,
+                edge_erode_px=params.edge_erode_px,
+                edge_blur_px=params.edge_blur_px,
+            )
+        logger.debug("Clip '%s' frame %d: reprocess %.3fs", clip.name, frame_index, time.monotonic() - t_start)
+        return res

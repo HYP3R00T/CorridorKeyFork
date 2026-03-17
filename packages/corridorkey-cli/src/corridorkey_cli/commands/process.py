@@ -25,40 +25,40 @@ app = typer.Typer(help="Process all READY clips in a directory.")
 @app.callback(invoke_without_command=True)
 def process(
     clips_dir: Annotated[Path, typer.Argument(help="Directory containing clips to process.")],
-    device: Annotated[str, typer.Option("--device", "-d", help="Compute device: auto, cuda, mps, cpu.")] = "auto",
+    device: Annotated[str, typer.Option("-device", "-d", help="Compute device: auto, cuda, mps, cpu.")] = "auto",
     optimization_mode: Annotated[
-        str, typer.Option("--opt-mode", help="Refiner tiling strategy: auto, speed, lowvram.")
+        str, typer.Option("-opt-mode", help="Refiner tiling strategy: auto, speed, lowvram.")
     ] = "auto",
     precision: Annotated[
-        str, typer.Option("--precision", help="Inference float format: auto, fp16, bf16, fp32.")
+        str, typer.Option("-precision", help="Inference float format: auto, fp16, bf16, fp32.")
     ] = "auto",
-    despill: Annotated[float, typer.Option("--despill", help="Green spill removal strength (0.0-1.0).")] = 1.0,
-    despeckle: Annotated[bool, typer.Option("--despeckle/--no-despeckle", help="Remove small matte artifacts.")] = True,
-    despeckle_size: Annotated[int, typer.Option("--despeckle-size", help="Min artifact area in pixels.")] = 400,
-    refiner: Annotated[float, typer.Option("--refiner", help="Edge refiner scale (0.0 = disabled).")] = 1.0,
-    linear: Annotated[bool, typer.Option("--linear", help="Treat input as linear light (not sRGB).")] = False,
+    despill: Annotated[float, typer.Option("-despill", help="Green spill removal strength (0.0-1.0).")] = 1.0,
+    despeckle: Annotated[bool, typer.Option("-despeckle/-no-despeckle", help="Remove small matte artifacts.")] = True,
+    despeckle_size: Annotated[int, typer.Option("-despeckle-size", help="Min artifact area in pixels.")] = 400,
+    refiner: Annotated[float, typer.Option("-refiner", help="Edge refiner scale (0.0 = disabled).")] = 1.0,
+    linear: Annotated[bool, typer.Option("-linear", help="Treat input as linear light (not sRGB).")] = False,
     source_passthrough: Annotated[
         bool,
         typer.Option(
-            "--source-passthrough/--no-source-passthrough",
+            "-source-passthrough/-no-source-passthrough",
             help="Use original source pixels in opaque interior regions.",
         ),
     ] = False,
     edge_erode_px: Annotated[
-        int, typer.Option("--edge-erode", help="Interior mask erosion in pixels (source passthrough).")
+        int, typer.Option("-edge-erode", help="Interior mask erosion in pixels (source passthrough).")
     ] = 3,
     edge_blur_px: Annotated[
-        int, typer.Option("--edge-blur", help="Transition seam blur radius in pixels (source passthrough).")
+        int, typer.Option("-edge-blur", help="Transition seam blur radius in pixels (source passthrough).")
     ] = 7,
-    fg_format: Annotated[str, typer.Option("--fg-format", help="FG output format: exr or png.")] = "exr",
-    matte_format: Annotated[str, typer.Option("--matte-format", help="Matte output format: exr or png.")] = "exr",
-    comp_format: Annotated[str, typer.Option("--comp-format", help="Comp output format: exr or png.")] = "png",
+    fg_format: Annotated[str, typer.Option("-fg-format", help="FG output format: exr or png.")] = "exr",
+    matte_format: Annotated[str, typer.Option("-matte-format", help="Matte output format: exr or png.")] = "exr",
+    comp_format: Annotated[str, typer.Option("-comp-format", help="Comp output format: exr or png.")] = "png",
     exr_compression: Annotated[
-        str, typer.Option("--exr-compression", help="EXR compression: dwaa, piz, zip, none.")
+        str, typer.Option("-exr-compression", help="EXR compression: dwaa, piz, zip, none.")
     ] = "dwaa",
-    no_comp: Annotated[bool, typer.Option("--no-comp", help="Skip comp output.")] = False,
-    no_processed: Annotated[bool, typer.Option("--no-processed", help="Skip processed RGBA output.")] = False,
-    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="Enable debug logging.")] = False,
+    no_comp: Annotated[bool, typer.Option("-no-comp", help="Skip comp output.")] = False,
+    no_processed: Annotated[bool, typer.Option("-no-processed", help="Skip processed RGBA output.")] = False,
+    verbose: Annotated[bool, typer.Option("-verbose", "-v", help="Enable debug logging.")] = False,
 ) -> None:
     """Process all READY clips in CLIPS_DIR through the keying pipeline.
 

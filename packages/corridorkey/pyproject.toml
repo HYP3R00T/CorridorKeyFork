@@ -7,25 +7,25 @@ readme = "README.md"
 authors = [{ name = "Corridor Digital" }]
 maintainers = [{ name = "Rajesh Das", email = "rajesh@hyperoot.dev" }]
 classifiers = [
-  "Development Status :: 3 - Alpha",
-  "Intended Audience :: Developers",
-  "Intended Audience :: End Users/Desktop",
-  "Topic :: Multimedia :: Video",
-  "Topic :: Scientific/Engineering :: Artificial Intelligence",
-  "Topic :: Scientific/Engineering :: Image Processing",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.13",
-  "Operating System :: OS Independent",
-  "Typing :: Typed",
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
 ]
 
 dependencies = [
-  "corridorkey-core>=0.1.0",
-  "opencv-python>=4.13.0.92",
-  "numpy>=2.0.0",
-  # Triton fix for Windows
-  "triton-windows==3.3.1.post21 ; sys_platform == 'win32'",
-  "utilityhub-config>=0.2.3",
+    "corridorkey-core>=0.1.0",
+    "opencv-python>=4.13.0.92",
+    "numpy>=2.0.0",
+    # Triton fix for Windows
+    "triton-windows==3.3.1.post21 ; sys_platform == 'win32'",
+    "utilityhub-config>=0.2.3",
 ]
 
 [dependency-groups]
@@ -46,20 +46,20 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-  "gpu: requires CUDA GPU (skipped in CI)",
-  "slow: long-running test",
-  "mlx: requires Apple Silicon with MLX installed",
+    "gpu: requires CUDA GPU (skipped in CI)",
+    "slow: long-running test",
+    "mlx: requires Apple Silicon with MLX installed",
 ]
-addopts = "--tb=short"
+addopts = "-tb=short"
 
 [tool.coverage.run]
 source = ["corridorkey"]
 omit = [
-  # Hardware-dependent modules - require real GPU/FFmpeg/filesystem
-  "*/corridorkey/service.py",
-  "*/corridorkey/ffmpeg_tools.py",
-  "*/corridorkey/frame_io.py",
-  "*/corridorkey/device_utils.py",
+    # Hardware-dependent modules - require real GPU/FFmpeg/filesystem
+    "*/corridorkey/service.py",
+    "*/corridorkey/ffmpeg_tools.py",
+    "*/corridorkey/frame_io.py",
+    "*/corridorkey/device_utils.py",
 ]
 
 [tool.coverage.report]

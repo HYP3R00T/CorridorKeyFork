@@ -20,11 +20,11 @@ from typer.testing import CliRunner
 
 
 class TestHelp:
-    """Top-level --help must list all commands so users can discover the CLI."""
+    """Top-level -help must list all commands so users can discover the CLI."""
 
     def test_help_lists_all_commands(self, runner: CliRunner) -> None:
         """All six commands must appear in the top-level help output."""
-        result = runner.invoke(app, ["--help"])
+        result = runner.invoke(app, ["-help"])
         assert result.exit_code == 0
         for cmd in ("init", "doctor", "wizard", "process", "scan", "config"):
             assert cmd in result.output
@@ -144,7 +144,7 @@ class TestProcess:
         assert call_kwargs["clips_dir"] == str(clips_dir)
 
     def test_process_passes_device_flag(self, runner: CliRunner, clips_dir: Path) -> None:
-        """--device flag must be forwarded to process_directory."""
+        """-device flag must be forwarded to process_directory."""
         with (
             patch("corridorkey_cli.commands.process.process_directory") as mock_pd,
             patch("corridorkey_cli.commands.process.ProgressContext"),
@@ -156,7 +156,7 @@ class TestProcess:
             mock_result.skipped = []
             mock_pd.return_value = mock_result
 
-            runner.invoke(app, ["process", str(clips_dir), "--device", "cpu"])
+            runner.invoke(app, ["process", str(clips_dir), "-device", "cpu"])
 
         call_kwargs = mock_pd.call_args.kwargs
         assert call_kwargs["device"] == "cpu"
@@ -179,12 +179,12 @@ class TestProcess:
                 [
                     "process",
                     str(clips_dir),
-                    "--despill",
+                    "-despill",
                     "0.5",
-                    "--no-despeckle",
-                    "--refiner",
+                    "-no-despeckle",
+                    "-refiner",
                     "0.8",
-                    "--linear",
+                    "-linear",
                 ],
             )
 

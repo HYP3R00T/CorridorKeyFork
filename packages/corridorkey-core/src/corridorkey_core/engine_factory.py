@@ -32,7 +32,7 @@ import numpy as np
 import torch
 
 if TYPE_CHECKING:
-    from corridorkey_core.pipeline.engine import CorridorKeyEngine
+    from corridorkey_core.engine import CorridorKeyEngine
 
 logger = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ def discover_checkpoint(checkpoint_dir: str | Path, ext: str) -> Path:
         hint = ""
         if other_files:
             other_backend = "mlx" if other_ext == MLX_EXT else "torch"
-            hint = f" (Found {other_ext} files - did you mean --backend={other_backend}?)"
+            hint = f" (Found {other_ext} files - did you mean -backend={other_backend}?)"
         raise FileNotFoundError(f"No {ext} checkpoint found in {checkpoint_dir}.{hint}")
 
     if len(matches) > 1:
@@ -325,9 +325,9 @@ def create_engine(
         backend: "torch", "mlx", "auto", or None. Resolved via resolve_backend().
         device: Torch device string (e.g. "cuda", "cpu"). Torch only. Defaults to "cpu" when None.
         img_size: Square resolution the model runs at internally.
-        optimization_mode: Torch only -- "auto", "speed", or "lowvram".
+        optimization_mode: Torch only - "auto", "speed", or "lowvram".
             Controls CNN refiner tiling and torch.compile. See CorridorKeyEngine for details.
-        precision: Torch only -- "auto", "fp16", "bf16", or "fp32".
+        precision: Torch only - "auto", "fp16", "bf16", or "fp32".
             "auto" selects BF16 on Ampere+/Apple Silicon, FP16 otherwise.
         tile_size: MLX only - tile size for tiled inference. None = full-frame.
         overlap: MLX only - overlap pixels between tiles.
@@ -348,7 +348,7 @@ def create_engine(
 
     # Torch
     ckpt = discover_checkpoint(Path(checkpoint_dir), TORCH_EXT)
-    from corridorkey_core.pipeline.engine import CorridorKeyEngine  # pragma: no cover
+    from corridorkey_core.engine import CorridorKeyEngine  # pragma: no cover
 
     resolved_device = device or "cpu"
     model_dtype = _resolve_precision(precision, resolved_device)

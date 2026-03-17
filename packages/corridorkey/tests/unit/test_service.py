@@ -1,4 +1,4 @@
-"""Unit tests for service.py -- InferenceParams, OutputConfig, and exr_flags.
+"""Unit tests for service.py - InferenceParams, OutputConfig, and exr_flags.
 
 These tests cover the dataclass contracts and the EXR flag builder without
 requiring a GPU, model files, or real frame data. The inference loop itself
@@ -10,15 +10,15 @@ from __future__ import annotations
 
 import cv2
 import numpy as np
-from corridorkey.processing.writer import EXR_COMPRESSION_IDS, exr_flags
-from corridorkey.service import (
+from corridorkey.contracts import (
     InferenceParams,
     OutputConfig,
 )
+from corridorkey.writer import EXR_COMPRESSION_IDS, exr_flags
 
 
 class TestInferenceParams:
-    """InferenceParams -- defaults, new fields, serialisation roundtrip."""
+    """InferenceParams - defaults, new fields, serialisation roundtrip."""
 
     def test_defaults(self):
         """All fields must have the documented default values."""
@@ -73,7 +73,7 @@ class TestInferenceParams:
 
 
 class TestOutputConfig:
-    """OutputConfig -- defaults, exr_compression field, serialisation roundtrip."""
+    """OutputConfig - defaults, exr_compression field, serialisation roundtrip."""
 
     def test_defaults(self):
         """All fields must have the documented default values."""
@@ -129,7 +129,7 @@ class TestOutputConfig:
 
 
 class TestBuildExrFlags:
-    """exr_flags -- codec ID mapping and cv2 flag list structure."""
+    """exr_flags - codec ID mapping and cv2 flag list structure."""
 
     def test_returns_list(self):
         """exr_flags must return a list (cv2.imwrite flags format)."""
@@ -181,10 +181,10 @@ class TestBuildExrFlags:
 
 
 class TestSourcePassthrough:
-    """apply_source_passthrough -- blend logic, shape contract, and edge cases.
+    """apply_source_passthrough - blend logic, shape contract, and edge cases.
 
     Tests call the extracted helper directly with synthetic numpy arrays.
-    No engine construction, no torch, no GPU -- runs in milliseconds.
+    No engine construction, no torch, no GPU - runs in milliseconds.
     """
 
     def _make_inputs(self, h: int = 32, w: int = 32):
@@ -209,11 +209,11 @@ class TestSourcePassthrough:
 
         source, fg, alpha = self._make_inputs()
         blended_fg, _ = apply_source_passthrough(source, fg, alpha, 1, 3)
-        # Source red channel is 1.0, model fg is 0.5 -- blend should be > 0.6
+        # Source red channel is 1.0, model fg is 0.5 - blend should be > 0.6
         assert blended_fg[:, :, 0].mean() > 0.6
 
     def test_zero_alpha_uses_model_fg(self):
-        """With alpha=0 everywhere, erosion produces no interior -- output equals model fg."""
+        """With alpha=0 everywhere, erosion produces no interior - output equals model fg."""
         from corridorkey_core.compositing import apply_source_passthrough
 
         h, w = 32, 32
@@ -241,7 +241,7 @@ class TestSourcePassthrough:
         assert processed_rgba.dtype == np.float32
 
     def test_large_erode_with_small_frame_does_not_crash(self):
-        """edge_erode_px larger than the frame must not raise -- kernel clamps to 1."""
+        """edge_erode_px larger than the frame must not raise - kernel clamps to 1."""
         from corridorkey_core.compositing import apply_source_passthrough
 
         source, fg, alpha = self._make_inputs(8, 8)

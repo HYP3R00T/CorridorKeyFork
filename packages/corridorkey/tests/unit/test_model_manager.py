@@ -1,4 +1,4 @@
-"""Unit tests for model_manager.py -- is_model_present and download_model.
+"""Unit tests for model_manager.py - is_model_present and download_model.
 
 Tests mock urllib and filesystem so no network access or real files needed.
 """
@@ -20,8 +20,9 @@ from corridorkey.model_manager import (
 def _config(checkpoint_dir: str) -> CorridorKeyConfig:
     return CorridorKeyConfig(checkpoint_dir=Path(checkpoint_dir))
 
+
 class TestIsModelPresent:
-    """is_model_present -- checks for .pth or .safetensors in checkpoint_dir."""
+    """is_model_present - checks for .pth or .safetensors in checkpoint_dir."""
 
     def test_false_when_dir_missing(self, tmp_path: Path):
         cfg = _config(str(tmp_path / "nonexistent"))
@@ -47,8 +48,9 @@ class TestIsModelPresent:
         cfg = _config(str(tmp_path))
         assert is_model_present(cfg) is False
 
+
 class TestDownloadModelError:
-    """download_model -- network failure must raise RuntimeError and clean up tmp."""
+    """download_model - network failure must raise RuntimeError and clean up tmp."""
 
     def test_raises_on_network_error(self, tmp_path: Path):
         cfg = _config(str(tmp_path))
@@ -142,8 +144,9 @@ class TestDownloadModelError:
             download_model(cfg, url="https://example.com/model.pth", filename="model.pth", checksum="")
         assert new_dir.is_dir()
 
+
 class TestSha256:
-    """_sha256 -- computes correct hex digest."""
+    """_sha256 - computes correct hex digest."""
 
     def test_known_digest(self, tmp_path: Path):
         import hashlib

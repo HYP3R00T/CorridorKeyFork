@@ -22,17 +22,17 @@ def stitch(
     outputs: Annotated[
         list[str] | None,
         typer.Option(
-            "--output",
+            "-output",
             "-o",
             help="Output(s) to stitch: fg, matte, comp, processed. Repeatable. Default: all found.",
         ),
     ] = None,
     fps: Annotated[
         float | None,
-        typer.Option("--fps", help="Frame rate. Reads from video metadata sidecar when omitted."),
+        typer.Option("-fps", help="Frame rate. Reads from video metadata sidecar when omitted."),
     ] = None,
-    codec: Annotated[str, typer.Option("--codec", help="FFmpeg video codec.")] = "libx264",
-    crf: Annotated[int, typer.Option("--crf", help="Quality factor (0-51, lower = better).")] = 18,
+    codec: Annotated[str, typer.Option("-codec", help="FFmpeg video codec.")] = "libx264",
+    crf: Annotated[int, typer.Option("-crf", help="Quality factor (0-51, lower = better).")] = 18,
 ) -> None:
     """Stitch output frame sequences in CLIPS_DIR into MP4 video files.
 
@@ -40,13 +40,13 @@ def stitch(
     Falls back to scanning Output/ subdirectories when no manifest is present.
 
     The source frame rate is recovered from the video metadata sidecar written
-    during extraction. Supply --fps explicitly for image-sequence source clips.
+    during extraction. Supply -fps explicitly for image-sequence source clips.
 
     Examples:
 
         corridorkey stitch /path/to/clips
 
-        corridorkey stitch /path/to/clips --output comp --output fg --fps 25
+        corridorkey stitch /path/to/clips -output comp -output fg -fps 25
     """
     if not clips_dir.exists():
         err_console.print(f"[red]Error:[/red] Path does not exist: {clips_dir}")

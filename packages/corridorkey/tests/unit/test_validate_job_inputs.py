@@ -1,4 +1,4 @@
-"""Unit tests for validators.validate_job_inputs -- Tier 1 and Tier 2 checks.
+"""Unit tests for validators.validate_job_inputs - Tier 1 and Tier 2 checks.
 
 All tests use tmp_path and mock ClipEntry objects. No GPU, no model files,
 no network access required.
@@ -270,12 +270,12 @@ class TestTier2SampleDecode:
         ):
             mock_du.return_value = MagicMock(free=100 * 1024**3)
             result = validate_job_inputs(clip)
-        # Video assets skip Tier 1 frame count check and Tier 2 -- should be ok
+        # Video assets skip Tier 1 frame count check and Tier 2 - should be ok
         assert result.ok is True
 
 
 class TestValidationResult:
-    """ValidationResult -- ok flag semantics."""
+    """ValidationResult - ok flag semantics."""
 
     def test_ok_true_when_no_errors(self):
         r = ValidationResult(ok=True, errors=[], warnings=[])

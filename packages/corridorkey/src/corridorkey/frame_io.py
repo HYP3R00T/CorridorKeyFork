@@ -190,7 +190,7 @@ class FrameData:
         source_h: Original frame height in pixels.
         source_w: Original frame width in pixels.
         is_linear: True if the source image was originally in linear light (e.g. EXR).
-            The image field always contains sRGB -- this flag records the origin.
+            The image field always contains sRGB - this flag records the origin.
         stem: Filename stem of the source frame (e.g. "frame_000001").
     """
 

@@ -8,6 +8,7 @@ from corridorkey.clip_state import (
     scan_project_clips,
 )
 from corridorkey.config import CorridorKeyConfig, export_config, load_config
+from corridorkey.contracts import FrameResult, InferenceParams, OutputConfig, WriteConfig
 from corridorkey.errors import CorridorKeyError, FFmpegNotFoundError
 from corridorkey.ffmpeg_tools import check_ffmpeg
 from corridorkey.frame_io import FrameData, load_frame
@@ -15,13 +16,6 @@ from corridorkey.job_queue import GPUJob, GPUJobQueue, JobStatus, JobType
 from corridorkey.model_manager import MODEL_DOWNLOAD_URL, MODEL_FILENAME, download_model, is_model_present
 from corridorkey.models import InOutRange
 from corridorkey.pipeline import ClipSummary, PipelineResult, process_directory
-from corridorkey.processing.contracts import FrameResult, InferenceParams, OutputConfig, WriteConfig
-from corridorkey.processing.service import (
-    CorridorKeyService,
-    inference_params_to_postprocess,
-    output_config_to_write_config,
-)
-from corridorkey.processing.writer import generate_masks, write_outputs
 from corridorkey.project import (
     add_clips_to_project,
     create_project,
@@ -41,7 +35,13 @@ from corridorkey.project import (
     write_project_json,
 )
 from corridorkey.protocols import AlphaGenerator
+from corridorkey.service import (
+    CorridorKeyService,
+    inference_params_to_postprocess,
+    output_config_to_write_config,
+)
 from corridorkey.validators import ValidationResult, validate_job_inputs
+from corridorkey.writer import generate_masks, write_outputs
 
 __all__ = [
     # Validation
@@ -52,7 +52,7 @@ __all__ = [
     "InferenceParams",
     "OutputConfig",
     "FrameResult",
-    # Bridge helpers -- convert application types to core stage contracts
+    # Bridge helpers - convert application types to core stage contracts
     "inference_params_to_postprocess",
     "output_config_to_write_config",
     # Pipeline stages (I/O and orchestration)
