@@ -162,7 +162,9 @@ def wizard(
         if cancelled:
             continue
 
-        if had_success and (output_config.stitch_enabled or (not yes and Confirm.ask("\nStitch outputs to video?", default=True))):
+        if had_success and (
+            output_config.stitch_enabled or (not yes and Confirm.ask("\nStitch outputs to video?", default=True))
+        ):
             _run_stitch(service, actionable, output_config)
 
         if yes:
@@ -552,7 +554,9 @@ def _run_inference(
             console.print(
                 f"  {_stage(2, 'alpha hints present', skipped=has_alpha) if has_alpha else _stage(2, 'Generating alpha hints')}"
             )
-            console.print(f"  {_stage(3, 'Preprocessing')}  /  {_stage(4, 'Inference')}  /  {_stage(5, 'Postprocessing')}")
+            console.print(
+                f"  {_stage(3, 'Preprocessing')}  /  {_stage(4, 'Inference')}  /  {_stage(5, 'Postprocessing')}"
+            )
             with ProgressContext() as prog:
                 t0 = time.monotonic()
                 try:
