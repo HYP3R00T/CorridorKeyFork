@@ -18,7 +18,6 @@ def main() -> None:
     print(type(gpu))
 
     clips = scan(CLIPS_DIR)
-    print(f"Found {len(clips)} clip(s)")
     for clip in clips:
         manifest = load(clip)
         print(manifest)
