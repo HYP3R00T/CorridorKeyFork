@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from corridorkey_new.entrypoint import Clip
 from corridorkey_new.loader.validator import (
     count_frames,
     detect_is_linear,
@@ -85,29 +84,28 @@ class TestDetectIsLinear:
 
 
 class TestValidate:
-    def _make_clip(self, tmp_path: Path, input_names: list[str], alpha_names: list[str] | None = None) -> Clip:
-        input_dir = tmp_path / "Input"
-        _touch_frames(input_dir, input_names)
-        alpha_dir = None
-        if alpha_names is not None:
-            alpha_dir = tmp_path / "AlphaHint"
-            _touch_frames(alpha_dir, alpha_names)
-        return Clip(name="test_clip", root=tmp_path, input_path=input_dir, alpha_path=alpha_dir)
-
     def test_valid_clip_no_alpha(self, tmp_path: Path):
-        clip = self._make_clip(tmp_path, ["frame_1.png", "frame_2.png"])
-        validate(clip)  # should not raise
+        input_dir = tmp_path / "Input"
+        _touch_frames(input_dir, ["frame_1.png", "frame_2.png"])
+        validate("test_clip", input_dir, None)  # should not raise
 
     def test_valid_clip_with_matching_alpha(self, tmp_path: Path):
-        clip = self._make_clip(tmp_path, ["frame_1.png", "frame_2.png"], ["alpha_1.png", "alpha_2.png"])
-        validate(clip)  # should not raise
+        input_dir = tmp_path / "Input"
+        alpha_dir = tmp_path / "AlphaHint"
+        _touch_frames(input_dir, ["frame_1.png", "frame_2.png"])
+        _touch_frames(alpha_dir, ["alpha_1.png", "alpha_2.png"])
+        validate("test_clip", input_dir, alpha_dir)  # should not raise
 
     def test_empty_input_raises(self, tmp_path: Path):
-        clip = self._make_clip(tmp_path, [])
+        input_dir = tmp_path / "Input"
+        input_dir.mkdir()
         with pytest.raises(ValueError, match="no image frames"):
-            validate(clip)
+            validate("test_clip", input_dir, None)
 
     def test_frame_count_mismatch_raises(self, tmp_path: Path):
-        clip = self._make_clip(tmp_path, ["frame_1.png", "frame_2.png"], ["alpha_1.png"])
+        input_dir = tmp_path / "Input"
+        alpha_dir = tmp_path / "AlphaHint"
+        _touch_frames(input_dir, ["frame_1.png", "frame_2.png"])
+        _touch_frames(alpha_dir, ["alpha_1.png"])
         with pytest.raises(ValueError, match="frame count mismatch"):
-            validate(clip)
+            validate("test_clip", input_dir, alpha_dir)

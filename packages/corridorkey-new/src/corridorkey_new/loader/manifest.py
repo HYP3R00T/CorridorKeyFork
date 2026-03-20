@@ -1,6 +1,6 @@
 """Stage 1 - clip manifest builder.
 
-Validates a Clip and returns a ClipManifest with paths and metadata.
+Validates a Clip and returns a ClipManifest ready for downstream stages.
 User files are never modified. For video inputs, frames are extracted into
 a sibling Frames/ or AlphaFrames/ directory. For image sequences, the
 existing directory is used directly.
@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 
 from corridorkey_new.entrypoint import Clip
-from corridorkey_new.loader.contracts import ClipLayout, ClipManifest
+from corridorkey_new.loader.contracts import ClipManifest
 from corridorkey_new.loader.extractor import extract_video, is_video
 from corridorkey_new.loader.validator import count_frames, detect_is_linear, validate
 
@@ -30,8 +30,7 @@ def load(clip: Clip) -> ClipManifest:
         clip: A Clip from stage 0.
 
     Returns:
-        ClipManifest with validated layout, needs_alpha flag,
-        frame count, and is_linear.
+        ClipManifest ready for stage 2 or stage 3.
 
     Raises:
         ValueError: If validation fails.
@@ -40,20 +39,21 @@ def load(clip: Clip) -> ClipManifest:
     frames_dir = _resolve_frames(clip.input_path, "Frames")
     alpha_frames_dir = _resolve_frames(clip.alpha_path, "AlphaFrames") if clip.alpha_path else None
 
-    layout = ClipLayout(
-        root=clip.root,
-        frames_dir=frames_dir,
-        alpha_frames_dir=alpha_frames_dir,
-    )
+    validate(clip.name, frames_dir, alpha_frames_dir)
 
-    resolved = clip.model_copy(update={"input_path": frames_dir, "alpha_path": alpha_frames_dir})
-    validate(resolved)
+    output_dir = clip.root / "Output"
+    output_dir.mkdir(exist_ok=True)
+
+    frame_count = count_frames(frames_dir)
 
     return ClipManifest(
         clip_name=clip.name,
-        layout=layout,
+        frames_dir=frames_dir,
+        alpha_frames_dir=alpha_frames_dir,
+        output_dir=output_dir,
         needs_alpha=alpha_frames_dir is None,
-        frame_count=count_frames(frames_dir),
+        frame_count=frame_count,
+        frame_range=(0, frame_count),
         is_linear=detect_is_linear(frames_dir),
     )
 
@@ -62,8 +62,8 @@ def _resolve_frames(path: Path, extracted_dir_name: str) -> Path:
     """Resolve the frame sequence directory for a given input path.
 
     If path is a directory (image sequence), return it directly — no copy made.
-    If path is a video file, extract frames into a sibling directory and return
-    that. The video file is never moved or modified.
+    If path is a video file, extract frames into a sibling directory at the
+    clip root level and return that. The video file is never moved or modified.
 
     Args:
         path: Input path — a frames directory or a video file.
@@ -76,6 +76,7 @@ def _resolve_frames(path: Path, extracted_dir_name: str) -> Path:
     if not is_video(path):
         return path
 
+    # path.parent is Input/ or AlphaHint/, path.parent.parent is the clip root
     output_dir = path.parent.parent / extracted_dir_name
     if output_dir.exists() and any(output_dir.iterdir()):
         logger.info("Frames already extracted, skipping: %s", output_dir)

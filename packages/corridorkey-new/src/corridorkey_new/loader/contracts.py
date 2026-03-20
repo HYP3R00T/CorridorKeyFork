@@ -7,68 +7,48 @@ from pathlib import Path
 from pydantic import BaseModel, model_validator
 
 
-class ClipLayout(BaseModel):
-    """Filesystem layout contract for a clip after stage 1.
-
-    User-owned directories are never modified by the program. For image
-    sequences the program reads directly from the user's folders. For video
-    inputs the program extracts frames into a separate folder so the original
-    video is untouched.
-
-    Image sequence input:
-
-        clip/
-          Input/          <- user's frames, read directly
-          AlphaHint/      <- user's alpha frames, read directly (optional)
-
-    Video input:
-
-        clip/
-          Input/          <- user's video, never touched
-          AlphaHint/      <- user's alpha video, never touched (optional)
-          Frames/         <- program-extracted frames (safe to delete and regenerate)
-          AlphaFrames/    <- program-extracted alpha frames (safe to delete and regenerate)
-
-    Stage 2 writes generated alpha hints directly into AlphaHint/ when it is
-    absent — no copy or intermediate folder is created.
-
-    Attributes:
-        root: Absolute path to the clip folder.
-        frames_dir: Directory the pipeline reads input frames from.
-            ``Input/`` for image sequences, ``Frames/`` for extracted video.
-        alpha_frames_dir: Directory the pipeline reads alpha frames from.
-            ``AlphaHint/`` for image sequences, ``AlphaFrames/`` for extracted
-            video. None if no alpha hint is available (stage 2 will generate it).
-    """
-
-    root: Path
-    frames_dir: Path
-    alpha_frames_dir: Path | None = None
-
-    @model_validator(mode="after")
-    def validate_paths(self) -> ClipLayout:
-        if not self.root.is_dir():
-            raise ValueError(f"Clip root is not a directory: {self.root}")
-        if not self.frames_dir.is_dir():
-            raise ValueError(f"Frames directory does not exist: {self.frames_dir}")
-        if self.alpha_frames_dir is not None and not self.alpha_frames_dir.is_dir():
-            raise ValueError(f"Alpha frames directory does not exist: {self.alpha_frames_dir}")
-        return self
-
-
 class ClipManifest(BaseModel):
-    """Output contract of stage 1. Input to stage 2 or stage 3.
+    """Output contract of stage 1. Input to all downstream stages.
+
+    Downstream stages only receive what they need — resolved frame paths,
+    output destination, and clip metadata. All discovery, validation, and
+    extraction decisions are made in stage 1 and are not repeated.
 
     Attributes:
-        clip_name: Name of the clip, carried through for logging and output naming.
-        layout: Filesystem layout — where to read frames from.
-        needs_alpha: True if alpha is missing and stage 2 must run before stage 3.
-        frame_count: Number of input frames detected.
-        is_linear: True if input frames are in linear light (e.g. .exr extension).
+        clip_name: Clip name, carried through for logging and output naming.
+        frames_dir: Directory containing the input frame sequence.
+            Points to ``Input/`` for image sequence inputs, or ``Frames/``
+            for video inputs (extracted by stage 1).
+        alpha_frames_dir: Directory containing the alpha hint frame sequence.
+            Points to ``AlphaHint/`` for image sequence inputs, or
+            ``AlphaFrames/`` for video inputs. None if absent — stage 2
+            will generate alpha and write directly into ``AlphaHint/``.
+        output_dir: Directory where stage 6 writes all output images.
+            Created by stage 1 at ``clip/Output/``.
+        needs_alpha: True if alpha is absent and stage 2 must run first.
+        frame_count: Total number of input frames.
+        frame_range: Half-open range ``(start, end)`` of frames to process.
+            Defaults to ``(0, frame_count)`` — the full sequence.
+            Can be narrowed for partial runs or testing.
+        is_linear: True if input frames are in linear light (e.g. .exr).
     """
 
     clip_name: str
-    layout: ClipLayout
+    frames_dir: Path
+    alpha_frames_dir: Path | None
+    output_dir: Path
     needs_alpha: bool
     frame_count: int
+    frame_range: tuple[int, int]
     is_linear: bool
+
+    @model_validator(mode="after")
+    def validate_frame_range(self) -> ClipManifest:
+        start, end = self.frame_range
+        if start < 0:
+            raise ValueError(f"frame_range start must be >= 0, got {start}")
+        if end > self.frame_count:
+            raise ValueError(f"frame_range end ({end}) exceeds frame_count ({self.frame_count})")
+        if start >= end:
+            raise ValueError(f"frame_range start ({start}) must be less than end ({end})")
+        return self
