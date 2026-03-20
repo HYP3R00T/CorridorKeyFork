@@ -1,9 +1,11 @@
-"""Stage 1 - clip manifest builder.
+"""Loader stage — orchestrator.
 
 Validates a Clip and returns a ClipManifest ready for downstream stages.
 User files are never modified. For video inputs, frames are extracted into
 a sibling Frames/ or AlphaFrames/ directory. For image sequences, the
 existing directory is used directly.
+
+Each stage in the pipeline has a corresponding orchestrator.py.
 """
 
 from __future__ import annotations
@@ -11,10 +13,10 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from corridorkey_new.entrypoint import Clip
 from corridorkey_new.loader.contracts import ClipManifest
 from corridorkey_new.loader.extractor import extract_video, is_video, save_video_metadata
 from corridorkey_new.loader.validator import count_frames, detect_is_linear, validate
+from corridorkey_new.scanner.contracts import Clip
 
 logger = logging.getLogger(__name__)
 

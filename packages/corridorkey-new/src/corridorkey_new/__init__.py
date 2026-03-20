@@ -32,6 +32,19 @@ resolve_alpha — bridge between external alpha generation and preprocessing
     Alpha generation is not a pipeline stage — it is the responsibility of
     the calling interface (CLI, GUI, etc.) and runs outside this pipeline.
 
+Stage 3 — preprocess_frame
+    preprocess_frame(manifest, i, config) -> PreprocessedFrame
+    Preprocess one frame for model inference. Reads image and alpha from
+    disk, converts color space if needed, resizes, applies ImageNet
+    normalisation, and returns a tensor on the configured device.
+
+    Build file lists once per clip and pass them on every call:
+        imgs = get_frame_files(manifest.frames_dir)
+        alps = get_frame_files(manifest.alpha_frames_dir)
+        for i in range(*manifest.frame_range):
+            result = preprocess_frame(manifest, i, config,
+                                      image_files=imgs, alpha_files=alps)
+
 Startup
 -------
 Before running the pipeline, initialise infrastructure:
@@ -46,12 +59,19 @@ Clip
     Output of scan(). Input to load().
 
 ClipManifest
-    Output of load(). Input to preprocessing.
+    Output of load(). Input to preprocess_frame().
     Contains: frames_dir, alpha_frames_dir, output_dir,
               needs_alpha, frame_count, frame_range, is_linear.
+
+PreprocessedFrame
+    Output of preprocess_frame(). Input to inference.
+    Contains: tensor [1, 4, img_size, img_size] on device + FrameMeta.
+
+FrameMeta
+    Original frame dimensions (H, W) and index — carried through to
+    postprocessing so outputs can be resized back to source resolution.
 """
 
-from corridorkey_new.entrypoint import Clip, scan
 from corridorkey_new.infra import (
     CorridorKeyConfig,
     GPUInfo,
@@ -61,6 +81,14 @@ from corridorkey_new.infra import (
     setup_logging,
 )
 from corridorkey_new.loader import ClipManifest, VideoMetadata, load, load_video_metadata, resolve_alpha
+from corridorkey_new.preprocessor import (
+    FrameMeta,
+    FrameReadError,
+    PreprocessConfig,
+    PreprocessedFrame,
+    preprocess_frame,
+)
+from corridorkey_new.scanner import Clip, scan
 
 __all__ = [
     # Pipeline
@@ -68,10 +96,16 @@ __all__ = [
     "load",
     "resolve_alpha",
     "load_video_metadata",
+    "preprocess_frame",
     # Contracts
     "Clip",
     "ClipManifest",
     "VideoMetadata",
+    "PreprocessConfig",
+    "PreprocessedFrame",
+    "FrameMeta",
+    # Errors
+    "FrameReadError",
     # Startup
     "load_config",
     "setup_logging",

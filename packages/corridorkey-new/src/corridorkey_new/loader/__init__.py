@@ -23,7 +23,7 @@ ClipManifest
 """
 
 from corridorkey_new.loader.contracts import ClipManifest
-from corridorkey_new.loader.extractor import VideoMetadata, load_video_metadata, save_video_metadata
-from corridorkey_new.loader.manifest import load, resolve_alpha
+from corridorkey_new.loader.extractor import VideoMetadata, load_video_metadata
+from corridorkey_new.loader.orchestrator import load, resolve_alpha
 
-__all__ = ["load", "resolve_alpha", "ClipManifest", "VideoMetadata", "load_video_metadata", "save_video_metadata"]
+__all__ = ["load", "resolve_alpha", "ClipManifest", "VideoMetadata", "load_video_metadata"]
