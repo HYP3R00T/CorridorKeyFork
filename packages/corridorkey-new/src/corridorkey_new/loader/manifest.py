@@ -12,9 +12,9 @@ import logging
 from pathlib import Path
 
 from corridorkey_new.entrypoint import Clip
-from corridorkey_new.stage1.contracts import ClipManifest
-from corridorkey_new.stage1.extractor import extract_video, is_video
-from corridorkey_new.stage1.validator import count_frames, detect_is_linear, validate
+from corridorkey_new.loader.contracts import ClipManifest
+from corridorkey_new.loader.extractor import extract_video, is_video
+from corridorkey_new.loader.validator import count_frames, detect_is_linear, validate
 
 logger = logging.getLogger(__name__)
 
