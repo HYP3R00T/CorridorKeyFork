@@ -226,7 +226,7 @@ class CorridorKeyConfig(BaseModel):
                 "inference.checkpoint_path is not set. Add it to corridorkey.toml or set CK_INFERENCE__CHECKPOINT_PATH."
             )
 
-        _precision_map: dict[str, torch.dtype] = {
+        _precision_map = {
             "float32": torch.float32,
             "float16": torch.float16,
         }
