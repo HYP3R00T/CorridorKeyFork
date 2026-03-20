@@ -76,7 +76,7 @@ def _resolve_frames(path: Path, extracted_dir_name: str) -> Path:
     if not is_video(path):
         return path
 
-    output_dir = path.parent / extracted_dir_name
+    output_dir = path.parent.parent / extracted_dir_name
     if output_dir.exists() and any(output_dir.iterdir()):
         logger.info("Frames already extracted, skipping: %s", output_dir)
         return output_dir
