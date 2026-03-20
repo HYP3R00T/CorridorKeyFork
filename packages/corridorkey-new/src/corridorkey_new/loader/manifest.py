@@ -30,7 +30,8 @@ def load(clip: Clip) -> ClipManifest:
         clip: A Clip from stage 0.
 
     Returns:
-        ClipManifest ready for stage 2 or stage 3.
+        ClipManifest ready for preprocessing, or for the interface to generate
+        alpha externally via resolve_alpha() if needs_alpha is True.
 
     Raises:
         ValueError: If validation fails.
@@ -84,3 +85,39 @@ def _resolve_frames(path: Path, extracted_dir_name: str) -> Path:
 
     extract_video(path, output_dir)
     return output_dir
+
+
+def resolve_alpha(manifest: ClipManifest, alpha_frames_dir: Path) -> ClipManifest:
+    """Update a manifest with an externally generated alpha sequence.
+
+    Called by the interface layer (CLI, GUI, etc.) after it has generated alpha
+    frames using an external tool. Alpha generation is not a pipeline stage —
+    it is entirely the interface's responsibility.
+
+    Validates the provided alpha directory matches the input frame count, then
+    returns an updated manifest with ``needs_alpha=False`` and
+    ``alpha_frames_dir`` set, ready for preprocessing.
+
+    Args:
+        manifest: A ClipManifest with ``needs_alpha=True``.
+        alpha_frames_dir: Path to the directory containing the generated
+            alpha frame sequence.
+
+    Returns:
+        Updated ClipManifest with ``needs_alpha=False``, ready for preprocessing.
+
+    Raises:
+        ValueError: If manifest already has alpha, the directory doesn't
+            exist, or the frame count doesn't match.
+    """
+    if not manifest.needs_alpha:
+        raise ValueError(f"Clip '{manifest.clip_name}' already has alpha — resolve_alpha should not be called.")
+
+    validate(manifest.clip_name, manifest.frames_dir, alpha_frames_dir)
+
+    return manifest.model_copy(
+        update={
+            "alpha_frames_dir": alpha_frames_dir,
+            "needs_alpha": False,
+        }
+    )

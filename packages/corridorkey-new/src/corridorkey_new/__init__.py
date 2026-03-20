@@ -16,8 +16,21 @@ Stage 0 — scan
 Stage 1 — load
     load(clip) -> ClipManifest
     Validate a Clip, extract video to frames if needed, and return a
-    ClipManifest with resolved paths and metadata. Check manifest.needs_alpha
-    to decide whether stage 2 must run before stage 3.
+    ClipManifest with resolved paths and metadata.
+
+    Check ``manifest.needs_alpha`` after this call. If True, alpha frames are
+    absent and the interface is responsible for generating them externally
+    (e.g. via an alpha generator tool). Once done, call ``resolve_alpha()``
+    to update the manifest and proceed to preprocessing.
+
+resolve_alpha — bridge between external alpha generation and preprocessing
+    resolve_alpha(manifest, alpha_frames_dir) -> ClipManifest
+    Called by the interface after external alpha generation completes.
+    Validates the alpha sequence matches the input frame count and returns
+    an updated manifest with ``needs_alpha=False``, ready for preprocessing.
+
+    Alpha generation is not a pipeline stage — it is the responsibility of
+    the calling interface (CLI, GUI, etc.) and runs outside this pipeline.
 
 Startup
 -------
@@ -33,7 +46,7 @@ Clip
     Output of scan(). Input to load().
 
 ClipManifest
-    Output of load(). Input to stage 2 or stage 3.
+    Output of load(). Input to preprocessing.
     Contains: frames_dir, alpha_frames_dir, output_dir,
               needs_alpha, frame_count, frame_range, is_linear.
 """
@@ -47,12 +60,13 @@ from corridorkey_new.infra import (
     resolve_device,
     setup_logging,
 )
-from corridorkey_new.loader import ClipManifest, load
+from corridorkey_new.loader import ClipManifest, load, resolve_alpha
 
 __all__ = [
     # Pipeline
     "scan",
     "load",
+    "resolve_alpha",
     # Contracts
     "Clip",
     "ClipManifest",

@@ -8,15 +8,14 @@ from __future__ import annotations
 
 import logging
 import platform
-from dataclasses import dataclass, field
 
 import torch
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class GPUInfo:
+class GPUInfo(BaseModel):
     """Information about the available GPU backend.
 
     Attributes:
@@ -29,9 +28,9 @@ class GPUInfo:
 
     vendor: str
     backend: str
-    version: str | None
-    devices: list[str] = field(default_factory=list)
-    vram_gb: list[float] = field(default_factory=list)
+    version: str | None = None
+    devices: list[str] = Field(default_factory=list)
+    vram_gb: list[float] = Field(default_factory=list)
 
     @property
     def device_str(self) -> str:

@@ -1,8 +1,22 @@
 from pathlib import Path
 
-from corridorkey_new import detect_gpu, load, load_config, scan, setup_logging
+from corridorkey_new import detect_gpu, load, load_config, resolve_alpha, scan, setup_logging
 
 CLIPS_DIR = Path(r"C:\Users\Rajes\Downloads\Samples\sample_inputs")
+
+
+def _generate_alpha_externally(manifest) -> Path:
+    """Stub: simulate external alpha generation.
+
+    In a real CLI/GUI this would invoke the alpha generator tool, wait for it
+    to finish, and return the path to the generated alpha frames directory.
+
+    For now, prompt the user to provide the path manually.
+    """
+    print(f"  Alpha required for '{manifest.clip_name}'.")
+    print(f"  Run your alpha generator on: {manifest.frames_dir}")
+    raw = input("  Enter path to generated alpha frames directory: ").strip()
+    return Path(raw)
 
 
 def main() -> None:
@@ -10,14 +24,19 @@ def main() -> None:
     setup_logging(config)
 
     gpu = detect_gpu()
-    print(f"Device: {gpu.vendor} ({gpu.backend})")
+    print(gpu.model_dump_json(indent=2))
 
     clips = scan(CLIPS_DIR)
     print(f"Found {len(clips)} clip(s)")
-    for clip in clips:
-        manifest = load(clip)
-        print(manifest)
-        if manifest.needs_alpha:
-            print(f"  → stage 2 required for '{manifest.clip_name}'")
-        else:
-            print(f"  → ready for stage 3 ({manifest.frame_count} frames, linear={manifest.is_linear})")
+
+    manifest = load(clips[0])
+    print(manifest.model_dump_json(indent=2))
+
+    if manifest.needs_alpha:
+        # Alpha generation is the interface's responsibility.
+        # Generate externally, then hand the result back to the pipeline.
+        alpha_dir = _generate_alpha_externally(manifest)
+        manifest = resolve_alpha(manifest, alpha_dir)
+        print(f"alpha resolved: {manifest.alpha_frames_dir}")
+
+    print(manifest.model_dump_json(indent=2))

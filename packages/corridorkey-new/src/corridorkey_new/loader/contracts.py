@@ -21,11 +21,13 @@ class ClipManifest(BaseModel):
             for video inputs (extracted by stage 1).
         alpha_frames_dir: Directory containing the alpha hint frame sequence.
             Points to ``AlphaHint/`` for image sequence inputs, or
-            ``AlphaFrames/`` for video inputs. None if absent — stage 2
-            will generate alpha and write directly into ``AlphaHint/``.
+            ``AlphaFrames/`` for video inputs. None if absent — the interface
+            layer is responsible for generating alpha externally and calling
+            ``resolve_alpha()`` to update the manifest before proceeding.
         output_dir: Directory where stage 6 writes all output images.
             Created by stage 1 at ``clip/Output/``.
-        needs_alpha: True if alpha is absent and stage 2 must run first.
+        needs_alpha: True if alpha is absent. The interface layer must generate
+            alpha externally and call ``resolve_alpha()`` before proceeding.
         frame_count: Total number of input frames.
         frame_range: Half-open range ``(start, end)`` of frames to process.
             Defaults to ``(0, frame_count)`` — the full sequence.
