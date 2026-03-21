@@ -1,0 +1,18 @@
+[project]
+name = "ckcli"
+version = "0.1.0"
+description = "Command-line interface for the CorridorKey AI keying pipeline."
+readme = "README.md"
+authors = [{ name = "Rajesh Das", email = "hyperoot.tech@proton.me" }]
+requires-python = ">=3.13"
+dependencies = ["corridorkey-new>=0.1.0", "typer>=0.12", "rich>=13"]
+
+[project.scripts]
+ck = "ckcli:main"
+
+[tool.uv.sources]
+corridorkey-new = { workspace = true }
+
+[build-system]
+requires = ["uv_build>=0.10.11,<0.11.0"]
+build-backend = "uv_build"
