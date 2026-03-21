@@ -6,14 +6,14 @@ to an output queue. Workers exit cleanly when they receive the STOP sentinel.
 Workers:
     PreprocessWorker   — reads frames from disk, preprocesses, pushes tensors
     InferenceWorker    — pulls tensors, runs model, pushes InferenceResult
-    PostWriteWorker    — pulls InferenceResult, postprocesses, writes to disk [stub]
+    PostWriteWorker    — pulls InferenceResult, postprocesses, writes to disk
 """
 
 from __future__ import annotations
 
 import logging
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import torch.nn as nn
@@ -22,7 +22,9 @@ from corridorkey_new.inference import InferenceConfig, InferenceResult, run_infe
 from corridorkey_new.loader.contracts import ClipManifest
 from corridorkey_new.loader.validator import get_frame_files
 from corridorkey_new.pipeline.queue import STOP, BoundedQueue
+from corridorkey_new.postprocessor import PostprocessConfig, postprocess_frame
 from corridorkey_new.preprocessor import FrameReadError, PreprocessConfig, PreprocessedFrame, preprocess_frame
+from corridorkey_new.writer import WriteConfig, write_frame
 
 logger = logging.getLogger(__name__)
 
@@ -142,26 +144,34 @@ class InferenceWorker:
 class PostWriteWorker:
     """Pulls InferenceResult, postprocesses, and writes frames to disk.
 
-    Stub — will be implemented when postprocessing and writing stages are built.
-
     Attributes:
         input_queue: Queue to pull InferenceResult objects from.
         output_dir: Directory to write output frames into.
+        postprocess_config: Postprocessing options (despill, despeckle, checkerboard).
+        write_config: Writer options (formats, enabled outputs).
+            If None, a default WriteConfig pointing at output_dir is used.
     """
 
     input_queue: BoundedQueue
     output_dir: Path
+    postprocess_config: PostprocessConfig = field(default_factory=PostprocessConfig)
+    write_config: WriteConfig | None = None
 
     def run(self) -> None:
         """Entry point for the postprocess+write thread."""
+        write_cfg = self.write_config or WriteConfig(output_dir=self.output_dir)
         while True:
             item = self.input_queue.get()
             if item is STOP:
                 self.input_queue.put_stop()
                 break
             assert isinstance(item, InferenceResult)
-            # TODO: postprocess item, write outputs to output_dir
-            logger.debug("postwrite_worker: received frame %d (stub)", item.meta.frame_index)
+            try:
+                processed = postprocess_frame(item, self.postprocess_config)
+                write_frame(processed, write_cfg)
+                logger.debug("postwrite_worker: wrote frame %d", item.meta.frame_index)
+            except Exception as e:
+                logger.error("postwrite_worker: skipping frame %d — %s", item.meta.frame_index, e)
 
         logger.debug("postwrite_worker: done")
 

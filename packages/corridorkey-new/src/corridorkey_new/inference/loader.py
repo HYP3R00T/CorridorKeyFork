@@ -41,8 +41,11 @@ def load_model(config: InferenceConfig) -> torch.nn.Module:
         FileNotFoundError: If the checkpoint file does not exist.
         RuntimeError: If the checkpoint cannot be loaded.
     """
-    # Import here to avoid a hard dependency at module level — corridorkey-core
-    # is a sibling package and may not always be installed.
+    # GreenFormer lives in corridorkey-core, which is the model architecture
+    # package. This is the one intentional cross-package dependency in
+    # corridorkey-new: we need the model class to instantiate it. Once
+    # corridorkey-new is ready to replace corridorkey-core, GreenFormer will
+    # be moved here and this import will be updated.
     from corridorkey_core.model_transformer import GreenFormer
 
     if not config.checkpoint_path.is_file():

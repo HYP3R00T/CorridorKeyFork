@@ -89,6 +89,7 @@ from corridorkey_new.infra import (
     setup_logging,
 )
 from corridorkey_new.loader import ClipManifest, VideoMetadata, load, load_video_metadata, resolve_alpha
+from corridorkey_new.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
 from corridorkey_new.preprocessor import (
     FrameMeta,
     FrameReadError,
@@ -97,6 +98,7 @@ from corridorkey_new.preprocessor import (
     preprocess_frame,
 )
 from corridorkey_new.scanner import Clip, scan
+from corridorkey_new.writer import WriteConfig, write_frame
 
 __all__ = [
     # Pipeline
@@ -129,4 +131,11 @@ __all__ = [
     "run_inference",
     "InferenceConfig",
     "InferenceResult",
+    # Postprocessor
+    "postprocess_frame",
+    "PostprocessConfig",
+    "PostprocessedFrame",
+    # Writer
+    "write_frame",
+    "WriteConfig",
 ]

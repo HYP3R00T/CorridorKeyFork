@@ -332,7 +332,7 @@ class TestInferenceWorker:
 
 
 # ---------------------------------------------------------------------------
-# PostWriteWorker (stub — drains queue)
+# PostWriteWorker — mocks postprocess_frame and write_frame
 # ---------------------------------------------------------------------------
 
 
@@ -352,9 +352,13 @@ class TestPostWriteWorker:
             in_q.put(self._make_fake_result())
         in_q.put_stop()
 
-        worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
-        t = worker.start()
-        t.join(timeout=5)
+        with (
+            patch("corridorkey_new.pipeline.worker.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey_new.pipeline.worker.write_frame"),
+        ):
+            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
+            t = worker.start()
+            t.join(timeout=5)
 
         assert not t.is_alive()
 
@@ -378,3 +382,36 @@ class TestPostWriteWorker:
         t = worker.start()
         assert isinstance(t, threading.Thread)
         t.join(timeout=5)
+
+    def test_postprocess_and_write_called_per_frame(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        for _ in range(3):
+            in_q.put(self._make_fake_result())
+        in_q.put_stop()
+
+        with (
+            patch("corridorkey_new.pipeline.worker.postprocess_frame", return_value=MagicMock()) as mock_pp,
+            patch("corridorkey_new.pipeline.worker.write_frame") as mock_wf,
+        ):
+            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert mock_pp.call_count == 3
+        assert mock_wf.call_count == 3
+
+    def test_error_skips_frame_does_not_abort(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        in_q.put(self._make_fake_result())
+        in_q.put(self._make_fake_result())
+        in_q.put_stop()
+
+        with (
+            patch("corridorkey_new.pipeline.worker.postprocess_frame", side_effect=RuntimeError("boom")),
+            patch("corridorkey_new.pipeline.worker.write_frame"),
+        ):
+            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert not t.is_alive()

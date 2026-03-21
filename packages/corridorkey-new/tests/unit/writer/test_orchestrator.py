@@ -1,0 +1,116 @@
+"""Unit tests for corridorkey_new.writer.orchestrator."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import cv2
+import numpy as np
+import pytest
+from corridorkey_new.postprocessor.contracts import PostprocessedFrame
+from corridorkey_new.writer.contracts import WriteConfig
+from corridorkey_new.writer.orchestrator import _alpha_to_bgr, _exr_flags, write_frame
+
+
+def _make_frame(h: int = 16, w: int = 16, stem: str = "frame_000000") -> PostprocessedFrame:
+    return PostprocessedFrame(
+        alpha=np.full((h, w, 1), 0.5, dtype=np.float32),
+        fg=np.full((h, w, 3), 0.4, dtype=np.float32),
+        comp=np.full((h, w, 3), 0.3, dtype=np.float32),
+        frame_index=0,
+        source_h=h,
+        source_w=w,
+        stem=stem,
+    )
+
+
+class TestAlphaToBgr:
+    def test_shape_hwc1_to_hw3(self):
+        alpha = np.zeros((8, 8, 1), dtype=np.float32)
+        out = _alpha_to_bgr(alpha)
+        assert out.shape == (8, 8, 3)
+
+    def test_shape_hw_to_hw3(self):
+        alpha = np.zeros((8, 8), dtype=np.float32)
+        out = _alpha_to_bgr(alpha)
+        assert out.shape == (8, 8, 3)
+
+    def test_values_replicated_across_channels(self):
+        alpha = np.full((4, 4, 1), 0.7, dtype=np.float32)
+        out = _alpha_to_bgr(alpha)
+        assert np.allclose(out[:, :, 0], 0.7)
+        assert np.allclose(out[:, :, 1], 0.7)
+        assert np.allclose(out[:, :, 2], 0.7)
+
+
+class TestExrFlags:
+    def test_returns_list_of_ints(self):
+        flags = _exr_flags("dwaa")
+        assert isinstance(flags, list)
+        assert all(isinstance(f, int) for f in flags)
+
+    def test_unknown_compression_falls_back_to_dwaa(self):
+        flags_dwaa = _exr_flags("dwaa")
+        flags_unknown = _exr_flags("unknown_codec")
+        assert flags_dwaa == flags_unknown
+
+
+class TestWriteFrame:
+    def test_writes_alpha_png(self, tmp_path: Path):
+        frame = _make_frame(stem="f0")
+        cfg = WriteConfig(output_dir=tmp_path, fg_enabled=False, comp_enabled=False)
+        write_frame(frame, cfg)
+        assert (tmp_path / "alpha" / "f0.png").exists()
+
+    def test_writes_fg_png(self, tmp_path: Path):
+        frame = _make_frame(stem="f0")
+        cfg = WriteConfig(output_dir=tmp_path, alpha_enabled=False, comp_enabled=False)
+        write_frame(frame, cfg)
+        assert (tmp_path / "fg" / "f0.png").exists()
+
+    def test_writes_comp_png(self, tmp_path: Path):
+        frame = _make_frame(stem="f0")
+        cfg = WriteConfig(output_dir=tmp_path, alpha_enabled=False, fg_enabled=False)
+        write_frame(frame, cfg)
+        assert (tmp_path / "comp" / "f0.png").exists()
+
+    def test_creates_subdirectories(self, tmp_path: Path):
+        frame = _make_frame(stem="f0")
+        cfg = WriteConfig(output_dir=tmp_path)
+        write_frame(frame, cfg)
+        assert (tmp_path / "alpha").is_dir()
+        assert (tmp_path / "fg").is_dir()
+        assert (tmp_path / "comp").is_dir()
+
+    def test_disabled_outputs_not_written(self, tmp_path: Path):
+        frame = _make_frame(stem="f0")
+        cfg = WriteConfig(output_dir=tmp_path, alpha_enabled=False, fg_enabled=False, comp_enabled=False)
+        write_frame(frame, cfg)
+        assert not (tmp_path / "alpha").exists()
+        assert not (tmp_path / "fg").exists()
+        assert not (tmp_path / "comp").exists()
+
+    def test_png_pixel_values_correct(self, tmp_path: Path):
+        frame = _make_frame(stem="f0")
+        cfg = WriteConfig(output_dir=tmp_path, fg_enabled=False, comp_enabled=False)
+        write_frame(frame, cfg)
+        img = cv2.imread(str(tmp_path / "alpha" / "f0.png"))
+        assert img is not None
+        # 0.5 float → 127 or 128 uint8
+        assert 126 <= img[0, 0, 0] <= 129
+
+    def test_multiple_frames_sequential(self, tmp_path: Path):
+        cfg = WriteConfig(output_dir=tmp_path, fg_enabled=False, comp_enabled=False)
+        for i in range(3):
+            frame = _make_frame(stem=f"frame_{i:06d}")
+            write_frame(frame, cfg)
+        assert len(list((tmp_path / "alpha").glob("*.png"))) == 3
+
+    def test_raises_on_bad_path(self, tmp_path: Path):
+        frame = _make_frame(stem="f0")
+        # Make output_dir a file so mkdir fails
+        bad_dir = tmp_path / "not_a_dir.txt"
+        bad_dir.write_text("x")
+        cfg = WriteConfig(output_dir=bad_dir, fg_enabled=False, comp_enabled=False)
+        with pytest.raises((OSError, NotADirectoryError, Exception)):
+            write_frame(frame, cfg)
