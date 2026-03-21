@@ -1,22 +1,23 @@
-"""``ck config`` subcommands."""
+"""``ck config`` — show and optionally write the resolved configuration."""
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
-from corridorkey_new.infra import export_config, load_config
-from rich.console import Console
 from rich.table import Table
 
-app = typer.Typer(help="Manage CorridorKey configuration.")
+from ckcli._console import console
 
 _CONFIG_PATH = "~/.config/corridorkey/corridorkey.toml"
 
-console = Console()
 
+def config(
+    write: Annotated[bool, typer.Option("--write", "-w", help="Write config file (overwrites if exists).")] = False,
+) -> None:
+    """Show the resolved configuration. Pass --write to save it to disk."""
+    from corridorkey_new.infra import export_config, load_config
 
-@app.command("show")
-def config_show() -> None:
-    """Print the resolved configuration (all sources merged)."""
     config = load_config()
 
     table = Table(title="CorridorKey Config", show_header=True, header_style="bold cyan")
@@ -37,21 +38,8 @@ def config_show() -> None:
         f"\n[dim]Sources (lowest → highest): defaults → {_CONFIG_PATH} → ./corridorkey.toml → CK_* env vars[/dim]"
     )
 
+    if write:
+        from pathlib import Path
 
-@app.command("init")
-def config_init(
-    force: bool = typer.Option(False, "--force", "-f", help="Overwrite existing config file."),
-) -> None:
-    """Write a starter config file to ~/.config/corridorkey/corridorkey.toml."""
-    from pathlib import Path
-
-    dest = Path(_CONFIG_PATH).expanduser()
-
-    if dest.exists() and not force:
-        console.print(f"[yellow]Config already exists:[/yellow] {dest}")
-        console.print("[dim]Pass --force to overwrite.[/dim]")
-        return
-
-    config = load_config()
-    written = export_config(config, path=dest)
-    console.print(f"[green]Config written:[/green] {written}")
+        written = export_config(config, path=Path(_CONFIG_PATH).expanduser())
+        console.print(f"\n[green]Config written:[/green] {written}")
