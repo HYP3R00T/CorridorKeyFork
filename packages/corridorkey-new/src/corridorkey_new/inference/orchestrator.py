@@ -20,6 +20,7 @@ import logging
 
 import torch
 import torch.nn as nn
+from torch.nn import functional
 
 from corridorkey_new.inference.config import (
     _VRAM_LOWVRAM_THRESHOLD_GB,
@@ -56,20 +57,24 @@ def run_inference(
     if tile_refiner:
         refiner = getattr(model, "refiner", None)
         if refiner is not None:
-            hook_handle = refiner.register_forward_hook(_make_tiled_refiner_hook(frame.tensor, config))
+            hook_fn = _make_tiled_refiner_hook(model, config)
+            hook_handle = refiner.register_forward_hook(hook_fn)
 
-    with (
-        torch.inference_mode(),
-        torch.autocast(
-            device_type=device_type,
-            dtype=torch.float16,
-            enabled=config.mixed_precision and device_type != "cpu",
-        ),
-    ):
-        output = model(frame.tensor)
-
-    if hook_handle is not None:
-        hook_handle.remove()
+    try:
+        with (
+            torch.inference_mode(),
+            torch.autocast(
+                device_type=device_type,
+                dtype=torch.float16,
+                enabled=config.mixed_precision and device_type != "cpu",
+            ),
+        ):
+            output = model(frame.tensor)
+    finally:
+        # Always remove the hook — even if inference raises — so it can never
+        # fire on a subsequent call or trigger recursion.
+        if hook_handle is not None:
+            hook_handle.remove()
 
     return InferenceResult(
         alpha=output["alpha"],
@@ -88,10 +93,16 @@ def _should_tile_refiner(config: InferenceConfig) -> bool:
     if not config.use_refiner:
         return False
     mode = config.optimization_mode
+
+    # MPS: Triton/inductor does not support Metal — always tile.
+    if torch.device(config.device).type == "mps":
+        return True
+
     if mode == "lowvram":
         return True
     if mode == "speed":
         return False
+
     # auto — probe VRAM
     vram_gb = _probe_vram_gb(config.device)
     if vram_gb > 0 and vram_gb < _VRAM_LOWVRAM_THRESHOLD_GB:
@@ -125,14 +136,37 @@ def _probe_vram_gb(device: str) -> float:
 # ---------------------------------------------------------------------------
 
 
-def _make_tiled_refiner_hook(tensor: torch.Tensor, config: InferenceConfig):
-    """Return a forward hook that replaces the refiner with a tiled pass."""
+class _TiledRefinerState:
+    """Mutable bypass flag shared between the hook and the tiled runner.
+
+    Using an object (rather than a closure list) matches the core engine's
+    ``self._bypass_tiled_refiner_hook`` pattern and avoids any closure
+    scoping surprises.
+    """
+
+    __slots__ = ("bypass",)
+
+    def __init__(self) -> None:
+        self.bypass = False
+
+
+def _make_tiled_refiner_hook(model: nn.Module, config: InferenceConfig):
+    """Return a forward hook that replaces the refiner with a tiled pass.
+
+    The ``state.bypass`` flag is set to True before each tile call inside
+    ``_run_refiner_tiled`` and reset in a ``finally`` block, preventing the
+    hook from firing recursively for tile-level refiner calls.
+    """
+    state = _TiledRefinerState()
 
     def hook(module: nn.Module, inputs: tuple, output: torch.Tensor) -> torch.Tensor:
+        if state.bypass:
+            # Re-entrant call from inside _run_refiner_tiled — pass through.
+            return output
         if len(inputs) != 2:
             raise RuntimeError(f"Tiled refiner hook expected 2 inputs (rgb, coarse_pred), got {len(inputs)}")
         rgb, coarse = inputs
-        return _run_refiner_tiled(module, rgb, coarse, config)
+        return _run_refiner_tiled(module, rgb, coarse, state)
 
     return hook
 
@@ -141,57 +175,93 @@ def _run_refiner_tiled(
     refiner: nn.Module,
     rgb: torch.Tensor,
     coarse: torch.Tensor,
-    config: InferenceConfig,
+    state: _TiledRefinerState,
+    tile_size: int = REFINER_TILE_SIZE,
+    overlap: int = REFINER_TILE_OVERLAP,
 ) -> torch.Tensor:
-    """Run the CNN refiner in overlapping tiles with cosine-weighted blending.
+    """Run the CNN refiner in overlapping tiles to keep VRAM flat.
 
-    Splits the [1, C, H, W] inputs into tiles of REFINER_TILE_SIZE with
-    REFINER_TILE_OVERLAP overlap, runs the refiner on each tile, and blends
-    the results back using a cosine weight window.
+    Splits the full-resolution tensor into overlapping tiles, runs the
+    refiner on each, and blends results back using linear ramp weights in
+    the overlap regions. Identical output to full-frame inference.
+
+    GroupNorm does not support bf16/fp16 on CUDA — the tiled pass always
+    upcasts to float32 and casts the result back to the original dtype.
 
     Args:
         refiner: The CNNRefinerModule.
-        rgb: [1, 3, H, W] float tensor.
-        coarse: [1, 4, H, W] float tensor.
-        config: InferenceConfig (for device).
+        rgb: [B, 3, H, W] float tensor.
+        coarse: [B, 4, H, W] float tensor.
+        state: Shared bypass flag — set to True around each tile call so the
+            hook does not fire recursively for tile-level refiner invocations.
+        tile_size: Spatial size of each tile (square).
+        overlap: Overlap in pixels between adjacent tiles.
 
     Returns:
-        [1, 4, H, W] delta logits tensor, same dtype as coarse.
+        [B, 4, H, W] delta logits tensor, same dtype as coarse.
     """
-    _, _, h, w = rgb.shape
-    tile_size = REFINER_TILE_SIZE
-    overlap = REFINER_TILE_OVERLAP
+    b, _, h, w = rgb.shape
+    orig_dtype = rgb.dtype
+
+    # GroupNorm does not support bf16/fp16 — upcast for the tiled pass.
+    if orig_dtype != torch.float32:
+        rgb = rgb.float()
+        coarse = coarse.float()
+        refiner = refiner.float()
+
+    output = torch.zeros(b, 4, h, w, device=rgb.device, dtype=torch.float32)
+    weight = torch.zeros(b, 1, h, w, device=rgb.device, dtype=torch.float32)
+
     stride = tile_size - overlap
 
-    output = torch.zeros_like(coarse)
-    weight_sum = torch.zeros(1, 1, h, w, device=rgb.device, dtype=torch.float32)
+    # Linear ramp blend window — avoids the near-zero edges of a Hann window
+    # which cause division instability at tile boundaries.
+    safe_overlap = min(overlap, tile_size // 2 - 1)
+    flat_len = tile_size - 2 * safe_overlap
+    ramp = torch.linspace(0.0, 1.0, safe_overlap, device=rgb.device)
+    flat = torch.ones(flat_len, device=rgb.device)
+    blend_1d = torch.cat([ramp, flat, ramp.flip(0)])
+    blend_2d = (blend_1d.unsqueeze(0) * blend_1d.unsqueeze(1)).unsqueeze(0).unsqueeze(0)  # [1,1,T,T]
 
-    # 1-D cosine window — smooth blend at tile edges.
-    window_1d = torch.hann_window(tile_size, device=rgb.device, dtype=torch.float32)
-    window_2d = window_1d.unsqueeze(0) * window_1d.unsqueeze(1)  # [tile, tile]
-    window_2d = window_2d.unsqueeze(0).unsqueeze(0)  # [1, 1, tile, tile]
+    y = 0
+    while y < h:
+        y_end = min(y + tile_size, h)
+        y_start = max(y_end - tile_size, 0)
+        x = 0
+        while x < w:
+            x_end = min(x + tile_size, w)
+            x_start = max(x_end - tile_size, 0)
 
-    y_starts = list(range(0, h - tile_size + 1, stride))
-    if not y_starts or y_starts[-1] + tile_size < h:
-        y_starts.append(max(0, h - tile_size))
+            rgb_tile = rgb[:, :, y_start:y_end, x_start:x_end]
+            coarse_tile = coarse[:, :, y_start:y_end, x_start:x_end]
 
-    x_starts = list(range(0, w - tile_size + 1, stride))
-    if not x_starts or x_starts[-1] + tile_size < w:
-        x_starts.append(max(0, w - tile_size))
-
-    for y in y_starts:
-        for x in x_starts:
-            y2, x2 = y + tile_size, x + tile_size
-            rgb_tile = rgb[:, :, y:y2, x:x2].float()
-            coarse_tile = coarse[:, :, y:y2, x:x2].float()
+            # Pad to tile_size if this is an edge tile smaller than tile_size.
+            th, tw = rgb_tile.shape[2], rgb_tile.shape[3]
+            pad_h, pad_w = tile_size - th, tile_size - tw
+            if pad_h > 0 or pad_w > 0:
+                rgb_tile = functional.pad(rgb_tile, (0, pad_w, 0, pad_h))
+                coarse_tile = functional.pad(coarse_tile, (0, pad_w, 0, pad_h))
 
             with torch.inference_mode():
-                delta_tile = refiner(rgb_tile, coarse_tile)
+                state.bypass = True
+                try:
+                    delta_tile = refiner(rgb_tile, coarse_tile)
+                finally:
+                    state.bypass = False
 
-            w_tile = window_2d.expand_as(delta_tile[:, :1])
-            output[:, :, y:y2, x:x2] += (delta_tile * w_tile).to(output.dtype)
-            weight_sum[:, :, y:y2, x:x2] += w_tile.to(weight_sum.dtype)
+            # Crop back to actual tile size before accumulating.
+            delta_tile = delta_tile[:, :, :th, :tw]
+            w_tile = blend_2d[:, :, :th, :tw]
 
-    # Avoid division by zero in any uncovered corner (shouldn't happen).
-    weight_sum = weight_sum.clamp(min=1e-6)
-    return output / weight_sum.to(output.dtype)
+            output[:, :, y_start:y_end, x_start:x_end] += delta_tile * w_tile
+            weight[:, :, y_start:y_end, x_start:x_end] += w_tile
+
+            x += stride
+            if x_end == w:
+                break
+        y += stride
+        if y_end == h:
+            break
+
+    result = output / weight.clamp(min=1e-6)
+    return result.to(orig_dtype)

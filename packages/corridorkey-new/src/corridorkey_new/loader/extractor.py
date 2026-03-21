@@ -7,6 +7,7 @@ FFmpeg C libraries). PyAV bundles its own FFmpeg — no system install required.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 import av
@@ -90,6 +91,7 @@ def extract_video(
     video_path: Path,
     output_dir: Path,
     pattern: str = "frame_{:06d}.png",
+    on_frame: Callable[[int, int], None] | None = None,
 ) -> VideoMetadata:
     """Extract a video file to a PNG image sequence using PyAV.
 
@@ -101,6 +103,9 @@ def extract_video(
         output_dir: Directory to write frames into (created if needed).
         pattern: Python format string for frame filenames. Must contain one
             integer placeholder (e.g. ``"frame_{:06d}.png"``).
+        on_frame: Optional callback(frame_index, total_frames) called after
+            each frame is written. total_frames is 0 when the container does
+            not report a frame count.
 
     Returns:
         VideoMetadata captured from the source container.
@@ -122,14 +127,18 @@ def extract_video(
 
     metadata = _extract_metadata(container, video_path)
 
+    # Best-effort total frame count from container metadata.
+    total_frames = stream.frames or 0
+
     frame_index = 0
     try:
         for packet in container.demux(stream):
             for frame in packet.decode():
-                # Decode directly to BGR for cv2.imwrite (PNG on disk is BGR)
                 bgr = frame.to_ndarray(format="bgr24")
                 out_path = output_dir / pattern.format(frame_index)
                 cv2.imwrite(str(out_path), bgr)
+                if on_frame:
+                    on_frame(frame_index, total_frames)
                 frame_index += 1
     except av.FFmpegError as e:
         raise RuntimeError(f"Error decoding '{video_path}' at frame {frame_index}: {e}") from e

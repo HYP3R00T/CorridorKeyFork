@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 
 import torch.nn as nn
 
+from corridorkey_new.events import PipelineEvents
 from corridorkey_new.inference import InferenceConfig
 from corridorkey_new.loader.contracts import ClipManifest
 from corridorkey_new.pipeline.queue import BoundedQueue
@@ -53,11 +54,14 @@ class PipelineConfig:
 
     preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
     inference: InferenceConfig | None = None
-    model: nn.Module | None = None  # pre-loaded model; if None, runner loads it from inference.checkpoint_path
+    model: nn.Module | None = None
     postprocess: PostprocessConfig = field(default_factory=PostprocessConfig)
     write: WriteConfig | None = None
     input_queue_depth: int = 2
     output_queue_depth: int = 2
+    events: PipelineEvents | None = None
+    """Optional event callbacks for all pipeline stages. Pass a PipelineEvents
+    instance to receive per-frame and per-stage progress notifications."""
 
 
 class PipelineRunner:
@@ -93,6 +97,8 @@ class PipelineRunner:
             manifest=manifest,
             config=cfg.preprocess,
             output_queue=input_queue,
+            postwrite_queue=output_queue,
+            events=cfg.events,
         )
         if cfg.inference is None:
             raise ValueError(
@@ -115,12 +121,15 @@ class PipelineRunner:
             output_queue=output_queue,
             model=loaded_model,
             config=inference_cfg,
+            events=cfg.events,
         )
         postwrite_worker = PostWriteWorker(
             input_queue=output_queue,
             output_dir=manifest.output_dir,
             postprocess_config=cfg.postprocess,
             write_config=cfg.write,
+            total_frames=manifest.frame_count,
+            events=cfg.events,
         )
 
         threads: list[threading.Thread] = [

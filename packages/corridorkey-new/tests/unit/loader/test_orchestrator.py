@@ -93,7 +93,7 @@ class TestLoad:
             codec_name="h264",
         )
 
-        def fake_extract(video_path, output_dir, pattern="frame_{:06d}.png"):
+        def fake_extract(video_path, output_dir, pattern="frame_{:06d}.png", on_frame=None):
             _make_frames(output_dir, count=5)
             return fake_meta
 
@@ -125,7 +125,7 @@ class TestLoad:
             has_audio=True,
         )
 
-        def fake_extract(video_path, output_dir, pattern="frame_{:06d}.png"):
+        def fake_extract(video_path, output_dir, pattern="frame_{:06d}.png", on_frame=None):
             _make_frames(output_dir, count=2)
             return fake_meta
 

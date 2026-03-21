@@ -34,11 +34,11 @@ def despeckle_alpha(alpha: np.ndarray, min_area: int) -> np.ndarray:
         if stats[i, cv2.CC_STAT_AREA] >= min_area:
             keep_mask[labels == i] = 255
 
-    # Dilate to recover edges lost during binarisation
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (31, 31))
+    # Dilate to recover edges lost during binarisation (dilation=25 → kernel 51×51)
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (51, 51))
     keep_mask = cv2.dilate(keep_mask, kernel)
 
-    # Blur to soften the hard mask edge
+    # Blur to soften the hard mask edge (blur_size=5 → kernel 11×11)
     keep_mask = cv2.GaussianBlur(keep_mask, (11, 11), 0)
 
     keep_f = keep_mask.astype(np.float32) / 255.0

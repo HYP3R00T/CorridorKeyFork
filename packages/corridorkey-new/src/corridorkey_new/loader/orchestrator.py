@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from corridorkey_new.events import PipelineEvents
 from corridorkey_new.loader.contracts import ClipManifest
 from corridorkey_new.loader.extractor import extract_video, is_video, save_video_metadata
 from corridorkey_new.loader.validator import count_frames, detect_is_linear, validate
@@ -21,7 +22,7 @@ from corridorkey_new.scanner.contracts import Clip
 logger = logging.getLogger(__name__)
 
 
-def load(clip: Clip) -> ClipManifest:
+def load(clip: Clip, events: PipelineEvents | None = None) -> ClipManifest:
     """Validate a clip and return its manifest.
 
     For image sequence inputs, reads directly from Input/ and AlphaHint/.
@@ -39,8 +40,8 @@ def load(clip: Clip) -> ClipManifest:
         ValueError: If validation fails.
         RuntimeError: If video extraction fails.
     """
-    frames_dir = _resolve_frames(clip.input_path, "Frames")
-    alpha_frames_dir = _resolve_frames(clip.alpha_path, "AlphaFrames") if clip.alpha_path else None
+    frames_dir = _resolve_frames(clip.input_path, "Frames", events=events)
+    alpha_frames_dir = _resolve_frames(clip.alpha_path, "AlphaFrames", events=events) if clip.alpha_path else None
 
     validate(clip.name, frames_dir, alpha_frames_dir)
 
@@ -73,33 +74,28 @@ def load(clip: Clip) -> ClipManifest:
     )
 
 
-def _resolve_frames(path: Path, extracted_dir_name: str) -> Path:
-    """Resolve the frame sequence directory for a given input path.
-
-    If path is a directory (image sequence), return it directly — no copy made.
-    If path is a video file, extract frames into a sibling directory at the
-    clip root level and return that. The video file is never moved or modified.
-
-    Args:
-        path: Input path — a frames directory or a video file.
-        extracted_dir_name: Name for the extracted frames directory
-            (``"Frames"`` or ``"AlphaFrames"``).
-
-    Returns:
-        Path to the frame sequence directory.
-    """
+def _resolve_frames(path: Path, extracted_dir_name: str, events: PipelineEvents | None = None) -> Path:
+    """Resolve the frame sequence directory for a given input path."""
     if not is_video(path):
         return path
 
-    # path.parent is Input/ or AlphaHint/, path.parent.parent is the clip root
     output_dir = path.parent.parent / extracted_dir_name
     if output_dir.exists() and any(output_dir.iterdir()):
         logger.info("Frames already extracted, skipping: %s", output_dir)
         return output_dir
 
-    metadata = extract_video(path, output_dir)
+    if events:
+        events.stage_start("extract", 0)  # total unknown until container is opened
 
-    # Only save metadata for the main input video (not alpha video)
+    metadata = extract_video(
+        path,
+        output_dir,
+        on_frame=events.extract_frame if events else None,
+    )
+
+    if events:
+        events.stage_done("extract")
+
     if extracted_dir_name == "Frames":
         clip_root = path.parent.parent
         save_video_metadata(metadata, clip_root)

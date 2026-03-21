@@ -29,10 +29,11 @@ class TestLinearToSrgb:
 
     def test_linear_segment_below_threshold(self):
         # Values <= 0.0031308 use the linear segment: out = in * 12.92
+        # LUT quantisation introduces up to ~0.002% error — use abs tolerance.
         val = 0.001
         img = np.array([[[val, val, val]]], dtype=np.float32)
         result = linear_to_srgb(img)
-        assert result[0, 0, 0] == pytest.approx(val * 12.92, rel=1e-4)
+        assert result[0, 0, 0] == pytest.approx(val * 12.92, abs=1e-4)
 
     def test_power_segment_above_threshold(self):
         # Values > 0.0031308 use: 1.055 * in^(1/2.4) - 0.055
