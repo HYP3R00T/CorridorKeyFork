@@ -38,6 +38,15 @@ logger = logging.getLogger(__name__)
 _APP_NAME = "corridorkey"
 
 
+def get_config_path() -> Path:
+    """Return the global user config file path (~/.config/corridorkey/corridorkey.toml).
+
+    Derived from the same logic utilityhub_config uses for global config lookup,
+    so it always stays in sync with what load_settings() reads.
+    """
+    return Path.home() / ".config" / _APP_NAME / f"{_APP_NAME}.toml"
+
+
 class PreprocessSettings(BaseModel):
     """User-facing preprocessing settings.
 
@@ -329,7 +338,7 @@ def export_config(config: CorridorKeyConfig, path: Path | None = None) -> Path:
     Returns:
         Absolute path to the written file.
     """
-    dest = (path or Path("~/.config/corridorkey/corridorkey.toml")).expanduser()
+    dest = (path or get_config_path()).expanduser()
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     def _p(v: Path) -> str:
@@ -436,7 +445,7 @@ def ensure_config_file() -> Path:
     Returns:
         Path to the config file (newly created or pre-existing).
     """
-    dest = Path("~/.config/corridorkey/corridorkey.toml").expanduser()
+    dest = get_config_path()
     if not dest.exists():
         export_config(CorridorKeyConfig(), path=dest)
         logger.info("Created default config at %s", dest)

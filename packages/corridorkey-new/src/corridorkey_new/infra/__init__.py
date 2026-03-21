@@ -34,6 +34,7 @@ from corridorkey_new.infra.config import (
     PreprocessSettings,
     ensure_config_file,
     export_config,
+    get_config_path,
     load_config,
 )
 from corridorkey_new.infra.device_utils import GPUInfo, detect_gpu, resolve_device
@@ -43,6 +44,7 @@ __all__ = [
     "load_config",
     "export_config",
     "ensure_config_file",
+    "get_config_path",
     "setup_logging",
     "resolve_device",
     "detect_gpu",
