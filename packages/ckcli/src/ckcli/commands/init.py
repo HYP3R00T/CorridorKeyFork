@@ -6,6 +6,10 @@ import platform
 import sys
 
 import typer
+from corridorkey_new import detect_gpu
+from corridorkey_new.infra import ensure_config_file, get_config_path
+from corridorkey_new.infra.model_hub import MODEL_FILENAME, MODEL_URL, default_checkpoint_path, ensure_model
+from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TransferSpeedColumn
 from rich.prompt import Confirm
 from rich.table import Table
 
@@ -18,9 +22,6 @@ _WARN = "[yellow]WARN[/yellow]"
 
 def init() -> None:
     """Set up CorridorKey for first use: health check, config, model download."""
-    from corridorkey_new.infra import ensure_config_file
-    from corridorkey_new.infra.model_hub import MODEL_FILENAME, MODEL_URL, default_checkpoint_path
-
     console.print("[bold cyan]CorridorKey — Init[/bold cyan]\n")
 
     # 1. Health check
@@ -54,9 +55,6 @@ def init() -> None:
 
 
 def _run_health_check() -> None:
-    from corridorkey_new import detect_gpu, load_config
-    from corridorkey_new.infra.model_hub import MODEL_FILENAME, default_checkpoint_path
-
     rows: list[tuple[str, str, str]] = []
     all_ok = True
 
@@ -76,8 +74,7 @@ def _run_health_check() -> None:
         rows.append(("compute device", _WARN, str(e)))
 
     # Config file
-    config = load_config()
-    config_file = config.log_dir.expanduser().parent / "corridorkey.toml"
+    config_file = get_config_path()
     rows.append((
         "config file",
         _PASS if config_file.exists() else _WARN,
@@ -109,9 +106,6 @@ def _run_health_check() -> None:
 
 
 def _download_with_progress(dest_path) -> None:
-    from corridorkey_new.infra.model_hub import ensure_model
-    from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TransferSpeedColumn
-
     progress = Progress(
         SpinnerColumn(),
         TextColumn("[cyan]{task.description}[/cyan]"),
