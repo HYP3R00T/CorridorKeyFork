@@ -61,10 +61,12 @@ def run_inference(
     device_type = torch.device(config.device).type
 
     # Use the model's actual precision for autocast.
-    # If model_precision is float32, autocast would be a no-op anyway — disable it
-    # entirely rather than silently casting to float16.
+    # autocast is required whenever the model is not float32 — it handles both
+    # the backbone (float32 input → half ops) and the float32 refiner/BatchNorm
+    # boundaries (half activations → float32 ops). Without it, dtype mismatches
+    # occur at those layer boundaries.
     autocast_dtype = config.model_precision
-    autocast_enabled = config.mixed_precision and device_type != "cpu" and config.model_precision != torch.float32
+    autocast_enabled = device_type != "cpu" and config.model_precision != torch.float32
 
     hook_handle = None
     if tile_refiner:
