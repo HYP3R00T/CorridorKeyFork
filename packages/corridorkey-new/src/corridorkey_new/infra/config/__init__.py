@@ -32,7 +32,7 @@ Config file structure (``corridorkey.toml``)::
     use_refiner = true
     mixed_precision = true
     model_precision = "auto"
-    optimization_mode = "auto"
+    refiner_mode = "auto"
     refiner_scale = 1.0
 
     [postprocess]

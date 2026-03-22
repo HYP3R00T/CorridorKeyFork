@@ -164,3 +164,27 @@ class TestRunInference:
 
         model.refiner.register_forward_hook.assert_called_once()
         handle.remove.assert_called_once()
+
+    def test_resolved_refiner_mode_skips_vram_probe(self, tmp_path: Path):
+        """Passing resolved_refiner_mode must not trigger _probe_vram_gb."""
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="auto")
+        frame = _make_frame()
+        model = MagicMock(return_value=_make_model_output())
+
+        with patch("corridorkey_new.stages.inference.orchestrator._probe_vram_gb") as mock_probe:
+            run_inference(frame, model, cfg, resolved_refiner_mode="full_frame")
+            mock_probe.assert_not_called()
+
+    def test_resolved_refiner_mode_tiled_registers_hook(self, tmp_path: Path):
+        """resolved_refiner_mode='tiled' must register the tiled hook even when config says 'auto'."""
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="auto")
+        frame = _make_frame()
+        model = MagicMock(return_value=_make_model_output())
+        handle = MagicMock()
+        model.refiner.register_forward_hook.return_value = handle
+
+        with patch("corridorkey_new.stages.inference.orchestrator._probe_vram_gb", return_value=0.0):
+            run_inference(frame, model, cfg, resolved_refiner_mode="tiled")
+
+        model.refiner.register_forward_hook.assert_called_once()
+        handle.remove.assert_called_once()

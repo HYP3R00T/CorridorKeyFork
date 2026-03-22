@@ -184,6 +184,13 @@ def _load_mlx_backend(config: InferenceConfig):  # pragma: no cover
     """Load the MLX engine and wrap it in MLXBackend."""
     from corridorkey_new.stages.inference.backend import MLXBackend
 
+    if config.img_size == 0:
+        raise ValueError(
+            "InferenceConfig.img_size is 0 (auto-select). "
+            "Resolve img_size to a concrete value before calling load_backend. "
+            "Use pipeline.to_inference_config() which resolves img_size automatically."
+        )
+
     ckpt = discover_checkpoint(config.checkpoint_path.parent, backend="mlx")
     from corridorkey_mlx import CorridorKeyMLXEngine  # type: ignore[import-not-found]
 

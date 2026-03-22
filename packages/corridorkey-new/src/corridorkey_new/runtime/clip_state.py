@@ -316,14 +316,11 @@ def _resolve_state(clip: Clip) -> ClipState:
         alpha_count = count_frames(clip.alpha_path)
         if alpha_count >= input_count:
             # Check if outputs also cover all frames → COMPLETE.
+            # All present output subdirs must have sufficient frames.
             output_dir = clip.root / "Output"
-            for subdir in ("alpha", "fg", "comp", "processed"):
-                d = output_dir / subdir
-                if d.is_dir():
-                    output_count = count_frames(d)
-                    if output_count >= input_count:
-                        return ClipState.COMPLETE
-                    break  # output dir exists but incomplete
+            output_subdirs = [d for sub in ("alpha", "fg", "comp", "processed") if (d := output_dir / sub).is_dir()]
+            if output_subdirs and all(count_frames(d) >= input_count for d in output_subdirs):
+                return ClipState.COMPLETE
             return ClipState.READY
         else:
             logger.info(

@@ -116,7 +116,9 @@ class TestPreprocessWorker:
         q: BoundedQueue = BoundedQueue(10)
 
         call_count = 0
-        original_preprocess = __import__("corridorkey_new.stages.preprocessor", fromlist=["preprocess_frame"]).preprocess_frame
+        original_preprocess = __import__(
+            "corridorkey_new.stages.preprocessor", fromlist=["preprocess_frame"]
+        ).preprocess_frame
 
         def patched_preprocess(m, i, c, **kwargs):
             nonlocal call_count
@@ -293,7 +295,7 @@ class TestInferenceWorker:
         in_q.put(frame2)
         in_q.put_stop()
 
-        def side_effect(frame, model, config):
+        def side_effect(frame, model, config, **kwargs):
             if frame is frame1:
                 raise RuntimeError("simulated inference failure")
             return result2

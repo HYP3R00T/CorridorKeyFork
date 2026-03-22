@@ -129,7 +129,9 @@ class CorridorKeyConfig(BaseModel):
         from corridorkey_new.runtime.runner import PipelineConfig
 
         resolved_device = device or self.device
-        inference_config = self.to_inference_config(device=resolved_device)
+        inference_config, resolved_refiner_mode = self.to_inference_config(
+            device=resolved_device, _return_resolved_refiner_mode=True
+        )
 
         return PipelineConfig(
             preprocess=self.to_preprocess_config(
@@ -139,6 +141,7 @@ class CorridorKeyConfig(BaseModel):
             inference=inference_config,
             model=model,
             postprocess=self.to_postprocess_config(),
+            resolved_refiner_mode=resolved_refiner_mode,
         )
 
     def to_preprocess_config(
@@ -203,16 +206,29 @@ class CorridorKeyConfig(BaseModel):
             exr_compression=self.writer.exr_compression,
         )
 
-    def to_inference_config(self, device: str | None = None):  # -> InferenceConfig
+    def to_inference_config(
+        self, device: str | None = None, _return_resolved_refiner_mode: bool = False
+    ):  # -> InferenceConfig | tuple[InferenceConfig, str]
         """Build an :class:`~corridorkey_new.stages.inference.InferenceConfig`.
+
+        Probes VRAM at most once — the same measurement resolves both
+        ``img_size`` (when set to 0/auto) and ``refiner_mode`` (when set to
+        "auto"), avoiding two separate pynvml calls at startup.
 
         Args:
             device: Override the device string. If None, uses ``self.device``.
+            _return_resolved_refiner_mode: Internal flag used by
+                ``to_pipeline_config`` to receive the resolved refiner mode
+                alongside the config so it can be stored in ``PipelineConfig``
+                and passed to ``PipelineRunner`` without a second VRAM probe.
         """
         import torch
 
         from corridorkey_new.stages.inference import InferenceConfig
-        from corridorkey_new.stages.inference.config import adaptive_img_size
+        from corridorkey_new.stages.inference.config import (
+            _VRAM_TILED_THRESHOLD_GB,
+            adaptive_img_size,
+        )
         from corridorkey_new.stages.inference.orchestrator import _probe_vram_gb
 
         checkpoint = self.inference.checkpoint_path
@@ -246,14 +262,32 @@ class CorridorKeyConfig(BaseModel):
         else:
             model_dtype = _precision_map[self.inference.model_precision]
 
+        # Probe VRAM at most once — used for both img_size and refiner_mode
+        # resolution when either is set to "auto" / 0.
+        needs_vram_probe = self.preprocess.img_size == 0 or self.inference.refiner_mode == "auto"
+        vram_gb = _probe_vram_gb(resolved_device) if needs_vram_probe else 0.0
+
         if self.preprocess.img_size == 0:
-            vram_gb = _probe_vram_gb(resolved_device)
             img_size = adaptive_img_size(vram_gb)
             logger.info("img_size auto: %.1f GB VRAM detected → img_size=%d", vram_gb, img_size)
         else:
             img_size = self.preprocess.img_size
 
-        return InferenceConfig(
+        # Resolve refiner_mode from the same VRAM reading — no second probe.
+        if self.inference.refiner_mode == "auto":
+            dev_type = torch.device(resolved_device).type
+            if dev_type == "mps":
+                resolved_refiner_mode = "tiled"
+            elif vram_gb > 0 and vram_gb < _VRAM_TILED_THRESHOLD_GB:
+                resolved_refiner_mode = "tiled"
+                logger.info("refiner_mode auto: %.1f GB VRAM → tiled", vram_gb)
+            else:
+                resolved_refiner_mode = "full_frame"
+                logger.info("refiner_mode auto: %.1f GB VRAM → full_frame", vram_gb)
+        else:
+            resolved_refiner_mode = self.inference.refiner_mode
+
+        config = InferenceConfig(
             checkpoint_path=checkpoint,
             device=resolved_device,
             img_size=img_size,
@@ -263,3 +297,7 @@ class CorridorKeyConfig(BaseModel):
             refiner_mode=self.inference.refiner_mode,
             refiner_scale=self.inference.refiner_scale,
         )
+
+        if _return_resolved_refiner_mode:
+            return config, resolved_refiner_mode
+        return config

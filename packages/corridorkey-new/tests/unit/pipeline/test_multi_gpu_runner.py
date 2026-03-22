@@ -191,7 +191,7 @@ class TestMultiGPUInferenceWorker:
         counter = _AtomicCounter(2)
         call_map = {id(f): r for f, r in zip(frames, results, strict=True)}
 
-        def side_effect(frame, model, config):
+        def side_effect(frame, model, config, **kwargs):
             return call_map[id(frame)]
 
         with patch("corridorkey_new.stages.inference.orchestrator.run_inference", side_effect=side_effect):
@@ -255,7 +255,7 @@ class TestMultiGPURunner:
 
         fake_model = MagicMock()
 
-        def fake_run_inference(frame, model, config):
+        def fake_run_inference(frame, model, config, **kwargs):
             return _make_fake_result(frame)
 
         with (
@@ -282,7 +282,7 @@ class TestMultiGPURunner:
 
         fake_model = MagicMock()
 
-        def fake_run_inference(frame, model, config):
+        def fake_run_inference(frame, model, config, **kwargs):
             return _make_fake_result(frame)
 
         with (

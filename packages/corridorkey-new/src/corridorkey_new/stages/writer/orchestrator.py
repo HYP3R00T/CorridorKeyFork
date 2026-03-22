@@ -48,6 +48,7 @@ def write_frame(frame: PostprocessedFrame, config: WriteConfig) -> None:
         OSError: If any cv2.imwrite call fails.
     """
     exr_flags = _exr_flags(config.exr_compression)
+    exr_flags_f32 = _exr_flags(config.exr_compression, half=False)
 
     if config.alpha_enabled:
         _write(
@@ -67,13 +68,13 @@ def write_frame(frame: PostprocessedFrame, config: WriteConfig) -> None:
 
     if config.processed_enabled:
         # Premultiplied linear RGBA — convert to BGRA for cv2.
-        # Written as 16-bit PNG to preserve sub-pixel alpha precision.
+        # Written as 16-bit PNG or float32 EXR to preserve sub-pixel alpha precision.
         bgra = cv2.cvtColor(frame.processed, cv2.COLOR_RGBA2BGRA)
         _write(
             bgra,
             config.output_dir / "processed" / f"{frame.stem}.{config.processed_format}",
             config.processed_format,
-            exr_flags,
+            exr_flags_f32,  # float32 EXR — full precision for compositing
             sixteen_bit=(config.processed_format == "png"),
         )
 
@@ -93,9 +94,10 @@ def write_frame(frame: PostprocessedFrame, config: WriteConfig) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _exr_flags(compression: str) -> list[int]:
+def _exr_flags(compression: str, half: bool = True) -> list[int]:
     codec = _EXR_COMPRESSION_IDS.get(compression.lower(), _EXR_COMPRESSION_IDS["dwaa"])
-    return [cv2.IMWRITE_EXR_TYPE, cv2.IMWRITE_EXR_TYPE_HALF, cv2.IMWRITE_EXR_COMPRESSION, codec]
+    exr_type = cv2.IMWRITE_EXR_TYPE_HALF if half else cv2.IMWRITE_EXR_TYPE_FLOAT
+    return [cv2.IMWRITE_EXR_TYPE, exr_type, cv2.IMWRITE_EXR_COMPRESSION, codec]
 
 
 def _alpha_to_bgr(alpha: np.ndarray) -> np.ndarray:

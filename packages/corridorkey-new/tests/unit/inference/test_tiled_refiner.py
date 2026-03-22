@@ -226,3 +226,35 @@ class TestEdgeCases:
         result = _run_refiner_tiled(refiner, _rgb(100, 150), _coarse(100, 150), _state(), tile_size=512, overlap=128)
         assert result.shape == (1, 4, 100, 150)
         assert torch.allclose(result, torch.ones_like(result), atol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# refiner_scale
+# ---------------------------------------------------------------------------
+
+
+class TestRefinerScale:
+    def test_scale_zero_produces_all_zeros(self):
+        """refiner_scale=0.0 must zero out all delta output."""
+        refiner = _OnesRefiner()
+        result = _run_refiner_tiled(
+            refiner, _rgb(512, 512), _coarse(512, 512), _state(), tile_size=512, overlap=128, refiner_scale=0.0
+        )
+        assert torch.allclose(result, torch.zeros_like(result), atol=1e-6)
+
+    def test_scale_one_unchanged(self):
+        """refiner_scale=1.0 must produce the same result as the default."""
+        refiner = _OnesRefiner()
+        result = _run_refiner_tiled(
+            refiner, _rgb(512, 512), _coarse(512, 512), _state(), tile_size=512, overlap=128, refiner_scale=1.0
+        )
+        assert torch.allclose(result, torch.ones_like(result), atol=1e-5)
+
+    def test_scale_half_produces_half(self):
+        """refiner_scale=0.5 must halve the delta output."""
+        refiner = _OnesRefiner()
+        result = _run_refiner_tiled(
+            refiner, _rgb(512, 512), _coarse(512, 512), _state(), tile_size=512, overlap=128, refiner_scale=0.5
+        )
+        expected = torch.full_like(result, 0.5)
+        assert torch.allclose(result, expected, atol=1e-5)

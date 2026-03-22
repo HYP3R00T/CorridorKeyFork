@@ -325,7 +325,7 @@ class GreenFormer(nn.Module):
         coarse_pred = torch.cat([alpha_coarse, fg_coarse], dim=1)
 
         if self.use_refiner and self.refiner is not None:
-            delta_logits = self.refiner(rgb_input.float(), coarse_pred.float()).to(coarse_pred.dtype)
+            delta_logits = self.refiner(rgb_input, coarse_pred).to(coarse_pred.dtype)
         else:
             delta_logits = torch.zeros_like(coarse_pred)
 

@@ -17,6 +17,10 @@ VALID_IMG_SIZES = (0, 512, 1024, 1536, 2048)
 # VRAM threshold below which tiled refiner mode is selected automatically.
 _VRAM_TILED_THRESHOLD_GB = 12.0
 
+# VRAM threshold below which empty_cache() is called after each frame to
+# prevent OOM on the next frame. Separate from the tiling threshold.
+_VRAM_FREE_CACHE_THRESHOLD_GB = 6.0
+
 # Tiled refiner defaults.
 REFINER_TILE_SIZE = 512
 REFINER_TILE_OVERLAP = 128
@@ -55,9 +59,11 @@ class InferenceConfig:
         checkpoint_path: Path to the .pth model checkpoint file.
         device: PyTorch device string ("cuda", "cuda:0", "mps", "cpu").
         img_size: Square resolution the model runs at. Must be one of
-            512, 1024, 1536, or 2048. 2048 is the native training resolution
-            and produces the best output. Smaller values reduce VRAM usage
-            at the cost of output quality.
+            0, 512, 1024, 1536, or 2048. 0 means auto-select based on VRAM
+            (resolved by ``pipeline.to_inference_config()`` before the model
+            is loaded — do not pass 0 directly to ``load_model``).
+            2048 is the native training resolution and produces the best output.
+            Smaller values reduce VRAM usage at the cost of output quality.
         use_refiner: Whether to enable the CNN refiner module. The refiner
             corrects transformer macroblocking artifacts at subject edges.
             Disabling it is faster but produces visibly coarser alpha mattes.

@@ -6,7 +6,7 @@ Entry points:
     run_inference(frame, model, config)   -> InferenceResult
 
 Contracts:
-    InferenceConfig   — checkpoint path, device, precision, backend, optimization mode
+    InferenceConfig   — checkpoint path, device, precision, backend, refiner_mode
     InferenceResult   — alpha [1,1,H,W], fg [1,3,H,W], FrameMeta
     ModelBackend      — protocol satisfied by TorchBackend and MLXBackend
 """

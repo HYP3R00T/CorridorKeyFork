@@ -21,7 +21,6 @@ import torch.nn as nn
 from corridorkey_new.events import PipelineEvents
 from corridorkey_new.runtime.queue import STOP, BoundedQueue
 from corridorkey_new.stages.inference import InferenceConfig, InferenceResult, run_inference
-from corridorkey_new.stages.inference.orchestrator import _free_vram_if_needed
 from corridorkey_new.stages.loader.contracts import ClipManifest
 from corridorkey_new.stages.loader.validator import get_frame_files
 from corridorkey_new.stages.postprocessor import PostprocessConfig, postprocess_frame
@@ -111,7 +110,11 @@ class InferenceWorker:
         input_queue: Queue to pull PreprocessedFrame objects from.
         output_queue: Queue to push InferenceResult objects onto.
         model: Loaded GreenFormer in eval mode.
-        config: Inference configuration (device, precision, optimization mode).
+        config: Inference configuration (device, precision, refiner_mode).
+        resolved_refiner_mode: Pre-resolved refiner mode ("full_frame" or "tiled").
+            Passed to run_inference to skip the per-frame VRAM probe when
+            refiner_mode="auto". Set by the caller after resolving via
+            _should_tile_refiner or load_backend.
         events: Optional pipeline event callbacks.
     """
 
@@ -119,6 +122,7 @@ class InferenceWorker:
     output_queue: BoundedQueue
     model: nn.Module
     config: InferenceConfig
+    resolved_refiner_mode: str | None = None
     events: PipelineEvents | None = None
 
     def run(self) -> None:
@@ -135,8 +139,9 @@ class InferenceWorker:
                 try:
                     if self.events:
                         self.events.inference_start(item.meta.frame_index)
-                    result = run_inference(item, self.model, self.config)
-                    _free_vram_if_needed(self.config.device)
+                    result = run_inference(
+                        item, self.model, self.config, resolved_refiner_mode=self.resolved_refiner_mode
+                    )
                     self.output_queue.put(result)
                     logger.debug("inference_worker: queued frame %d", item.meta.frame_index)
                     if self.events:

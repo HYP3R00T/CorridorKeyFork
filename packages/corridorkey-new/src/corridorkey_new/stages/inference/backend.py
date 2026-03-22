@@ -54,7 +54,7 @@ class ModelBackend(Protocol):
             {
                 "backend": "torch",
                 "device": "cuda",
-                "optimization_mode": "lowvram",
+                "refiner_mode": "tiled",
                 "precision": "bfloat16",
                 "img_size": "2048",
             }
@@ -110,12 +110,13 @@ class TorchBackend:
             "img_size": str(cfg.img_size),
             "use_refiner": str(cfg.use_refiner),
             "mixed_precision": str(cfg.mixed_precision),
+            "refiner_scale": str(cfg.refiner_scale),
         }
 
     def run(self, frame: PreprocessedFrame) -> InferenceResult:
         from corridorkey_new.stages.inference.orchestrator import run_inference
 
-        return run_inference(frame, self._model, self._config)
+        return run_inference(frame, self._model, self._config, resolved_refiner_mode=self._resolved_refiner_mode)
 
 
 class MLXBackend:  # pragma: no cover

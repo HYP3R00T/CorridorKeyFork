@@ -59,6 +59,14 @@ def load_model(config: InferenceConfig, resolved_refiner_mode: str | None = None
     if not config.checkpoint_path.is_file():
         raise FileNotFoundError(f"Checkpoint not found: {config.checkpoint_path}")
 
+    if config.img_size == 0:
+        raise ValueError(
+            "InferenceConfig.img_size is 0 (auto-select). "
+            "Resolve img_size to a concrete value (512, 1024, 1536, or 2048) "
+            "before calling load_model. Use pipeline.to_inference_config() which "
+            "resolves img_size automatically based on available VRAM."
+        )
+
     # Use the pre-resolved mode so compile decisions are made on the concrete
     # value, not "auto". Callers (factory.load_backend) resolve this before
     # calling load_model.

@@ -58,6 +58,10 @@ class PipelineConfig:
         input_queue_depth: Max preprocessed frames waiting for inference.
             Keep small — each frame is ~64MB on GPU at 2048 resolution.
         output_queue_depth: Max inference outputs waiting for postprocessing.
+        resolved_refiner_mode: Pre-resolved refiner mode ("full_frame" or "tiled").
+            When set, PipelineRunner skips the VRAM probe entirely and uses this
+            value directly. Populated by ``to_pipeline_config()`` so the VRAM
+            probe that already ran for img_size resolution is not repeated.
     """
 
     preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
@@ -68,6 +72,7 @@ class PipelineConfig:
     input_queue_depth: int = 2
     output_queue_depth: int = 2
     events: PipelineEvents | None = None
+    resolved_refiner_mode: str | None = None
     """Optional event callbacks for all pipeline stages. Pass a PipelineEvents
     instance to receive per-frame and per-stage progress notifications."""
 
@@ -116,11 +121,25 @@ class PipelineRunner:
             )
         inference_cfg: InferenceConfig = cfg.inference
 
+        # Resolve refiner_mode once — use the pre-resolved value from PipelineConfig
+        # when available (set by to_pipeline_config, avoids a second VRAM probe).
+        # Fall back to probing only when a model is loaded on-demand here.
+        if cfg.resolved_refiner_mode is not None:
+            resolved_refiner_mode = cfg.resolved_refiner_mode
+        else:
+            from corridorkey_new.stages.inference.orchestrator import _should_tile_refiner
+
+            resolved_refiner_mode = "tiled" if _should_tile_refiner(inference_cfg) else "full_frame"
+
         if cfg.model is None:
             from corridorkey_new.stages.inference import load_model
 
-            logger.info("pipeline_runner: loading model from %s", inference_cfg.checkpoint_path)
-            loaded_model = load_model(inference_cfg)
+            logger.info(
+                "pipeline_runner: loading model from %s (refiner_mode=%s)",
+                inference_cfg.checkpoint_path,
+                resolved_refiner_mode,
+            )
+            loaded_model = load_model(inference_cfg, resolved_refiner_mode=resolved_refiner_mode)
         else:
             loaded_model = cfg.model
 
@@ -129,6 +148,7 @@ class PipelineRunner:
             output_queue=output_queue,
             model=loaded_model,
             config=inference_cfg,
+            resolved_refiner_mode=resolved_refiner_mode,
             events=cfg.events,
         )
         postwrite_worker = PostWriteWorker(
@@ -241,7 +261,7 @@ class MultiGPURunner:
         )
 
         # Load one model per GPU in parallel to minimise startup time.
-        models = self._load_models_parallel(cfg.devices, cfg.inference)
+        models, resolved_refiner_mode = self._load_models_parallel(cfg.devices, cfg.inference)
 
         # One InferenceWorker per GPU — all share the same input/output queues.
         # The STOP sentinel propagation pattern: the last worker to see STOP
@@ -261,6 +281,7 @@ class MultiGPURunner:
                 output_queue=output_queue,
                 model=model,
                 config=device_cfg,
+                resolved_refiner_mode=resolved_refiner_mode,
                 active_workers=active_workers,
                 worker_index=i,
                 events=cfg.events,
@@ -282,12 +303,23 @@ class MultiGPURunner:
 
         logger.info("multi_gpu_runner: clip='%s' complete", manifest.clip_name)
 
-    def _load_models_parallel(self, devices: list[str], base_config: InferenceConfig) -> list[nn.Module]:
+    def _load_models_parallel(self, devices: list[str], base_config: InferenceConfig) -> tuple[list[nn.Module], str]:
         """Load one model per device in parallel threads.
 
-        Returns models in the same order as ``devices``.
+        Resolves refiner_mode once (using the first device as representative)
+        before spawning threads so torch.compile decisions are made on the
+        concrete mode, not "auto".
+
+        Returns:
+            Tuple of (models in device order, resolved_refiner_mode string).
         """
         from corridorkey_new.stages.inference.loader import load_model
+        from corridorkey_new.stages.inference.orchestrator import _should_tile_refiner
+
+        # Resolve once using the base config (device doesn't affect mode resolution
+        # for VRAM probing — we use the first device as representative).
+        resolved_refiner_mode = "tiled" if _should_tile_refiner(base_config) else "full_frame"
+        logger.info("multi_gpu_runner: resolved refiner_mode=%s", resolved_refiner_mode)
 
         models: list[nn.Module | None] = [None] * len(devices)
         errors: list[Exception | None] = [None] * len(devices)
@@ -296,7 +328,7 @@ class MultiGPURunner:
             try:
                 device_cfg = _override_device(base_config, device)
                 logger.info("multi_gpu_runner: loading model on %s (worker %d)", device, idx)
-                models[idx] = load_model(device_cfg)
+                models[idx] = load_model(device_cfg, resolved_refiner_mode=resolved_refiner_mode)
                 logger.info("multi_gpu_runner: model ready on %s", device)
             except Exception as e:
                 errors[idx] = e
@@ -313,7 +345,7 @@ class MultiGPURunner:
             if err is not None:
                 raise RuntimeError(f"Failed to load model on {devices[i]}: {err}") from err
 
-        return models  # type: ignore[return-value]
+        return models, resolved_refiner_mode  # type: ignore[return-value]
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +386,7 @@ class _MultiGPUInferenceWorker:
     config: InferenceConfig
     active_workers: _AtomicCounter
     worker_index: int
+    resolved_refiner_mode: str | None = None
     events: PipelineEvents | None = None
 
     def run(self) -> None:
@@ -374,7 +407,9 @@ class _MultiGPUInferenceWorker:
                 try:
                     if self.events:
                         self.events.inference_start(item.meta.frame_index)
-                    result = run_inference(item, self.model, self.config)
+                    result = run_inference(
+                        item, self.model, self.config, resolved_refiner_mode=self.resolved_refiner_mode
+                    )
                     self.output_queue.put(result)
                     logger.debug(
                         "multi_gpu_inference[%s]: queued frame %d",
@@ -383,6 +418,10 @@ class _MultiGPUInferenceWorker:
                     )
                     if self.events:
                         self.events.inference_queued(item.meta.frame_index)
+                        self.events.queue_depth(
+                            len(self.input_queue),
+                            len(self.output_queue),
+                        )
                 except Exception as e:
                     logger.error(
                         "multi_gpu_inference[%s]: skipping frame %d — %s",

@@ -23,6 +23,7 @@ import torch.nn as nn
 from torch.nn import functional
 
 from corridorkey_new.stages.inference.config import (
+    _VRAM_FREE_CACHE_THRESHOLD_GB,
     _VRAM_TILED_THRESHOLD_GB,
     REFINER_TILE_OVERLAP,
     REFINER_TILE_SIZE,
@@ -38,6 +39,7 @@ def run_inference(
     frame: PreprocessedFrame,
     model: nn.Module,
     config: InferenceConfig,
+    resolved_refiner_mode: str | None = None,
 ) -> InferenceResult:
     """Run model inference on a single preprocessed frame.
 
@@ -46,11 +48,16 @@ def run_inference(
             on config.device, already ImageNet-normalised.
         model: Loaded GreenFormer in eval mode.
         config: Inference configuration.
+        resolved_refiner_mode: Pre-resolved refiner mode ("full_frame" or
+            "tiled"). When provided, skips the per-frame VRAM probe that
+            ``_should_tile_refiner`` would otherwise perform for "auto" mode.
+            ``TorchBackend.run()`` always passes this to avoid pynvml overhead
+            on every frame.
 
     Returns:
         InferenceResult with alpha and fg tensors on device, plus FrameMeta.
     """
-    tile_refiner = _should_tile_refiner(config)
+    tile_refiner = _should_tile_refiner(config, resolved_refiner_mode=resolved_refiner_mode)
     device_type = torch.device(config.device).type
 
     # Use the model's actual precision for autocast.
@@ -63,13 +70,10 @@ def run_inference(
     if tile_refiner:
         refiner = getattr(model, "refiner", None)
         if refiner is not None:
-            hook_fn = _make_tiled_refiner_hook(model, config)
+            hook_fn = _make_tiled_refiner_hook(refiner, config.refiner_scale)
             hook_handle = refiner.register_forward_hook(hook_fn)
     elif config.use_refiner and config.refiner_scale != 1.0:
         # Scale hook — only active when NOT tiling (tiled path handles scale internally).
-        # Note: if refiner_mode resolves to tiled, tile_refiner=True takes
-        # priority and this branch is skipped, meaning refiner_scale is ignored in
-        # tiled mode. Apply the scale inside _run_refiner_tiled if needed.
         refiner = getattr(model, "refiner", None)
         if refiner is not None:
             scale = config.refiner_scale
@@ -118,7 +122,7 @@ def _free_vram_if_needed(device: str) -> None:
         return
     try:
         vram_gb = torch.cuda.get_device_properties(dev).total_memory / (1024**3)
-        if vram_gb < 6.0:
+        if vram_gb < _VRAM_FREE_CACHE_THRESHOLD_GB:
             torch.cuda.empty_cache()
     except Exception:
         pass
@@ -129,22 +133,36 @@ def _free_vram_if_needed(device: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _should_tile_refiner(config: InferenceConfig) -> bool:
-    """Return True if the refiner should run in tiled mode."""
+def _should_tile_refiner(config: InferenceConfig, resolved_refiner_mode: str | None = None) -> bool:
+    """Return True if the refiner should run in tiled mode.
+
+    Args:
+        config: Inference configuration.
+        resolved_refiner_mode: Pre-resolved mode from a prior VRAM probe
+            ("full_frame" or "tiled"). When provided, takes priority over
+            everything else — avoids pynvml overhead on every frame when
+            called from ``run_inference`` via ``TorchBackend.run()``.
+    """
     if not config.use_refiner:
         return False
-    mode = config.refiner_mode
+
+    # Pre-resolved mode takes full priority — caller already accounted for
+    # device type (including MPS) when resolving.
+    if resolved_refiner_mode is not None:
+        return resolved_refiner_mode == "tiled"
 
     # MPS: Triton/inductor does not support Metal — always tile.
     if torch.device(config.device).type == "mps":
         return True
 
+    mode = config.refiner_mode
     if mode == "tiled":
         return True
     if mode == "full_frame":
         return False
 
-    # auto — probe VRAM
+    # auto — probe VRAM (only reached when resolved_refiner_mode is None and
+    # config.refiner_mode == "auto", i.e. called outside of TorchBackend.run())
     vram_gb = _probe_vram_gb(config.device)
     if vram_gb > 0 and vram_gb < _VRAM_TILED_THRESHOLD_GB:
         logger.info("Auto refiner_mode: %.1f GB VRAM → tiled refiner", vram_gb)
@@ -156,11 +174,14 @@ def _should_tile_refiner(config: InferenceConfig) -> bool:
 def _probe_vram_gb(device: str) -> float:
     """Return total VRAM in GB for the given device. Returns 0.0 on failure.
 
-    Correctly handles multi-GPU setups by parsing the device index from the
-    device string (e.g. "cuda:1" → index 1). Falls back to index 0 for bare
-    "cuda" or "rocm" strings.
+    Short-circuits immediately for non-CUDA devices (CPU, MPS) to avoid
+    unnecessary pynvml import and init attempts. Correctly handles multi-GPU
+    setups by parsing the device index from the device string (e.g. "cuda:1"
+    → index 1). Falls back to index 0 for bare "cuda" strings.
     """
     dev = torch.device(device)
+    if dev.type not in ("cuda", "rocm"):
+        return 0.0
     # Parse the device index — torch.device("cuda:1").index == 1,
     # torch.device("cuda").index is None (defaults to 0).
     device_index = dev.index if dev.index is not None else 0
@@ -200,12 +221,18 @@ class _TiledRefinerState:
         self.bypass = False
 
 
-def _make_tiled_refiner_hook(model: nn.Module, config: InferenceConfig):
+def _make_tiled_refiner_hook(refiner: nn.Module, refiner_scale: float = 1.0):
     """Return a forward hook that replaces the refiner with a tiled pass.
 
     The ``state.bypass`` flag is set to True before each tile call inside
     ``_run_refiner_tiled`` and reset in a ``finally`` block, preventing the
     hook from firing recursively for tile-level refiner calls.
+
+    Args:
+        refiner: The CNNRefinerModule (used only for type clarity; the hook
+            receives the module as its first argument at call time).
+        refiner_scale: Multiplier applied to the tiled delta output before
+            accumulation. 1.0 = full refinement, 0.0 = no refinement.
     """
     state = _TiledRefinerState()
 
@@ -216,7 +243,7 @@ def _make_tiled_refiner_hook(model: nn.Module, config: InferenceConfig):
         if len(inputs) != 2:
             raise RuntimeError(f"Tiled refiner hook expected 2 inputs (rgb, coarse_pred), got {len(inputs)}")
         rgb, coarse = inputs
-        return _run_refiner_tiled(module, rgb, coarse, state)
+        return _run_refiner_tiled(module, rgb, coarse, state, refiner_scale=refiner_scale)
 
     return hook
 
@@ -228,6 +255,7 @@ def _run_refiner_tiled(
     state: _TiledRefinerState,
     tile_size: int = REFINER_TILE_SIZE,
     overlap: int = REFINER_TILE_OVERLAP,
+    refiner_scale: float = 1.0,
 ) -> torch.Tensor:
     """Run the CNN refiner in overlapping tiles to keep VRAM flat.
 
@@ -246,6 +274,8 @@ def _run_refiner_tiled(
             hook does not fire recursively for tile-level refiner invocations.
         tile_size: Spatial size of each tile (square).
         overlap: Overlap in pixels between adjacent tiles.
+        refiner_scale: Multiplier applied to each tile's delta output before
+            accumulation. Mirrors the full-frame ``refiner_scale`` behaviour.
 
     Returns:
         [B, 4, H, W] delta logits tensor, same dtype as coarse.
@@ -253,11 +283,14 @@ def _run_refiner_tiled(
     b, _, h, w = rgb.shape
     orig_dtype = rgb.dtype
 
-    # GroupNorm does not support bf16/fp16 — upcast for the tiled pass.
+    # GroupNorm does not support bf16/fp16 — upcast input tensors for the
+    # tiled pass. Do NOT call refiner.float() — that would permanently mutate
+    # the module's weights in-place. The refiner is already kept in float32 by
+    # loader.py, so its parameters are always float32; only the activations
+    # (inputs) need upcasting here.
     if orig_dtype != torch.float32:
         rgb = rgb.float()
         coarse = coarse.float()
-        refiner = refiner.float()
 
     output = torch.zeros(b, 4, h, w, device=rgb.device, dtype=torch.float32)
     weight = torch.zeros(b, 1, h, w, device=rgb.device, dtype=torch.float32)
@@ -308,7 +341,7 @@ def _run_refiner_tiled(
             delta_tile = delta_tile[:, :, :th, :tw]
             w_tile = blend_2d[:, :, :th, :tw]
 
-            output[:, :, y_start:y_end, x_start:x_end] += delta_tile * w_tile
+            output[:, :, y_start:y_end, x_start:x_end] += delta_tile * w_tile * refiner_scale
             weight[:, :, y_start:y_end, x_start:x_end] += w_tile
 
             x += stride
