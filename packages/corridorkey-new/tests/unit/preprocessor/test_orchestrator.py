@@ -94,6 +94,7 @@ class TestPreprocessFrame:
     def test_meta_pad_present(self, tmp_path: Path):
         """FrameMeta must carry a LetterboxPad."""
         from corridorkey_new.stages.preprocessor.resize import LetterboxPad
+
         manifest = _make_manifest(tmp_path, img_h=48, img_w=80)
         config = PreprocessConfig(img_size=64, device="cpu")
         result = preprocess_frame(manifest, 0, config)
@@ -104,7 +105,7 @@ class TestPreprocessFrame:
         manifest = _make_manifest(tmp_path, img_h=48, img_w=80)
         config = PreprocessConfig(img_size=64, device="cpu")
         result = preprocess_frame(manifest, 0, config)
-        pad = result.meta.pad
+        pad = result.meta.resolved_pad
         assert pad.top + pad.bottom + pad.inner_h == 64
         assert pad.left + pad.right + pad.inner_w == 64
 
@@ -113,7 +114,7 @@ class TestPreprocessFrame:
         manifest = _make_manifest(tmp_path, img_h=64, img_w=64)
         config = PreprocessConfig(img_size=64, device="cpu")
         result = preprocess_frame(manifest, 0, config)
-        assert result.meta.pad.is_noop
+        assert result.meta.resolved_pad.is_noop
 
     def test_meta_frame_index(self, tmp_path: Path):
         manifest = _make_manifest(tmp_path, frame_count=3)
@@ -380,16 +381,20 @@ class TestPreprocessConfigValidation:
 class TestPreprocessorPackageExports:
     def test_upsample_mode_importable(self):
         from corridorkey_new.stages.preprocessor import UpsampleMode
+
         assert UpsampleMode is not None
 
     def test_default_upsample_mode_importable(self):
         from corridorkey_new.stages.preprocessor import DEFAULT_UPSAMPLE_MODE
+
         assert isinstance(DEFAULT_UPSAMPLE_MODE, str)
 
     def test_default_alpha_upsample_mode_importable(self):
         from corridorkey_new.stages.preprocessor import DEFAULT_ALPHA_UPSAMPLE_MODE
+
         assert isinstance(DEFAULT_ALPHA_UPSAMPLE_MODE, str)
 
     def test_letterbox_pad_importable(self):
         from corridorkey_new.stages.preprocessor import LetterboxPad
+
         assert LetterboxPad is not None

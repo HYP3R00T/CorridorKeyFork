@@ -13,10 +13,9 @@ Public API::
     )
 """
 
+from corridorkey_new.stages.preprocessor.contracts import FrameMeta, PreprocessedFrame
 from corridorkey_new.stages.preprocessor.orchestrator import (
-    FrameMeta,
     PreprocessConfig,
-    PreprocessedFrame,
     preprocess_frame,
 )
 from corridorkey_new.stages.preprocessor.reader import FrameReadError

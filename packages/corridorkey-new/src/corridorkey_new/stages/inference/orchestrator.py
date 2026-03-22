@@ -29,7 +29,7 @@ from corridorkey_new.stages.inference.config import (
     InferenceConfig,
 )
 from corridorkey_new.stages.inference.contracts import InferenceResult
-from corridorkey_new.stages.preprocessor.orchestrator import PreprocessedFrame
+from corridorkey_new.stages.preprocessor.contracts import PreprocessedFrame
 
 logger = logging.getLogger(__name__)
 

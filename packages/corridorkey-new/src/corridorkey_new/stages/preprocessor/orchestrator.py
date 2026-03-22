@@ -32,12 +32,12 @@ import torch
 from corridorkey_new.stages.loader.contracts import ClipManifest
 from corridorkey_new.stages.loader.validator import get_frame_files
 from corridorkey_new.stages.preprocessor.colorspace import linear_to_srgb, linear_to_srgb_numpy
+from corridorkey_new.stages.preprocessor.contracts import FrameMeta, PreprocessedFrame
 from corridorkey_new.stages.preprocessor.normalise import normalise_image
 from corridorkey_new.stages.preprocessor.reader import _read_frame_pair
 from corridorkey_new.stages.preprocessor.resize import (
     DEFAULT_ALPHA_UPSAMPLE_MODE,
     DEFAULT_UPSAMPLE_MODE,
-    LetterboxPad,
     UpsampleMode,
     letterbox_frame,
 )
@@ -144,50 +144,6 @@ class PreprocessConfig:
     def __post_init__(self) -> None:
         if self.img_size <= 0:
             raise ValueError(f"PreprocessConfig.img_size must be > 0, got {self.img_size}.")
-
-
-@dataclass(frozen=True)
-class FrameMeta:
-    """Metadata carried alongside the tensor for use by postprocessing.
-
-    Attributes:
-        frame_index: Index of this frame within the clip's frame_range.
-        original_h: Frame height before resizing, in pixels.
-        original_w: Frame width before resizing, in pixels.
-        pad: Letterbox padding offsets added during preprocessing. The
-            postprocessor uses these to crop the model output back to the
-            original aspect ratio before scaling to source resolution.
-        source_image: Original sRGB image [H, W, 3] float32, RGB channel order,
-            at source resolution, used by postprocessor source_passthrough to
-            replace model FG in opaque interior regions. None if source
-            passthrough is disabled.
-    """
-
-    frame_index: int
-    original_h: int
-    original_w: int
-    pad: LetterboxPad = None  # type: ignore[assignment]
-    source_image: np.ndarray | None = None
-
-    def __post_init__(self) -> None:
-        # Default pad to a no-op LetterboxPad if not provided
-        if self.pad is None:
-            object.__setattr__(self, "pad", LetterboxPad(0, 0, 0, 0, self.original_h, self.original_w))
-
-
-@dataclass(frozen=True)
-class PreprocessedFrame:
-    """Output contract of the preprocessing stage.
-
-    Attributes:
-        tensor: Model input tensor [1, 4, img_size, img_size] on device.
-            Channels: [R_norm, G_norm, B_norm, alpha_hint].
-            dtype is float32 unless PreprocessConfig.half_precision=True.
-        meta: Original frame dimensions and index for postprocessing.
-    """
-
-    tensor: torch.Tensor
-    meta: FrameMeta
 
 
 def preprocess_frame(

@@ -266,9 +266,12 @@ def _resize_content(
             is_srgb=False,  # already linearised/re-encoded in first pass if needed
         )
 
-    # Post-upscale sharpening (image only, upscale path)
-    upscaling = not (h_down and w_down)
-    if upscaling and sharpen_strength > 0.0:
+    # Post-upscale sharpening (image only, when the output is larger than the source).
+    # Compare pixel counts: if the target area exceeds the source area, we upscaled.
+    # Using pixel counts rather than per-dimension flags handles the mixed case
+    # (one dim down, one up) correctly — sharpening only fires on a net upscale.
+    net_upscale = (target_h * target_w) > (src_h * src_w)
+    if net_upscale and sharpen_strength > 0.0:
         img_out = _unsharp_mask(img_out, strength=sharpen_strength)
 
     return img_out, alp_out
