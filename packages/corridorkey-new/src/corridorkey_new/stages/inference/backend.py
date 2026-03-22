@@ -22,7 +22,7 @@ import torch.nn as nn
 if TYPE_CHECKING:
     from corridorkey_new.stages.inference.config import InferenceConfig
     from corridorkey_new.stages.inference.contracts import InferenceResult
-    from corridorkey_new.stages.preprocessor.orchestrator import PreprocessedFrame
+    from corridorkey_new.stages.preprocessor.contracts import PreprocessedFrame
 
 logger = logging.getLogger(__name__)
 
@@ -174,8 +174,8 @@ class MLXBackend:  # pragma: no cover
             refiner_scale=1.0,
             input_is_linear=False,
             fg_is_straight=True,
-            despill_strength=0.0,   # postprocessor stage handles despill
-            auto_despeckle=False,   # postprocessor stage handles despeckle
+            despill_strength=0.0,  # postprocessor stage handles despill
+            auto_despeckle=False,  # postprocessor stage handles despeckle
         )
 
         # MLX returns uint8 [H, W] alpha and [H, W, 3] fg — normalise to float32.
@@ -187,6 +187,6 @@ class MLXBackend:  # pragma: no cover
 
         # Convert to [1, C, H, W] tensors to match TorchBackend output shape.
         alpha_t = torch.from_numpy(alpha_np).permute(2, 0, 1).unsqueeze(0)  # [1, 1, H, W]
-        fg_t = torch.from_numpy(fg_np).permute(2, 0, 1).unsqueeze(0)        # [1, 3, H, W]
+        fg_t = torch.from_numpy(fg_np).permute(2, 0, 1).unsqueeze(0)  # [1, 3, H, W]
 
         return InferenceResult(alpha=alpha_t, fg=fg_t, meta=frame.meta)

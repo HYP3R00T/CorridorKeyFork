@@ -184,7 +184,7 @@ class CNNRefinerModule(nn.Module):
         self.final = nn.Conv2d(hidden_channels, out_channels, kernel_size=1)
 
         nn.init.normal_(self.final.weight, mean=0.0, std=1e-3)
-        nn.init.constant_(self.final.bias, 0)  # ty:ignore[invalid-argument-type]
+        nn.init.constant_(self.final.bias, 0)  # type: ignore[arg-type]
 
     def forward(self, img: torch.Tensor, coarse_pred: torch.Tensor) -> torch.Tensor:
         """Predict delta logits from the RGB image and coarse predictions.
@@ -241,7 +241,7 @@ class GreenFormer(nn.Module):
             self._patch_input_layer(in_channels)
 
         try:
-            feature_channels = self.encoder.feature_info.channels()  # ty:ignore[unresolved-attribute, call-non-callable]
+            feature_channels = self.encoder.feature_info.channels()  # type: ignore[union-attr]
         except (AttributeError, TypeError):
             feature_channels = [112, 224, 448, 896]
         logger.info("Feature channels: %s", feature_channels)
@@ -283,8 +283,8 @@ class GreenFormer(nn.Module):
             in_channels,
             out_channels,
             kernel_size=k,
-            stride=patch_embed.stride,  # ty:ignore[invalid-argument-type]
-            padding=patch_embed.padding,  # ty:ignore[invalid-argument-type]
+            stride=patch_embed.stride,  # type: ignore[arg-type]
+            padding=patch_embed.padding,  # type: ignore[arg-type]
             bias=(bias is not None),
         )
 

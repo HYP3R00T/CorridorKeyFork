@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import torch
 from corridorkey_new.stages.inference.contracts import InferenceResult
-from corridorkey_new.stages.preprocessor.orchestrator import FrameMeta
+from corridorkey_new.stages.preprocessor.contracts import FrameMeta
 
 
 def _make_result(h: int = 32, w: int = 32) -> InferenceResult:

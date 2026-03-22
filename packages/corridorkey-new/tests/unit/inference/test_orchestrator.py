@@ -16,7 +16,7 @@ from corridorkey_new.stages.inference.orchestrator import (
     _should_tile_refiner,
     run_inference,
 )
-from corridorkey_new.stages.preprocessor.orchestrator import FrameMeta, PreprocessedFrame
+from corridorkey_new.stages.preprocessor.contracts import FrameMeta, PreprocessedFrame
 
 # ---------------------------------------------------------------------------
 # Helpers
