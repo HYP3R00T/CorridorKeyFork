@@ -53,6 +53,8 @@ def postprocess_frame(
         meta.original_h,
         meta.original_w,
         pad=meta.pad,
+        fg_upsample_mode=config.fg_upsample_mode,
+        alpha_upsample_mode=config.alpha_upsample_mode,
     )
 
     # Step 2 — green spill removal (on straight sRGB FG)

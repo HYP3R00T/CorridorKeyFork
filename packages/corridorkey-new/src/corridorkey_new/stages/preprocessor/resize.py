@@ -56,10 +56,14 @@ from corridorkey_new.stages.preprocessor.colorspace import linear_to_srgb
 
 logger = logging.getLogger(__name__)
 
-UpsampleMode = Literal["bicubic", "bilinear"]
+UpsampleMode = Literal["bicubic", "bilinear"]  # kept for any external references
+ImageUpsampleMode = Literal["bicubic", "bilinear"]
 
-DEFAULT_UPSAMPLE_MODE: UpsampleMode = "bicubic"
-DEFAULT_ALPHA_UPSAMPLE_MODE: UpsampleMode = "bilinear"
+DEFAULT_IMAGE_UPSAMPLE_MODE: ImageUpsampleMode = "bicubic"
+# Alpha upscale is fixed to bilinear in PyTorch — bicubic rings below zero on
+# hard matte edges, producing negative alpha values that corrupt compositing.
+# There is no lanczos in F.interpolate; bilinear is the correct choice here.
+_ALPHA_UPSAMPLE_MODE = "bilinear"
 
 # Ratio threshold above which multi-step downscaling is used.
 _MULTISTEP_THRESHOLD = 4.0
@@ -105,9 +109,8 @@ def letterbox_frame(
     image: torch.Tensor,
     alpha: torch.Tensor,
     img_size: int,
-    upsample_mode: UpsampleMode = DEFAULT_UPSAMPLE_MODE,
-    alpha_upsample_mode: UpsampleMode = DEFAULT_ALPHA_UPSAMPLE_MODE,
-    sharpen_strength: float = 0.0,
+    image_upsample_mode: ImageUpsampleMode = DEFAULT_IMAGE_UPSAMPLE_MODE,
+    sharpen_strength: float = 0.3,
     is_srgb: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor, LetterboxPad]:
     """Fit image and alpha into img_size × img_size preserving aspect ratio.
@@ -116,14 +119,18 @@ def letterbox_frame(
     symmetrically with the mean pixel value of the frame. The pad offsets are
     returned so the postprocessor can crop back.
 
+    Downscaling always uses colour-aware area interpolation (sRGB → linear →
+    area → sRGB). Upscaling uses image_upsample_mode for the image and bilinear
+    for the alpha (fixed — bicubic rings below zero on hard matte edges).
+
     Args:
         image: float32 [1, 3, H, W], sRGB, range 0.0–1.0.
         alpha: float32 [1, 1, H, W], linear, range 0.0–1.0.
         img_size: Target square resolution (e.g. 2048).
-        upsample_mode: Interpolation mode for upscaling the image.
-        alpha_upsample_mode: Interpolation mode for upscaling the alpha matte.
+        image_upsample_mode: Interpolation mode for upscaling the image.
+            "bicubic" (default) is sharpest. "bilinear" is faster.
         sharpen_strength: Unsharp mask strength applied after upscaling.
-            0.0 disables sharpening. Typical range 0.1–0.5.
+            0.3 (default) recovers antialias softness. 0.0 disables.
         is_srgb: If True, linearise before downscaling and re-encode to sRGB
             afterwards (colour-accurate downscaling). Set False for linear
             inputs (they are already linear).
@@ -173,8 +180,7 @@ def letterbox_frame(
             inner_w,
             src_h,
             src_w,
-            upsample_mode=upsample_mode,
-            alpha_upsample_mode=alpha_upsample_mode,
+            image_upsample_mode=image_upsample_mode,
             sharpen_strength=sharpen_strength,
             is_srgb=is_srgb,
         )
@@ -220,8 +226,7 @@ def _resize_content(
     target_w: int,
     src_h: int,
     src_w: int,
-    upsample_mode: UpsampleMode,
-    alpha_upsample_mode: UpsampleMode,
+    image_upsample_mode: ImageUpsampleMode,
     sharpen_strength: float,
     is_srgb: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -237,8 +242,7 @@ def _resize_content(
             target_h,
             target_w,
             downscaling=h_down,
-            img_mode=upsample_mode,
-            alpha_mode=alpha_upsample_mode,
+            img_mode=image_upsample_mode,
             is_srgb=is_srgb,
         )
     else:
@@ -251,8 +255,7 @@ def _resize_content(
             mid_h,
             mid_w,
             downscaling=True,
-            img_mode=upsample_mode,
-            alpha_mode=alpha_upsample_mode,
+            img_mode=image_upsample_mode,
             is_srgb=is_srgb,
         )
         img_out, alp_out = _single_pass(
@@ -261,8 +264,7 @@ def _resize_content(
             target_h,
             target_w,
             downscaling=False,
-            img_mode=upsample_mode,
-            alpha_mode=alpha_upsample_mode,
+            img_mode=image_upsample_mode,
             is_srgb=False,  # already linearised/re-encoded in first pass if needed
         )
 
@@ -283,11 +285,15 @@ def _single_pass(
     target_h: int,
     target_w: int,
     downscaling: bool,
-    img_mode: UpsampleMode,
-    alpha_mode: UpsampleMode,
+    img_mode: ImageUpsampleMode,
     is_srgb: bool,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Resize image and alpha in one or two interpolate calls."""
+    """Resize image and alpha in one or two interpolate calls.
+
+    Downscaling: colour-aware area (sRGB→linear→area→sRGB). Alpha: area.
+    Upscaling: img_mode with antialias=True for image. bilinear for alpha
+    (fixed — bicubic rings below zero on hard matte edges in PyTorch).
+    """
     size = (target_h, target_w)
     src_h, src_w = image.shape[2], image.shape[3]
 
@@ -310,14 +316,15 @@ def _single_pass(
 
         return image, alpha
 
-    # Upscaling
-    if img_mode == alpha_mode:
+    # Upscaling — image uses configured mode, alpha always bilinear
+    if img_mode == _ALPHA_UPSAMPLE_MODE:
+        # Both modes are the same — single combined interpolate call
         combined = torch.cat([image, alpha], dim=1)
         out = functional.interpolate(combined, size=size, mode=img_mode, align_corners=False, antialias=True)
         return out[:, :3], out[:, 3:]
 
     img_out = functional.interpolate(image, size=size, mode=img_mode, align_corners=False, antialias=True)
-    alp_out = functional.interpolate(alpha, size=size, mode=alpha_mode, align_corners=False, antialias=True)
+    alp_out = functional.interpolate(alpha, size=size, mode=_ALPHA_UPSAMPLE_MODE, align_corners=False, antialias=True)
     return img_out, alp_out
 
 

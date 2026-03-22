@@ -5,8 +5,7 @@ from __future__ import annotations
 import pytest
 import torch
 from corridorkey_new.stages.preprocessor.resize import (
-    DEFAULT_ALPHA_UPSAMPLE_MODE,
-    DEFAULT_UPSAMPLE_MODE,
+    DEFAULT_IMAGE_UPSAMPLE_MODE,
     LetterboxPad,
     _linear_to_srgb,
     _multistep_downscale,
@@ -166,16 +165,16 @@ class TestAlphaClamp:
         src = _make_image(16, 16)
         alp = torch.zeros(1, 1, 16, 16, dtype=torch.float32)
         alp[:, :, 8:, :] = 1.0
-        _, alpha_out, _ = letterbox_frame(src, alp, 64, alpha_upsample_mode="bilinear")
+        _, alpha_out, _ = letterbox_frame(src, alp, 64)
         assert alpha_out.min().item() >= 0.0
         assert alpha_out.max().item() <= 1.0
 
-    def test_bicubic_alpha_clamped_after_resize(self):
-        """bicubic alpha is clamped to [0, 1] even though it can ring."""
+    def test_alpha_clamped_after_resize(self):
+        """Alpha is clamped to [0, 1] after resize."""
         src = _make_image(16, 16)
         alp = torch.zeros(1, 1, 16, 16, dtype=torch.float32)
         alp[:, :, 8:, :] = 1.0
-        _, alpha_out, _ = letterbox_frame(src, alp, 64, alpha_upsample_mode="bicubic")
+        _, alpha_out, _ = letterbox_frame(src, alp, 64)
         assert alpha_out.min().item() >= 0.0
         assert alpha_out.max().item() <= 1.0
 
@@ -298,32 +297,22 @@ class TestMultistepDownscaling:
 
 
 class TestUpsampleModes:
-    def test_default_upsample_mode_is_bicubic(self):
-        assert DEFAULT_UPSAMPLE_MODE == "bicubic"
-
-    def test_default_alpha_upsample_mode_is_bilinear(self):
-        assert DEFAULT_ALPHA_UPSAMPLE_MODE == "bilinear"
+    def test_default_image_upsample_mode_is_bicubic(self):
+        assert DEFAULT_IMAGE_UPSAMPLE_MODE == "bicubic"
 
     def test_bilinear_differs_from_bicubic_on_upscale(self):
         src = _make_image(32, 32)
         alp = _make_alpha(32, 32)
-        img_bicubic, _, _ = letterbox_frame(src, alp, 128, upsample_mode="bicubic")
-        img_bilinear, _, _ = letterbox_frame(src, alp, 128, upsample_mode="bilinear")
+        img_bicubic, _, _ = letterbox_frame(src, alp, 128, image_upsample_mode="bicubic")
+        img_bilinear, _, _ = letterbox_frame(src, alp, 128, image_upsample_mode="bilinear")
         assert not torch.allclose(img_bicubic, img_bilinear)
 
     def test_upsample_mode_has_no_effect_when_downscaling(self):
         src = _make_image(512, 512)
         alp = _make_alpha(512, 512)
-        img_bicubic, _, _ = letterbox_frame(src, alp, 128, upsample_mode="bicubic")
-        img_bilinear, _, _ = letterbox_frame(src, alp, 128, upsample_mode="bilinear")
+        img_bicubic, _, _ = letterbox_frame(src, alp, 128, image_upsample_mode="bicubic")
+        img_bilinear, _, _ = letterbox_frame(src, alp, 128, image_upsample_mode="bilinear")
         torch.testing.assert_close(img_bicubic, img_bilinear)
-
-    def test_alpha_upsample_mode_independent_of_image_mode(self):
-        src = _make_image(32, 32)
-        alp = _make_alpha(32, 32)
-        _, alp_bilinear, _ = letterbox_frame(src, alp, 128, upsample_mode="bicubic", alpha_upsample_mode="bilinear")
-        _, alp_bicubic, _ = letterbox_frame(src, alp, 128, upsample_mode="bicubic", alpha_upsample_mode="bicubic")
-        assert not torch.allclose(alp_bilinear, alp_bicubic)
 
     def test_mixed_dimensions_correct_shape(self):
         """Portrait source into square target."""

@@ -54,8 +54,7 @@ class TestPreprocessSettings:
     def test_defaults(self):
         cfg = CorridorKeyConfig()
         assert cfg.preprocess.img_size == 0  # 0 = auto-select based on VRAM
-        assert cfg.preprocess.upsample_mode == "bicubic"
-        assert cfg.preprocess.alpha_upsample_mode == "bilinear"
+        assert cfg.preprocess.image_upsample_mode == "bicubic"
         assert cfg.preprocess.half_precision is False
         assert cfg.preprocess.source_passthrough is True
 
@@ -68,14 +67,14 @@ class TestPreprocessSettings:
     def test_override_upsample_mode(self):
         from corridorkey_new.infra.config import PreprocessSettings
 
-        cfg = CorridorKeyConfig(preprocess=PreprocessSettings(upsample_mode="bilinear"))
-        assert cfg.preprocess.upsample_mode == "bilinear"
+        cfg = CorridorKeyConfig(preprocess=PreprocessSettings(image_upsample_mode="bilinear"))
+        assert cfg.preprocess.image_upsample_mode == "bilinear"
 
     def test_invalid_upsample_mode_raises(self):
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            CorridorKeyConfig(preprocess={"upsample_mode": "nearest"})  # type: ignore[arg-type]
+            CorridorKeyConfig(preprocess={"image_upsample_mode": "nearest"})  # type: ignore[arg-type]
 
     def test_img_size_minimum(self):
         from corridorkey_new.infra.config import PreprocessSettings
@@ -128,8 +127,7 @@ class TestBridgeMethods:
         pc = cfg.to_preprocess_config()
         assert pc.img_size == 2048
         assert pc.device == "cpu"
-        assert pc.upsample_mode == "bicubic"
-        assert pc.alpha_upsample_mode == "bilinear"
+        assert pc.image_upsample_mode == "bicubic"
         assert pc.half_precision is False
         assert pc.source_passthrough is True
 

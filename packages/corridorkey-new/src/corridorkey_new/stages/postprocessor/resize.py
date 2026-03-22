@@ -8,17 +8,33 @@ scaling back to source resolution. This ensures the output matches the
 original aspect ratio exactly.
 
 Resize strategy:
-  - Alpha: cv2.INTER_LANCZOS4 on upscale (sharper edges), INTER_AREA on downscale.
-  - FG:    cv2.INTER_LINEAR always (colour accuracy over sharpness).
+  - Downscaling: always INTER_AREA (anti-aliased, no ringing).
+  - FG upscaling: configurable — "bicubic" (default), "bilinear", or "lanczos4".
+  - Alpha upscaling: configurable — "lanczos4" (default) or "bilinear".
 """
 
 from __future__ import annotations
+
+from typing import Literal
 
 import cv2
 import numpy as np
 import torch
 
 from corridorkey_new.stages.preprocessor import LetterboxPad
+
+FgUpsampleMode = Literal["bilinear", "bicubic", "lanczos4"]
+AlphaUpsampleMode = Literal["bilinear", "lanczos4"]
+
+_FG_INTERP_MAP: dict[str, int] = {
+    "bilinear": cv2.INTER_LINEAR,
+    "bicubic": cv2.INTER_CUBIC,
+    "lanczos4": cv2.INTER_LANCZOS4,
+}
+_ALPHA_INTERP_MAP: dict[str, int] = {
+    "bilinear": cv2.INTER_LINEAR,
+    "lanczos4": cv2.INTER_LANCZOS4,
+}
 
 
 def tensor_to_numpy_hwc(t: torch.Tensor) -> np.ndarray:
@@ -41,14 +57,17 @@ def resize_to_source(
     source_h: int,
     source_w: int,
     pad: LetterboxPad | None = None,
+    fg_upsample_mode: FgUpsampleMode = "bicubic",
+    alpha_upsample_mode: AlphaUpsampleMode = "lanczos4",
 ) -> tuple[np.ndarray, np.ndarray]:
     """Resize alpha and fg tensors back to source resolution and convert to numpy.
 
     If ``pad`` is provided, the letterbox padding is cropped out first so the
     output matches the original aspect ratio before scaling to source resolution.
 
-    Alpha uses Lanczos4 on upscale (sharper matte edges) and INTER_AREA on
-    downscale (anti-aliased). FG uses bilinear always (colour accuracy).
+    Downscaling always uses INTER_AREA (anti-aliased). Upscaling uses the
+    configured modes: fg_upsample_mode for the foreground, alpha_upsample_mode
+    for the alpha matte.
 
     Args:
         alpha: [1, 1, H, W] tensor, range 0-1.
@@ -57,6 +76,10 @@ def resize_to_source(
         source_w: Target width in pixels.
         pad: Letterbox padding offsets from the preprocessor. If provided,
             the padded border is cropped before scaling.
+        fg_upsample_mode: Interpolation for upscaling FG. One of "bilinear",
+            "bicubic" (default), "lanczos4". Downscale always uses INTER_AREA.
+        alpha_upsample_mode: Interpolation for upscaling alpha. One of
+            "bilinear", "lanczos4" (default). Downscale always uses INTER_AREA.
 
     Returns:
         Tuple of (alpha_np [H, W, 1], fg_np [H, W, 3]), both float32 numpy.
@@ -69,8 +92,8 @@ def resize_to_source(
         model_h, model_w = alpha_np.shape[:2]
         crop_h_end = model_h - pad.bottom if pad.bottom > 0 else model_h
         crop_w_end = model_w - pad.right if pad.right > 0 else model_w
-        alpha_np = alpha_np[pad.top:crop_h_end, pad.left:crop_w_end]
-        fg_np = fg_np[pad.top:crop_h_end, pad.left:crop_w_end]
+        alpha_np = alpha_np[pad.top : crop_h_end, pad.left : crop_w_end]
+        fg_np = fg_np[pad.top : crop_h_end, pad.left : crop_w_end]
 
     model_h, model_w = alpha_np.shape[:2]
     target = (source_w, source_h)  # cv2 uses (width, height)
@@ -80,12 +103,13 @@ def resize_to_source(
 
     upscaling = source_h * source_w > model_h * model_w
 
-    # Alpha: Lanczos4 on upscale for sharp matte edges; INTER_AREA on downscale.
-    alpha_interp = cv2.INTER_LANCZOS4 if upscaling else cv2.INTER_AREA
+    # Alpha: configured mode on upscale, INTER_AREA on downscale.
+    alpha_interp = _ALPHA_INTERP_MAP[alpha_upsample_mode] if upscaling else cv2.INTER_AREA
     alpha_2d = cv2.resize(alpha_np[:, :, 0], target, interpolation=alpha_interp)
     alpha_out = np.clip(alpha_2d, 0.0, 1.0)[:, :, np.newaxis].astype(np.float32)
 
-    # FG: bilinear always — colour accuracy matters more than sharpness here.
-    fg_out = cv2.resize(fg_np, target, interpolation=cv2.INTER_LINEAR).astype(np.float32)
+    # FG: configured mode on upscale, INTER_AREA on downscale.
+    fg_interp = _FG_INTERP_MAP[fg_upsample_mode] if upscaling else cv2.INTER_AREA
+    fg_out = cv2.resize(fg_np, target, interpolation=fg_interp).astype(np.float32)
 
     return alpha_out, fg_out

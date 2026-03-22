@@ -315,55 +315,6 @@ class TestPreprocessFrame:
         assert isinstance(result.meta.source_image, np.ndarray)  # never a tensor
 
 
-class TestPreprocessConfigProfiles:
-    def test_quality_profile_defaults(self):
-        cfg = PreprocessConfig.quality(device="cpu", img_size=64)
-        assert cfg.upsample_mode == "bicubic"
-        assert cfg.alpha_upsample_mode == "bilinear"
-        assert cfg.half_precision is False
-        assert cfg.source_passthrough is True
-        assert cfg.sharpen_strength == pytest.approx(0.3)
-
-    def test_balanced_profile_defaults(self):
-        cfg = PreprocessConfig.balanced(device="cpu", img_size=64)
-        assert cfg.upsample_mode == "bilinear"
-        assert cfg.alpha_upsample_mode == "bilinear"
-        assert cfg.half_precision is False
-        assert cfg.source_passthrough is True
-        assert cfg.sharpen_strength == pytest.approx(0.0)
-
-    def test_speed_profile_defaults(self):
-        cfg = PreprocessConfig.speed(device="cpu", img_size=64)
-        assert cfg.upsample_mode == "bilinear"
-        assert cfg.alpha_upsample_mode == "bilinear"
-        assert cfg.half_precision is True
-        assert cfg.source_passthrough is False
-        assert cfg.sharpen_strength == pytest.approx(0.0)
-
-    def test_quality_profile_produces_float32_tensor(self, tmp_path: Path):
-        manifest = _make_manifest(tmp_path)
-        config = PreprocessConfig.quality(device="cpu", img_size=64)
-        result = preprocess_frame(manifest, 0, config)
-        assert result.tensor.dtype == torch.float32
-
-    def test_speed_profile_produces_float16_tensor(self, tmp_path: Path):
-        manifest = _make_manifest(tmp_path)
-        config = PreprocessConfig.speed(device="cpu", img_size=64)
-        result = preprocess_frame(manifest, 0, config)
-        assert result.tensor.dtype == torch.float16
-
-    def test_speed_profile_no_source_image(self, tmp_path: Path):
-        manifest = _make_manifest(tmp_path)
-        config = PreprocessConfig.speed(device="cpu", img_size=64)
-        result = preprocess_frame(manifest, 0, config)
-        assert result.meta.source_image is None
-
-    def test_profile_device_and_img_size_forwarded(self):
-        cfg = PreprocessConfig.balanced(device="cuda", img_size=1024)
-        assert cfg.device == "cuda"
-        assert cfg.img_size == 1024
-
-
 class TestPreprocessConfigValidation:
     def test_img_size_zero_raises(self):
         with pytest.raises(ValueError, match="img_size must be > 0"):
@@ -379,20 +330,15 @@ class TestPreprocessConfigValidation:
 
 
 class TestPreprocessorPackageExports:
-    def test_upsample_mode_importable(self):
-        from corridorkey_new.stages.preprocessor import UpsampleMode
+    def test_image_upsample_mode_importable(self):
+        from corridorkey_new.stages.preprocessor import ImageUpsampleMode
 
-        assert UpsampleMode is not None
+        assert ImageUpsampleMode is not None
 
-    def test_default_upsample_mode_importable(self):
-        from corridorkey_new.stages.preprocessor import DEFAULT_UPSAMPLE_MODE
+    def test_default_image_upsample_mode_importable(self):
+        from corridorkey_new.stages.preprocessor import DEFAULT_IMAGE_UPSAMPLE_MODE
 
-        assert isinstance(DEFAULT_UPSAMPLE_MODE, str)
-
-    def test_default_alpha_upsample_mode_importable(self):
-        from corridorkey_new.stages.preprocessor import DEFAULT_ALPHA_UPSAMPLE_MODE
-
-        assert isinstance(DEFAULT_ALPHA_UPSAMPLE_MODE, str)
+        assert isinstance(DEFAULT_IMAGE_UPSAMPLE_MODE, str)
 
     def test_letterbox_pad_importable(self):
         from corridorkey_new.stages.preprocessor import LetterboxPad

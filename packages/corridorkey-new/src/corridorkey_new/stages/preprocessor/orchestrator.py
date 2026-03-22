@@ -36,9 +36,8 @@ from corridorkey_new.stages.preprocessor.contracts import FrameMeta, Preprocesse
 from corridorkey_new.stages.preprocessor.normalise import normalise_image
 from corridorkey_new.stages.preprocessor.reader import _read_frame_pair
 from corridorkey_new.stages.preprocessor.resize import (
-    DEFAULT_ALPHA_UPSAMPLE_MODE,
-    DEFAULT_UPSAMPLE_MODE,
-    UpsampleMode,
+    DEFAULT_IMAGE_UPSAMPLE_MODE,
+    ImageUpsampleMode,
     letterbox_frame,
 )
 from corridorkey_new.stages.preprocessor.tensor import to_tensors
@@ -56,13 +55,11 @@ class PreprocessConfig:
         device: PyTorch device string ("cuda", "mps", "cpu"). All transforms
             after the disk read run on this device. PyTorch handles CPU
             fallback transparently when no GPU is available.
-        upsample_mode: Interpolation mode used when the source image is smaller
-            than img_size. "bicubic" (default) gives the sharpest result.
-            "bilinear" is faster but slightly softer. Has no effect when
-            downscaling — area mode is always used then.
-        alpha_upsample_mode: Interpolation mode for upscaling the alpha matte.
-            Defaults to "bilinear" to avoid bicubic ringing on matte edges,
-            which can produce negative alpha values at sharp transitions.
+        image_upsample_mode: Interpolation mode used when the source image is
+            smaller than img_size. "bicubic" (default) gives the sharpest
+            result with antialias=True. "bilinear" is faster but slightly
+            softer. Has no effect when downscaling — area mode with
+            colour-aware linearisation is always used then.
         half_precision: If True, cast tensors to float16 before inference.
             Halves VRAM usage and PCIe bandwidth. Requires the model to
             support float16 (most modern inference runtimes do). Default False.
@@ -72,74 +69,17 @@ class PreprocessConfig:
             fringing caused by background contamination in the model FG output.
             Disable for a small speed gain if fringing is not a concern.
         sharpen_strength: Unsharp mask strength applied after upscaling.
-            0.0 (default) disables sharpening. Typical range 0.1–0.5.
-            Has no effect when downscaling. Enable in the quality profile
-            to recover softness introduced by the antialias filter.
+            0.3 (default) recovers softness introduced by the antialias filter.
+            0.0 disables sharpening entirely. Typical range 0.1–0.5.
+            Has no effect when downscaling.
     """
 
     img_size: int = 2048
     device: str = "cpu"
-    upsample_mode: UpsampleMode = DEFAULT_UPSAMPLE_MODE
-    alpha_upsample_mode: UpsampleMode = DEFAULT_ALPHA_UPSAMPLE_MODE
+    image_upsample_mode: ImageUpsampleMode = DEFAULT_IMAGE_UPSAMPLE_MODE
     half_precision: bool = False
     source_passthrough: bool = True
-    sharpen_strength: float = 0.0
-
-    # ------------------------------------------------------------------
-    # Named profiles — factory constructors for common use cases.
-    # These produce a PreprocessConfig tuned for a specific quality/speed
-    # tradeoff. The pipeline itself has no conditional logic — it just
-    # reads the config fields.
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def quality(cls, device: str = "cpu", img_size: int = 2048) -> PreprocessConfig:
-        """Highest quality — bicubic image upscale, bilinear alpha, float32, sharpening on.
-
-        Best for final renders where quality is the priority.
-        """
-        return cls(
-            img_size=img_size,
-            device=device,
-            upsample_mode="bicubic",
-            alpha_upsample_mode="bilinear",
-            half_precision=False,
-            source_passthrough=True,
-            sharpen_strength=0.3,
-        )
-
-    @classmethod
-    def balanced(cls, device: str = "cpu", img_size: int = 2048) -> PreprocessConfig:
-        """Balanced quality and speed — bilinear for both, float32, no sharpening.
-
-        Good default for most production workflows.
-        """
-        return cls(
-            img_size=img_size,
-            device=device,
-            upsample_mode="bilinear",
-            alpha_upsample_mode="bilinear",
-            half_precision=False,
-            source_passthrough=True,
-            sharpen_strength=0.0,
-        )
-
-    @classmethod
-    def speed(cls, device: str = "cpu", img_size: int = 2048) -> PreprocessConfig:
-        """Maximum speed — bilinear for both, float16, no source passthrough, no sharpening.
-
-        For previews, proxies, or hardware-constrained environments.
-        Requires the model and device to support float16.
-        """
-        return cls(
-            img_size=img_size,
-            device=device,
-            upsample_mode="bilinear",
-            alpha_upsample_mode="bilinear",
-            half_precision=True,
-            source_passthrough=False,
-            sharpen_strength=0.0,
-        )
+    sharpen_strength: float = 0.3
 
     def __post_init__(self) -> None:
         if self.img_size <= 0:
@@ -213,8 +153,7 @@ def preprocess_frame(
         img_t,
         alp_t,
         config.img_size,
-        upsample_mode=config.upsample_mode,
-        alpha_upsample_mode=config.alpha_upsample_mode,
+        image_upsample_mode=config.image_upsample_mode,
         sharpen_strength=config.sharpen_strength,
         is_srgb=not manifest.is_linear,
     )

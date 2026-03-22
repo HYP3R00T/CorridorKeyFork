@@ -62,7 +62,7 @@ class PreprocessSettings(BaseModel):
         ),
     ] = 0
 
-    upsample_mode: Annotated[
+    image_upsample_mode: Annotated[
         Literal["bicubic", "bilinear"],
         Field(
             default="bicubic",
@@ -70,22 +70,11 @@ class PreprocessSettings(BaseModel):
                 "Interpolation mode when the source frame is smaller than img_size. "
                 "'bicubic' (default) gives the sharpest result. "
                 "'bilinear' is faster but slightly softer. "
-                "Has no effect when downscaling — area mode is always used then."
+                "Has no effect when downscaling — area mode is always used then. "
+                "Alpha upscale is always bilinear internally (bicubic rings on matte edges)."
             ),
         ),
     ] = "bicubic"
-
-    alpha_upsample_mode: Annotated[
-        Literal["bicubic", "bilinear"],
-        Field(
-            default="bilinear",
-            description=(
-                "Interpolation mode for upscaling the alpha matte. "
-                "Defaults to 'bilinear' to avoid bicubic ringing on matte edges. "
-                "Has no effect when downscaling — area mode is always used then."
-            ),
-        ),
-    ] = "bilinear"
 
     half_precision: Annotated[
         bool,
@@ -115,17 +104,17 @@ class PreprocessSettings(BaseModel):
     sharpen_strength: Annotated[
         float,
         Field(
-            default=0.0,
+            default=0.3,
             ge=0.0,
             le=1.0,
             description=(
                 "Unsharp mask strength applied after upscaling. "
-                "0.0 (default) disables sharpening. Typical range 0.1–0.5. "
-                "Has no effect when downscaling. "
-                "Set to 0.3 for the quality profile to recover softness from the antialias filter."
+                "0.3 (default) recovers softness introduced by the antialias filter. "
+                "0.0 disables sharpening. Typical range 0.1–0.5. "
+                "Has no effect when downscaling."
             ),
         ),
-    ] = 0.0
+    ] = 0.3
 
 
 class InferenceSettings(BaseModel):
@@ -208,6 +197,40 @@ class InferenceSettings(BaseModel):
     ] = 1.0
 
 
+class PostprocessSettings(BaseModel):
+    """User-facing postprocessing settings.
+
+    Mirrors :class:`~corridorkey_new.stages.postprocessor.PostprocessConfig` but lives
+    in the config layer so it can be loaded from TOML / env vars.
+    """
+
+    fg_upsample_mode: Annotated[
+        Literal["bilinear", "bicubic", "lanczos4"],
+        Field(
+            default="bicubic",
+            description=(
+                "Interpolation mode for upscaling the foreground when the model resolution "
+                "is smaller than the source. 'bicubic' (default) is sharp and accurate. "
+                "'lanczos4' is slightly sharper but slower. 'bilinear' is fastest. "
+                "Downscaling always uses INTER_AREA regardless of this setting."
+            ),
+        ),
+    ] = "bicubic"
+
+    alpha_upsample_mode: Annotated[
+        Literal["bilinear", "lanczos4"],
+        Field(
+            default="lanczos4",
+            description=(
+                "Interpolation mode for upscaling the alpha matte. "
+                "'lanczos4' (default) gives the sharpest matte edges. "
+                "'bilinear' is faster. "
+                "Downscaling always uses INTER_AREA regardless of this setting."
+            ),
+        ),
+    ] = "lanczos4"
+
+
 class CorridorKeyConfig(BaseModel):
     """Validated configuration for the CorridorKey pipeline.
 
@@ -262,6 +285,11 @@ class CorridorKeyConfig(BaseModel):
         Field(default_factory=InferenceSettings, description="Inference stage settings."),
     ] = Field(default_factory=InferenceSettings)
 
+    postprocess: Annotated[
+        PostprocessSettings,
+        Field(default_factory=PostprocessSettings, description="Postprocessing stage settings."),
+    ] = Field(default_factory=PostprocessSettings)
+
     def to_preprocess_config(
         self, device: str | None = None, resolved_img_size: int | None = None
     ):  # -> PreprocessConfig
@@ -283,11 +311,23 @@ class CorridorKeyConfig(BaseModel):
         return PreprocessConfig(
             img_size=img_size,
             device=device or self.device,
-            upsample_mode=self.preprocess.upsample_mode,
-            alpha_upsample_mode=self.preprocess.alpha_upsample_mode,
+            image_upsample_mode=self.preprocess.image_upsample_mode,
             half_precision=self.preprocess.half_precision,
             source_passthrough=self.preprocess.source_passthrough,
             sharpen_strength=self.preprocess.sharpen_strength,
+        )
+
+    def to_postprocess_config(self):  # -> PostprocessConfig
+        """Build a :class:`~corridorkey_new.stages.postprocessor.PostprocessConfig` from this config.
+
+        Returns:
+            PostprocessConfig ready to pass to ``postprocess_frame``.
+        """
+        from corridorkey_new.stages.postprocessor.config import PostprocessConfig
+
+        return PostprocessConfig(
+            fg_upsample_mode=self.postprocess.fg_upsample_mode,
+            alpha_upsample_mode=self.postprocess.alpha_upsample_mode,
         )
 
     def to_inference_config(self, device: str | None = None):  # -> InferenceConfig

@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
+
+FgUpsampleMode = Literal["bilinear", "bicubic", "lanczos4"]
+AlphaUpsampleMode = Literal["bilinear", "lanczos4"]
 
 
 @dataclass(frozen=True)
@@ -10,6 +14,13 @@ class PostprocessConfig:
     """Configuration for the postprocessor stage.
 
     Attributes:
+        fg_upsample_mode: Interpolation mode for upscaling the foreground when
+            the model resolution is smaller than the source. "bicubic" (default)
+            is sharp and accurate. "lanczos4" is slightly sharper but slower.
+            "bilinear" is fastest. Downscaling always uses INTER_AREA.
+        alpha_upsample_mode: Interpolation mode for upscaling the alpha matte.
+            "lanczos4" (default) gives the sharpest matte edges. "bilinear" is
+            faster. Downscaling always uses INTER_AREA.
         despill_strength: Green spill suppression strength (0.0 = off, 1.0 = full).
         auto_despeckle: Remove small disconnected alpha islands.
         despeckle_size: Minimum connected region area in pixels to keep.
@@ -25,6 +36,8 @@ class PostprocessConfig:
             Higher values produce a softer transition between model FG and source.
     """
 
+    fg_upsample_mode: FgUpsampleMode = "bicubic"
+    alpha_upsample_mode: AlphaUpsampleMode = "lanczos4"
     despill_strength: float = 1.0
     auto_despeckle: bool = True
     despeckle_size: int = 400
