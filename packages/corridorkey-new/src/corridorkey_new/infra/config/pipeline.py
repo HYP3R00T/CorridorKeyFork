@@ -102,6 +102,40 @@ class CorridorKeyConfig(BaseModel):
     # Bridge methods — build stage runtime configs from this config
     # ------------------------------------------------------------------
 
+    def to_pipeline_config(
+        self,
+        device: str | None = None,
+        model=None,
+    ):  # -> PipelineConfig
+        """Build a :class:`~corridorkey_new.runtime.runner.PipelineConfig` from this config.
+
+        Resolves device and img_size once, then builds all stage configs
+        consistently. Pass the result directly to ``PipelineRunner``.
+
+        Args:
+            device: Resolved device string (from ``resolve_device(config.device)``).
+                If None, uses ``self.device`` as-is.
+            model: Pre-loaded model (``nn.Module``). If None, ``PipelineRunner``
+                will load it from the checkpoint path at run time.
+
+        Returns:
+            PipelineConfig ready to pass to ``PipelineRunner``.
+        """
+        from corridorkey_new.runtime.runner import PipelineConfig
+
+        resolved_device = device or self.device
+        inference_config = self.to_inference_config(device=resolved_device)
+
+        return PipelineConfig(
+            preprocess=self.to_preprocess_config(
+                device=resolved_device,
+                resolved_img_size=inference_config.img_size,
+            ),
+            inference=inference_config,
+            model=model,
+            postprocess=self.to_postprocess_config(),
+        )
+
     def to_preprocess_config(
         self,
         device: str | None = None,
