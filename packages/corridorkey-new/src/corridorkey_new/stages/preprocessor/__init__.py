@@ -8,6 +8,7 @@ Public API::
         PreprocessedFrame,
         FrameMeta,
         FrameReadError,
+        LetterboxPad,
         UpsampleMode,
     )
 """
@@ -22,6 +23,7 @@ from corridorkey_new.stages.preprocessor.reader import FrameReadError
 from corridorkey_new.stages.preprocessor.resize import (
     DEFAULT_ALPHA_UPSAMPLE_MODE,
     DEFAULT_UPSAMPLE_MODE,
+    LetterboxPad,
     UpsampleMode,
 )
 
@@ -31,6 +33,7 @@ __all__ = [
     "PreprocessedFrame",
     "FrameMeta",
     "FrameReadError",
+    "LetterboxPad",
     "UpsampleMode",
     "DEFAULT_UPSAMPLE_MODE",
     "DEFAULT_ALPHA_UPSAMPLE_MODE",

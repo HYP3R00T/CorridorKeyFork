@@ -46,12 +46,13 @@ def postprocess_frame(
     """
     meta = result.meta
 
-    # Step 1 — resize tensors back to source resolution and convert to numpy
+    # Step 1 — crop letterbox padding and resize tensors back to source resolution
     alpha_np, fg_np = resize_to_source(
         result.alpha,
         result.fg,
         meta.original_h,
         meta.original_w,
+        pad=meta.pad,
     )
 
     # Step 2 — green spill removal (on straight sRGB FG)

@@ -37,8 +37,9 @@ from corridorkey_new.stages.preprocessor.reader import _read_frame_pair
 from corridorkey_new.stages.preprocessor.resize import (
     DEFAULT_ALPHA_UPSAMPLE_MODE,
     DEFAULT_UPSAMPLE_MODE,
+    LetterboxPad,
     UpsampleMode,
-    resize_frame,
+    letterbox_frame,
 )
 from corridorkey_new.stages.preprocessor.tensor import to_tensors
 
@@ -70,6 +71,10 @@ class PreprocessConfig:
             interior regions with original source pixels. Eliminates dark
             fringing caused by background contamination in the model FG output.
             Disable for a small speed gain if fringing is not a concern.
+        sharpen_strength: Unsharp mask strength applied after upscaling.
+            0.0 (default) disables sharpening. Typical range 0.1–0.5.
+            Has no effect when downscaling. Enable in the quality profile
+            to recover softness introduced by the antialias filter.
     """
 
     img_size: int = 2048
@@ -78,6 +83,7 @@ class PreprocessConfig:
     alpha_upsample_mode: UpsampleMode = DEFAULT_ALPHA_UPSAMPLE_MODE
     half_precision: bool = False
     source_passthrough: bool = True
+    sharpen_strength: float = 0.0
 
     # ------------------------------------------------------------------
     # Named profiles — factory constructors for common use cases.
@@ -88,7 +94,7 @@ class PreprocessConfig:
 
     @classmethod
     def quality(cls, device: str = "cpu", img_size: int = 2048) -> "PreprocessConfig":
-        """Highest quality — bicubic image upscale, bilinear alpha, float32.
+        """Highest quality — bicubic image upscale, bilinear alpha, float32, sharpening on.
 
         Best for final renders where quality is the priority.
         """
@@ -99,11 +105,12 @@ class PreprocessConfig:
             alpha_upsample_mode="bilinear",
             half_precision=False,
             source_passthrough=True,
+            sharpen_strength=0.3,
         )
 
     @classmethod
     def balanced(cls, device: str = "cpu", img_size: int = 2048) -> "PreprocessConfig":
-        """Balanced quality and speed — bilinear for both, float32.
+        """Balanced quality and speed — bilinear for both, float32, no sharpening.
 
         Good default for most production workflows.
         """
@@ -114,11 +121,12 @@ class PreprocessConfig:
             alpha_upsample_mode="bilinear",
             half_precision=False,
             source_passthrough=True,
+            sharpen_strength=0.0,
         )
 
     @classmethod
     def speed(cls, device: str = "cpu", img_size: int = 2048) -> "PreprocessConfig":
-        """Maximum speed — bilinear for both, float16, no source passthrough.
+        """Maximum speed — bilinear for both, float16, no source passthrough, no sharpening.
 
         For previews, proxies, or hardware-constrained environments.
         Requires the model and device to support float16.
@@ -130,6 +138,7 @@ class PreprocessConfig:
             alpha_upsample_mode="bilinear",
             half_precision=True,
             source_passthrough=False,
+            sharpen_strength=0.0,
         )
 
     def __post_init__(self) -> None:
@@ -145,6 +154,9 @@ class FrameMeta:
         frame_index: Index of this frame within the clip's frame_range.
         original_h: Frame height before resizing, in pixels.
         original_w: Frame width before resizing, in pixels.
+        pad: Letterbox padding offsets added during preprocessing. The
+            postprocessor uses these to crop the model output back to the
+            original aspect ratio before scaling to source resolution.
         source_image: Original sRGB image [H, W, 3] float32, RGB channel order,
             at source resolution, used by postprocessor source_passthrough to
             replace model FG in opaque interior regions. None if source
@@ -154,7 +166,13 @@ class FrameMeta:
     frame_index: int
     original_h: int
     original_w: int
+    pad: LetterboxPad = None  # type: ignore[assignment]
     source_image: np.ndarray | None = None
+
+    def __post_init__(self) -> None:
+        # Default pad to a no-op LetterboxPad if not provided
+        if self.pad is None:
+            object.__setattr__(self, "pad", LetterboxPad(0, 0, 0, 0, self.original_h, self.original_w))
 
 
 @dataclass(frozen=True)
@@ -238,11 +256,15 @@ def preprocess_frame(
     if manifest.is_linear:
         img_t = linear_to_srgb(img_t)
 
-    # Step 7 — resize image and alpha to model resolution (on device)
-    img_t, alp_t = resize_frame(
+    # Step 7 — letterbox to model resolution (on device)
+    # Preserves aspect ratio; pads remainder with mean pixel value.
+    # Returns pad offsets so the postprocessor can crop back.
+    img_t, alp_t, pad = letterbox_frame(
         img_t, alp_t, config.img_size,
         upsample_mode=config.upsample_mode,
         alpha_upsample_mode=config.alpha_upsample_mode,
+        sharpen_strength=config.sharpen_strength,
+        is_srgb=not manifest.is_linear,
     )
 
     # Step 8 — ImageNet normalisation (image only, on device, in-place)
@@ -272,6 +294,7 @@ def preprocess_frame(
             frame_index=i,
             original_h=original_h,
             original_w=original_w,
+            pad=pad,
             source_image=source_image,
         ),
     )

@@ -3,6 +3,10 @@
 Takes the raw model output tensors (on device, at model resolution) and
 returns float32 numpy arrays at the original source resolution.
 
+The crop step removes letterbox padding added by the preprocessor before
+scaling back to source resolution. This ensures the output matches the
+original aspect ratio exactly.
+
 Resize strategy:
   - Alpha: cv2.INTER_LANCZOS4 on upscale (sharper edges), INTER_AREA on downscale.
   - FG:    cv2.INTER_LINEAR always (colour accuracy over sharpness).
@@ -13,6 +17,8 @@ from __future__ import annotations
 import cv2
 import numpy as np
 import torch
+
+from corridorkey_new.stages.preprocessor.resize import LetterboxPad
 
 
 def tensor_to_numpy_hwc(t: torch.Tensor) -> np.ndarray:
@@ -34,8 +40,12 @@ def resize_to_source(
     fg: torch.Tensor,
     source_h: int,
     source_w: int,
+    pad: LetterboxPad | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Resize alpha and fg tensors back to source resolution and convert to numpy.
+
+    If ``pad`` is provided, the letterbox padding is cropped out first so the
+    output matches the original aspect ratio before scaling to source resolution.
 
     Alpha uses Lanczos4 on upscale (sharper matte edges) and INTER_AREA on
     downscale (anti-aliased). FG uses bilinear always (colour accuracy).
@@ -45,12 +55,22 @@ def resize_to_source(
         fg: [1, 3, H, W] tensor, range 0-1.
         source_h: Target height in pixels.
         source_w: Target width in pixels.
+        pad: Letterbox padding offsets from the preprocessor. If provided,
+            the padded border is cropped before scaling.
 
     Returns:
         Tuple of (alpha_np [H, W, 1], fg_np [H, W, 3]), both float32 numpy.
     """
     alpha_np = tensor_to_numpy_hwc(alpha.float()).clip(0.0, 1.0)  # [H_model, W_model, 1]
     fg_np = tensor_to_numpy_hwc(fg.float()).clip(0.0, 1.0)  # [H_model, W_model, 3]
+
+    # Crop letterbox padding before scaling
+    if pad is not None and not pad.is_noop:
+        model_h, model_w = alpha_np.shape[:2]
+        crop_h_end = model_h - pad.bottom if pad.bottom > 0 else model_h
+        crop_w_end = model_w - pad.right if pad.right > 0 else model_w
+        alpha_np = alpha_np[pad.top:crop_h_end, pad.left:crop_w_end]
+        fg_np = fg_np[pad.top:crop_h_end, pad.left:crop_w_end]
 
     model_h, model_w = alpha_np.shape[:2]
     target = (source_w, source_h)  # cv2 uses (width, height)

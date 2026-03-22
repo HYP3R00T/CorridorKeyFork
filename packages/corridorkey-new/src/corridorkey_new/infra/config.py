@@ -18,6 +18,7 @@ Example ``corridorkey.toml``::
     alpha_upsample_mode = "bilinear"
     half_precision = false
     source_passthrough = true
+    sharpen_strength = 0.0
 
     [inference]
     checkpoint_path = "~/models/greenformer.pth"
@@ -110,6 +111,21 @@ class PreprocessSettings(BaseModel):
             ),
         ),
     ] = True
+
+    sharpen_strength: Annotated[
+        float,
+        Field(
+            default=0.0,
+            ge=0.0,
+            le=1.0,
+            description=(
+                "Unsharp mask strength applied after upscaling. "
+                "0.0 (default) disables sharpening. Typical range 0.1–0.5. "
+                "Has no effect when downscaling. "
+                "Set to 0.3 for the quality profile to recover softness from the antialias filter."
+            ),
+        ),
+    ] = 0.0
 
 
 class InferenceSettings(BaseModel):
@@ -271,6 +287,7 @@ class CorridorKeyConfig(BaseModel):
             alpha_upsample_mode=self.preprocess.alpha_upsample_mode,
             half_precision=self.preprocess.half_precision,
             source_passthrough=self.preprocess.source_passthrough,
+            sharpen_strength=self.preprocess.sharpen_strength,
         )
 
     def to_inference_config(self, device: str | None = None):  # -> InferenceConfig
