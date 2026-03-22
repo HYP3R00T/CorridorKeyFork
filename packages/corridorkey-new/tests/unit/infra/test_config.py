@@ -53,7 +53,7 @@ class TestCorridorKeyConfigOverrides:
 class TestPreprocessSettings:
     def test_defaults(self):
         cfg = CorridorKeyConfig()
-        assert cfg.preprocess.img_size == 2048
+        assert cfg.preprocess.img_size == 0  # 0 = auto-select based on VRAM
         assert cfg.preprocess.resize_strategy == "squish"
 
     def test_override_img_size(self):
@@ -79,7 +79,7 @@ class TestPreprocessSettings:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            PreprocessSettings(img_size=32)  # below ge=64
+            PreprocessSettings(img_size=-1)  # below ge=0
 
 
 class TestInferenceSettings:
@@ -88,7 +88,7 @@ class TestInferenceSettings:
         assert cfg.inference.checkpoint_path is None
         assert cfg.inference.use_refiner is True
         assert cfg.inference.mixed_precision is True
-        assert cfg.inference.model_precision == "float32"
+        assert cfg.inference.model_precision == "auto"
         assert cfg.inference.optimization_mode == "auto"
 
     def test_override_checkpoint_path(self, tmp_path):
@@ -116,7 +116,7 @@ class TestInferenceSettings:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            InferenceSettings(model_precision="bfloat16")  # type: ignore[arg-type]
+            InferenceSettings(model_precision="fp8")  # type: ignore[arg-type]
 
 
 class TestBridgeMethods:
@@ -148,10 +148,14 @@ class TestBridgeMethods:
 
     def test_to_inference_config_basic(self, tmp_path):
         import torch
-        from corridorkey_new.infra.config import InferenceSettings
+        from corridorkey_new.infra.config import InferenceSettings, PreprocessSettings
 
         p = tmp_path / "model.pth"
-        cfg = CorridorKeyConfig(device="cpu", inference=InferenceSettings(checkpoint_path=p))
+        cfg = CorridorKeyConfig(
+            device="cpu",
+            preprocess=PreprocessSettings(img_size=2048),
+            inference=InferenceSettings(checkpoint_path=p),
+        )
         ic = cfg.to_inference_config()
         assert ic.checkpoint_path == p
         assert ic.device == "cpu"

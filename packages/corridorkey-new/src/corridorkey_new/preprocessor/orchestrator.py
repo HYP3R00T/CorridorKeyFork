@@ -6,11 +6,15 @@ is delegated to its own module.
     Step 1  — validate inputs            (here)
     Step 2  — read from disk             → reader.py
     Step 3  — capture original dims      (here)
-    Step 4  — color space conversion     → colorspace.py
-    Step 5  — resize                     → resize.py
-    Step 6  — ImageNet normalisation     → normalise.py
-    Steps 7–9 — tensor + device transfer → tensor.py
+    Step 4  — move to device tensor      → tensor.py
+    Step 5  — color space conversion     → colorspace.py
+    Step 6  — resize                     → resize.py
+    Step 7  — ImageNet normalisation     → normalise.py
+    Steps 8–9 — concat + return          (here)
     Step 10 — return PreprocessedFrame   (here)
+
+All transforms from step 5 onward run on the configured device (CUDA, MPS,
+or CPU) — no separate fallback is needed; PyTorch handles device dispatch.
 
 Public entry point: preprocess_frame(manifest, i, config)
 Each stage in the pipeline has a corresponding orchestrator.py.
@@ -32,7 +36,7 @@ from corridorkey_new.preprocessor.colorspace import linear_to_srgb
 from corridorkey_new.preprocessor.normalise import normalise_image
 from corridorkey_new.preprocessor.reader import _read_frame_pair
 from corridorkey_new.preprocessor.resize import resize_frame
-from corridorkey_new.preprocessor.tensor import to_tensor
+from corridorkey_new.preprocessor.tensor import to_tensors
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +48,9 @@ class PreprocessConfig:
     Attributes:
         img_size: Square resolution the model runs at. 2048 is the native
             training resolution — do not change unless retraining.
-        device: PyTorch device string ("cuda", "mps", "cpu").
+        device: PyTorch device string ("cuda", "mps", "cpu"). All transforms
+            after the disk read run on this device. PyTorch handles CPU
+            fallback transparently when no GPU is available.
         resize_strategy: How to fit the frame into img_size × img_size.
             "squish" stretches to square (fast, mild distortion).
             "letterbox" pads the shorter dimension with black (preserves
@@ -104,6 +110,9 @@ def preprocess_frame(
 ) -> PreprocessedFrame:
     """Preprocess one frame from a clip for model inference.
 
+    All transforms after the disk read run on ``config.device``. PyTorch
+    handles CPU/GPU dispatch transparently — no separate fallback is needed.
+
     Args:
         manifest: ClipManifest from stage 1. Must have needs_alpha=False.
         i: Frame index within manifest.frame_range.
@@ -125,29 +134,35 @@ def preprocess_frame(
     if not (start <= i < end):
         raise ValueError(f"Frame index {i} is out of range [{start}, {end}) for clip '{manifest.clip_name}'.")
 
-    # Step 2 — read from disk
+    # Step 2 — read from disk (CPU NumPy — I/O boundary)
     image_path, alpha_path = _resolve_paths(manifest, i, image_files, alpha_files)
     image, alpha = _read_frame_pair(image_path, alpha_path)
 
     # Step 3 — capture original dimensions before any resizing
     original_h, original_w = image.shape[:2]
 
-    # Step 4 — color space: linear → sRGB (on original resolution data)
+    # Step 4 — move to device; all subsequent ops run on-device
+    img_t, alp_t = to_tensors(image, alpha, config.device)  # [1,3,H,W], [1,1,H,W]
+
+    # Step 5 — color space: linear → sRGB (on device)
     if manifest.is_linear:
-        image = linear_to_srgb(image)
+        img_t = linear_to_srgb(img_t)
 
     # Carry the source sRGB image at original resolution for source_passthrough.
-    # Stored before resize so postprocessor can blend at full resolution.
-    source_image: np.ndarray | None = image.copy() if config.source_passthrough else None
+    # Pulled back to CPU numpy so the postprocessor can blend at full resolution
+    # without needing to know the inference device.
+    source_image: np.ndarray | None = (
+        img_t.squeeze(0).permute(1, 2, 0).cpu().numpy() if config.source_passthrough else None
+    )
 
-    # Step 5 — resize image and alpha to model resolution
-    image, alpha = resize_frame(image, alpha, config.img_size, config.resize_strategy)
+    # Step 6 — resize image and alpha to model resolution (on device)
+    img_t, alp_t = resize_frame(img_t, alp_t, config.img_size, config.resize_strategy)
 
-    # Step 6 — ImageNet normalisation (image only)
-    image = normalise_image(image)
+    # Step 7 — ImageNet normalisation (image only, on device)
+    img_t = normalise_image(img_t)
 
-    # Steps 7–9 — concat, transpose, move to device
-    tensor = to_tensor(image, alpha, config.device)
+    # Steps 8–9 — concat channels → [1, 4, H, W]
+    tensor = torch.cat([img_t, alp_t], dim=1)
 
     logger.debug(
         "preprocess_frame clip=%s i=%d original=(%d,%d) img_size=%d device=%s",

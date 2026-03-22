@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import torch
-from corridorkey_new.preprocessor.tensor import to_tensor
+from corridorkey_new.preprocessor.tensor import to_tensor, to_tensors
 
 
 def _make_image(h: int = 32, w: int = 32) -> np.ndarray:
@@ -14,6 +14,23 @@ def _make_image(h: int = 32, w: int = 32) -> np.ndarray:
 
 def _make_alpha(h: int = 32, w: int = 32) -> np.ndarray:
     return np.random.rand(h, w, 1).astype(np.float32)
+
+
+class TestToTensors:
+    def test_output_shapes(self):
+        img_t, alp_t = to_tensors(_make_image(32, 32), _make_alpha(32, 32), "cpu")
+        assert img_t.shape == (1, 3, 32, 32)
+        assert alp_t.shape == (1, 1, 32, 32)
+
+    def test_output_dtype_float32(self):
+        img_t, alp_t = to_tensors(_make_image(), _make_alpha(), "cpu")
+        assert img_t.dtype == torch.float32
+        assert alp_t.dtype == torch.float32
+
+    def test_output_on_cpu(self):
+        img_t, alp_t = to_tensors(_make_image(), _make_alpha(), "cpu")
+        assert img_t.device.type == "cpu"
+        assert alp_t.device.type == "cpu"
 
 
 class TestToTensor:
@@ -30,7 +47,6 @@ class TestToTensor:
         assert t.device.type == "cpu"
 
     def test_channel_order_image_then_alpha(self):
-        # Channels 0-2 should be image, channel 3 should be alpha
         image = np.zeros((4, 4, 3), dtype=np.float32)
         alpha = np.ones((4, 4, 1), dtype=np.float32)
         image[:, :, 0] = 0.1
