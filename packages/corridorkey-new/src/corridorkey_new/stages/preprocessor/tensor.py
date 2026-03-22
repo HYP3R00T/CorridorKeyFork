@@ -6,6 +6,12 @@ on these tensors directly on the device.
 
 This is the boundary between NumPy (CPU disk I/O) and PyTorch (device compute).
 
+Single PCIe transfer
+--------------------
+Image [3, H, W] and alpha [1, H, W] are concatenated into a single [4, H, W]
+array on CPU before calling ``.to(device)``. This produces one DMA operation
+instead of two, halving the number of PCIe round-trips per frame.
+
 BGR→RGB reorder
 ---------------
 OpenCV reads images as BGR. Rather than reordering on CPU (a full memcopy),
@@ -28,8 +34,9 @@ def to_tensors(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Convert image and alpha NumPy arrays to device tensors.
 
-    Transfers data to the device first, then reorders BGR→RGB on-device if
-    needed. This avoids a full-resolution CPU memcopy just to swap channels.
+    Concatenates image and alpha into a single array before the device
+    transfer so only one DMA operation is needed. Splits back on-device.
+    Then reorders BGR→RGB on-device if needed.
 
     Args:
         image: float32 [H, W, 3], sRGB or linear, BGR or RGB channel order.
@@ -41,21 +48,20 @@ def to_tensors(
     Returns:
         Tuple of (image [1, 3, H, W] RGB, alpha [1, 1, H, W]) on the device.
     """
-    # np.ascontiguousarray is a no-op if already contiguous, otherwise a
-    # single copy — makes the intent explicit and avoids a hidden copy inside
-    # torch.from_numpy when the array is non-contiguous (e.g. after a slice).
-    img_t = (
-        torch.from_numpy(np.ascontiguousarray(image.transpose(2, 0, 1)))
-        .unsqueeze(0)
+    # HWC → CHW for both, then stack into [4, H, W] for a single transfer.
+    img_chw = np.ascontiguousarray(image.transpose(2, 0, 1))   # [3, H, W]
+    alp_chw = np.ascontiguousarray(alpha.transpose(2, 0, 1))   # [1, H, W]
+    combined = np.concatenate([img_chw, alp_chw], axis=0)      # [4, H, W]
+
+    t = (
+        torch.from_numpy(combined)
+        .unsqueeze(0)   # [1, 4, H, W]
         .float()
         .to(device)
     )
-    alp_t = (
-        torch.from_numpy(np.ascontiguousarray(alpha.transpose(2, 0, 1)))
-        .unsqueeze(0)
-        .float()
-        .to(device)
-    )
+
+    img_t = t[:, :3]   # [1, 3, H, W]
+    alp_t = t[:, 3:]   # [1, 1, H, W]
 
     if bgr:
         # Reorder BGR→RGB on-device. On CUDA this is a strided view — no copy.

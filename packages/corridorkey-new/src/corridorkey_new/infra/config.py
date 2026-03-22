@@ -52,22 +52,61 @@ class PreprocessSettings(BaseModel):
             description=(
                 "Square resolution the model runs at. "
                 "0 (default) = auto-select based on available VRAM: "
-                "<6 GB → 1024, 6-12 GB → 1536, 12+ GB → 2048 (native training resolution). "
+                "<6 GB -> 1024, 6-12 GB -> 1536, 12+ GB -> 2048 (native training resolution). "
                 "Set explicitly to override (e.g. 2048 for maximum quality regardless of VRAM)."
             ),
         ),
     ] = 0
 
-    resize_strategy: Annotated[
-        Literal["squish", "letterbox"],
+    upsample_mode: Annotated[
+        Literal["bicubic", "bilinear"],
         Field(
-            default="squish",
+            default="bicubic",
             description=(
-                "'squish' stretches the frame to a square (fast, mild distortion). "
-                "'letterbox' pads the shorter dimension with black (preserves aspect ratio)."
+                "Interpolation mode when the source frame is smaller than img_size. "
+                "'bicubic' (default) gives the sharpest result. "
+                "'bilinear' is faster but slightly softer. "
+                "Has no effect when downscaling — area mode is always used then."
             ),
         ),
-    ] = "squish"
+    ] = "bicubic"
+
+    alpha_upsample_mode: Annotated[
+        Literal["bicubic", "bilinear"],
+        Field(
+            default="bilinear",
+            description=(
+                "Interpolation mode for upscaling the alpha matte. "
+                "Defaults to 'bilinear' to avoid bicubic ringing on matte edges. "
+                "Has no effect when downscaling — area mode is always used then."
+            ),
+        ),
+    ] = "bilinear"
+
+    half_precision: Annotated[
+        bool,
+        Field(
+            default=False,
+            description=(
+                "Cast tensors to float16 before inference. "
+                "Halves VRAM usage and PCIe bandwidth. "
+                "Requires the model and device to support float16."
+            ),
+        ),
+    ] = False
+
+    source_passthrough: Annotated[
+        bool,
+        Field(
+            default=True,
+            description=(
+                "Carry the original sRGB source image through to the postprocessor. "
+                "Enables replacing model FG in opaque interior regions with original "
+                "source pixels, eliminating dark fringing. "
+                "Disable for a small speed gain if fringing is not a concern."
+            ),
+        ),
+    ] = True
 
 
 class InferenceSettings(BaseModel):
@@ -225,7 +264,10 @@ class CorridorKeyConfig(BaseModel):
         return PreprocessConfig(
             img_size=img_size,
             device=device or self.device,
-            resize_strategy=self.preprocess.resize_strategy,
+            upsample_mode=self.preprocess.upsample_mode,
+            alpha_upsample_mode=self.preprocess.alpha_upsample_mode,
+            half_precision=self.preprocess.half_precision,
+            source_passthrough=self.preprocess.source_passthrough,
         )
 
     def to_inference_config(self, device: str | None = None):  # -> InferenceConfig

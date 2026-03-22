@@ -72,6 +72,12 @@ class TestPreprocessFrame:
         result = preprocess_frame(manifest, 0, config)
         assert result.tensor.dtype == torch.float32
 
+    def test_tensor_dtype_float16_when_half_precision(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path)
+        config = PreprocessConfig(img_size=64, device="cpu", half_precision=True)
+        result = preprocess_frame(manifest, 0, config)
+        assert result.tensor.dtype == torch.float16
+
     def test_tensor_on_cpu(self, tmp_path: Path):
         manifest = _make_manifest(tmp_path)
         config = PreprocessConfig(img_size=64, device="cpu")
@@ -250,3 +256,49 @@ class TestPreprocessFrame:
         result = preprocess_frame(manifest, 0, config)
         assert result.meta.source_image is not None
         assert isinstance(result.meta.source_image, np.ndarray)  # never a tensor
+
+
+class TestPreprocessConfigProfiles:
+    def test_quality_profile_defaults(self):
+        cfg = PreprocessConfig.quality(device="cpu", img_size=64)
+        assert cfg.upsample_mode == "bicubic"
+        assert cfg.alpha_upsample_mode == "bilinear"
+        assert cfg.half_precision is False
+        assert cfg.source_passthrough is True
+
+    def test_balanced_profile_defaults(self):
+        cfg = PreprocessConfig.balanced(device="cpu", img_size=64)
+        assert cfg.upsample_mode == "bilinear"
+        assert cfg.alpha_upsample_mode == "bilinear"
+        assert cfg.half_precision is False
+        assert cfg.source_passthrough is True
+
+    def test_speed_profile_defaults(self):
+        cfg = PreprocessConfig.speed(device="cpu", img_size=64)
+        assert cfg.upsample_mode == "bilinear"
+        assert cfg.alpha_upsample_mode == "bilinear"
+        assert cfg.half_precision is True
+        assert cfg.source_passthrough is False
+
+    def test_quality_profile_produces_float32_tensor(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path)
+        config = PreprocessConfig.quality(device="cpu", img_size=64)
+        result = preprocess_frame(manifest, 0, config)
+        assert result.tensor.dtype == torch.float32
+
+    def test_speed_profile_produces_float16_tensor(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path)
+        config = PreprocessConfig.speed(device="cpu", img_size=64)
+        result = preprocess_frame(manifest, 0, config)
+        assert result.tensor.dtype == torch.float16
+
+    def test_speed_profile_no_source_image(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path)
+        config = PreprocessConfig.speed(device="cpu", img_size=64)
+        result = preprocess_frame(manifest, 0, config)
+        assert result.meta.source_image is None
+
+    def test_profile_device_and_img_size_forwarded(self):
+        cfg = PreprocessConfig.balanced(device="cuda", img_size=1024)
+        assert cfg.device == "cuda"
+        assert cfg.img_size == 1024

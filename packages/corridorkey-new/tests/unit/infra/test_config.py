@@ -54,7 +54,10 @@ class TestPreprocessSettings:
     def test_defaults(self):
         cfg = CorridorKeyConfig()
         assert cfg.preprocess.img_size == 0  # 0 = auto-select based on VRAM
-        assert cfg.preprocess.resize_strategy == "squish"
+        assert cfg.preprocess.upsample_mode == "bicubic"
+        assert cfg.preprocess.alpha_upsample_mode == "bilinear"
+        assert cfg.preprocess.half_precision is False
+        assert cfg.preprocess.source_passthrough is True
 
     def test_override_img_size(self):
         from corridorkey_new.infra.config import PreprocessSettings
@@ -62,17 +65,17 @@ class TestPreprocessSettings:
         cfg = CorridorKeyConfig(preprocess=PreprocessSettings(img_size=512))
         assert cfg.preprocess.img_size == 512
 
-    def test_override_resize_strategy(self):
+    def test_override_upsample_mode(self):
         from corridorkey_new.infra.config import PreprocessSettings
 
-        cfg = CorridorKeyConfig(preprocess=PreprocessSettings(resize_strategy="letterbox"))
-        assert cfg.preprocess.resize_strategy == "letterbox"
+        cfg = CorridorKeyConfig(preprocess=PreprocessSettings(upsample_mode="bilinear"))
+        assert cfg.preprocess.upsample_mode == "bilinear"
 
-    def test_invalid_resize_strategy_raises(self):
+    def test_invalid_upsample_mode_raises(self):
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            CorridorKeyConfig(preprocess={"resize_strategy": "crop"})  # type: ignore[arg-type]
+            CorridorKeyConfig(preprocess={"upsample_mode": "nearest"})  # type: ignore[arg-type]
 
     def test_img_size_minimum(self):
         from corridorkey_new.infra.config import PreprocessSettings
@@ -125,7 +128,10 @@ class TestBridgeMethods:
         pc = cfg.to_preprocess_config()
         assert pc.img_size == 2048
         assert pc.device == "cpu"
-        assert pc.resize_strategy == "squish"
+        assert pc.upsample_mode == "bicubic"
+        assert pc.alpha_upsample_mode == "bilinear"
+        assert pc.half_precision is False
+        assert pc.source_passthrough is True
 
     def test_to_preprocess_config_device_override(self):
         cfg = CorridorKeyConfig(device="cuda")

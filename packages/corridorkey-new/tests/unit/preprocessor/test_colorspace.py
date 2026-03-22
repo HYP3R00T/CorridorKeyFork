@@ -93,10 +93,14 @@ class TestLinearToSrgbNumpy:
         assert result.max() <= 1.0
 
     def test_matches_tensor_version(self):
-        """numpy and tensor versions must produce numerically identical results."""
+        """numpy (LUT) and tensor (piecewise) versions must be numerically close.
+
+        The LUT has 65536 entries giving <0.002% error — we allow atol=1e-3
+        to account for the quantisation difference between the two paths.
+        """
         arr = np.random.rand(8, 8, 3).astype(np.float32)
         np_result = linear_to_srgb_numpy(arr)
         # Convert to [1, 3, H, W] tensor, run tensor version, convert back
         t = torch.from_numpy(arr.transpose(2, 0, 1)).unsqueeze(0)
         t_result = linear_to_srgb(t).squeeze(0).permute(1, 2, 0).numpy()
-        np.testing.assert_allclose(np_result, t_result, atol=1e-5)
+        np.testing.assert_allclose(np_result, t_result, atol=1e-3)

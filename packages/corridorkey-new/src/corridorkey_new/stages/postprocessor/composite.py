@@ -6,6 +6,9 @@ make_preview            — checkerboard composite for visual QC
 
 All compositing is done in linear light (physically correct). sRGB inputs are
 converted to linear before blending and back to sRGB for display/writing.
+
+LUT-accelerated sRGB transfer functions are sourced from infra.colorspace so
+the same table is shared with the preprocessor.
 """
 
 from __future__ import annotations
@@ -15,42 +18,15 @@ import functools
 import cv2
 import numpy as np
 
-# sRGB transfer function constants (IEC 61966-2-1)
-_LINEAR_THRESHOLD = 0.0031308
-_ENCODED_THRESHOLD = 0.04045
-_LINEAR_SCALE = 12.92
-_GAMMA = 1.0 / 2.4
-_SCALE = 1.055
-_OFFSET = 0.055
-
-# LUT-accelerated sRGB transfer functions (65536 entries, <0.002% error).
-_LUT_SIZE = 65536
-_lut_x = np.linspace(0.0, 1.0, _LUT_SIZE, dtype=np.float64)
-
-_linear_to_srgb_lut: np.ndarray = np.where(
-    _lut_x <= _LINEAR_THRESHOLD,
-    _lut_x * _LINEAR_SCALE,
-    _SCALE * np.power(np.maximum(_lut_x, 1e-12), _GAMMA) - _OFFSET,
-).astype(np.float32)
-
-_srgb_to_linear_lut: np.ndarray = np.where(
-    _lut_x <= _ENCODED_THRESHOLD,
-    _lut_x / _LINEAR_SCALE,
-    np.power(np.maximum((_lut_x + _OFFSET) / _SCALE, 1e-12), 2.4),
-).astype(np.float32)
-
-
-def _lut(x: np.ndarray, lut: np.ndarray) -> np.ndarray:
-    indices = np.clip(np.rint(x * (_LUT_SIZE - 1)).astype(np.uint16), 0, _LUT_SIZE - 1)
-    return lut[indices]
+from corridorkey_new.infra.colorspace import linear_to_srgb_lut, lut_apply, srgb_to_linear_lut
 
 
 def srgb_to_linear(x: np.ndarray) -> np.ndarray:
-    return _lut(np.clip(x, 0.0, 1.0), _srgb_to_linear_lut)
+    return lut_apply(np.clip(x, 0.0, 1.0), srgb_to_linear_lut)
 
 
 def linear_to_srgb(x: np.ndarray) -> np.ndarray:
-    return _lut(np.clip(x, 0.0, None), _linear_to_srgb_lut)
+    return lut_apply(np.clip(x, 0.0, 1.0), linear_to_srgb_lut)
 
 
 def make_processed(fg: np.ndarray, alpha: np.ndarray) -> np.ndarray:

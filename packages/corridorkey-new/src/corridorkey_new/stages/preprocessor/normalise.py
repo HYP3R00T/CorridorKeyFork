@@ -15,9 +15,17 @@ In-place ops
 allocations compared to ``(image - mean) / std``. This is safe here because
 the tensor is freshly created by ``to_tensors`` and is not referenced anywhere
 else at the point normalisation runs.
+
+Caching
+-------
+The mean and std tensors are cached per (dtype, device) pair via
+``functools.lru_cache``. For a 1000-frame clip this avoids 2000 small tensor
+allocations — the cached tensors are reused on every frame.
 """
 
 from __future__ import annotations
+
+import functools
 
 import torch
 
@@ -26,10 +34,25 @@ _MEAN = [0.485, 0.456, 0.406]
 _STD = [0.229, 0.224, 0.225]
 
 
+@functools.lru_cache(maxsize=8)
+def _get_mean_std(dtype: torch.dtype, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return cached mean and std tensors for the given dtype and device.
+
+    Cached per (dtype, device) — at most 8 entries (one per device/dtype combo
+    seen in practice). Avoids re-allocating these small tensors on every frame.
+    """
+    mean = torch.tensor(_MEAN, dtype=dtype, device=device).view(1, 3, 1, 1)
+    std = torch.tensor(_STD, dtype=dtype, device=device).view(1, 3, 1, 1)
+    return mean, std
+
+
 def normalise_image(image: torch.Tensor) -> torch.Tensor:
     """Apply ImageNet mean/std normalisation to an sRGB image tensor in-place.
 
     Uses ``sub_`` / ``div_`` to avoid allocating intermediate tensors.
+    Mean and std tensors are cached per (dtype, device) — no allocation on
+    repeated calls with the same configuration.
+
     The input tensor is modified and returned — do not use the original
     reference after calling this function.
 
@@ -40,11 +63,11 @@ def normalise_image(image: torch.Tensor) -> torch.Tensor:
         The same tensor, normalised in-place. Values will be outside [0, 1] —
         that is expected and correct.
     """
-    mean = torch.tensor(_MEAN, dtype=image.dtype, device=image.device).view(1, 3, 1, 1)
-    std = torch.tensor(_STD, dtype=image.dtype, device=image.device).view(1, 3, 1, 1)
-    if image.ndim == 3:
+    squeezed = image.ndim == 3
+    if squeezed:
         image = image.unsqueeze(0)
-        image.sub_(mean).div_(std)
-        return image.squeeze(0)
+
+    mean, std = _get_mean_std(image.dtype, image.device)
     image.sub_(mean).div_(std)
-    return image
+
+    return image.squeeze(0) if squeezed else image

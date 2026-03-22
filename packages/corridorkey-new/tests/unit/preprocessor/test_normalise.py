@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import torch
-from corridorkey_new.stages.preprocessor.normalise import _MEAN, _STD, normalise_image
+from corridorkey_new.stages.preprocessor.normalise import _MEAN, _STD, _get_mean_std, normalise_image
 
 
 class TestNormaliseImage:
@@ -50,3 +50,22 @@ class TestNormaliseImage:
         img = torch.rand(3, 8, 8, dtype=torch.float32)
         result = normalise_image(img)
         assert result.shape == (3, 8, 8)
+
+
+class TestGetMeanStdCache:
+    def test_returns_same_objects_on_repeated_calls(self):
+        """Cached tensors must be the exact same objects on repeated calls."""
+        mean1, std1 = _get_mean_std(torch.float32, torch.device("cpu"))
+        mean2, std2 = _get_mean_std(torch.float32, torch.device("cpu"))
+        assert mean1 is mean2
+        assert std1 is std2
+
+    def test_mean_values_correct(self):
+        mean, _ = _get_mean_std(torch.float32, torch.device("cpu"))
+        expected = torch.tensor(_MEAN, dtype=torch.float32).view(1, 3, 1, 1)
+        torch.testing.assert_close(mean, expected)
+
+    def test_std_values_correct(self):
+        _, std = _get_mean_std(torch.float32, torch.device("cpu"))
+        expected = torch.tensor(_STD, dtype=torch.float32).view(1, 3, 1, 1)
+        torch.testing.assert_close(std, expected)
