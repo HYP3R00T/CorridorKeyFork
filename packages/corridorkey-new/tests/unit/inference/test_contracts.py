@@ -50,3 +50,33 @@ class TestInferenceResult:
         r = _make_result(h=16, w=48)
         assert r.alpha.shape == (1, 1, 16, 48)
         assert r.fg.shape == (1, 3, 16, 48)
+
+
+class TestInferenceResultValidation:
+    def test_bad_alpha_ndim_raises(self):
+        import pytest
+
+        meta = FrameMeta(frame_index=0, original_h=32, original_w=32)
+        with pytest.raises(ValueError, match="alpha must be"):
+            InferenceResult(alpha=torch.zeros(1, 32, 32), fg=torch.zeros(1, 3, 32, 32), meta=meta)
+
+    def test_bad_alpha_channels_raises(self):
+        import pytest
+
+        meta = FrameMeta(frame_index=0, original_h=32, original_w=32)
+        with pytest.raises(ValueError, match="alpha must be"):
+            InferenceResult(alpha=torch.zeros(1, 2, 32, 32), fg=torch.zeros(1, 3, 32, 32), meta=meta)
+
+    def test_bad_fg_channels_raises(self):
+        import pytest
+
+        meta = FrameMeta(frame_index=0, original_h=32, original_w=32)
+        with pytest.raises(ValueError, match="fg must be"):
+            InferenceResult(alpha=torch.zeros(1, 1, 32, 32), fg=torch.zeros(1, 4, 32, 32), meta=meta)
+
+    def test_spatial_mismatch_raises(self):
+        import pytest
+
+        meta = FrameMeta(frame_index=0, original_h=32, original_w=32)
+        with pytest.raises(ValueError, match="spatial size mismatch"):
+            InferenceResult(alpha=torch.zeros(1, 1, 32, 32), fg=torch.zeros(1, 3, 16, 16), meta=meta)

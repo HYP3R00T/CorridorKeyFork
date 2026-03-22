@@ -115,9 +115,7 @@ def load_model(config: InferenceConfig) -> torch.nn.Module:
             os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(cache_dir)
             compiled = torch.compile(model)
             logger.info("Warming up compiled model...")
-            dummy = torch.zeros(
-                1, 4, config.img_size, config.img_size, dtype=config.model_precision, device=config.device
-            )
+            dummy = torch.zeros(1, 4, config.img_size, config.img_size, dtype=torch.float32, device=config.device)
             with torch.inference_mode():
                 compiled(dummy)
             del dummy

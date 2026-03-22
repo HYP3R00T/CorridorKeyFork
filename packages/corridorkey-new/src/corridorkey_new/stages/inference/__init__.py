@@ -9,9 +9,6 @@ Contracts:
     InferenceConfig   — checkpoint path, device, precision, backend, optimization mode
     InferenceResult   — alpha [1,1,H,W], fg [1,3,H,W], FrameMeta
     ModelBackend      — protocol satisfied by TorchBackend and MLXBackend
-
-Model architecture:
-    GreenFormer       — full model class (for subclassing or inspection)
 """
 
 from corridorkey_new.stages.inference.backend import ModelBackend, TorchBackend
@@ -19,7 +16,6 @@ from corridorkey_new.stages.inference.config import BackendChoice, InferenceConf
 from corridorkey_new.stages.inference.contracts import InferenceResult
 from corridorkey_new.stages.inference.factory import discover_checkpoint, load_backend
 from corridorkey_new.stages.inference.loader import load_model
-from corridorkey_new.stages.inference.model import GreenFormer
 from corridorkey_new.stages.inference.orchestrator import run_inference
 
 __all__ = [
@@ -38,6 +34,4 @@ __all__ = [
     "TorchBackend",
     # Utilities
     "discover_checkpoint",
-    # Model architecture
-    "GreenFormer",
 ]

@@ -53,9 +53,11 @@ def run_inference(
     tile_refiner = _should_tile_refiner(config)
     device_type = torch.device(config.device).type
 
-    # Use the model's actual precision for autocast — bf16 on Ampere+/MPS,
-    # fp16 on older GPUs. Hardcoding fp16 would silently downcast bf16 models.
-    autocast_dtype = config.model_precision if config.model_precision != torch.float32 else torch.float16
+    # Use the model's actual precision for autocast.
+    # If model_precision is float32, autocast would be a no-op anyway — disable it
+    # entirely rather than silently casting to float16.
+    autocast_dtype = config.model_precision
+    autocast_enabled = config.mixed_precision and device_type != "cpu" and config.model_precision != torch.float32
 
     hook_handle = None
     if tile_refiner:
@@ -63,7 +65,11 @@ def run_inference(
         if refiner is not None:
             hook_fn = _make_tiled_refiner_hook(model, config)
             hook_handle = refiner.register_forward_hook(hook_fn)
-    elif config.refiner_scale != 1.0:
+    elif config.use_refiner and config.refiner_scale != 1.0:
+        # Scale hook — only active when NOT tiling (tiled path handles scale internally).
+        # Note: if optimization_mode resolves to lowvram, tile_refiner=True takes
+        # priority and this branch is skipped, meaning refiner_scale is ignored in
+        # tiled mode. Apply the scale inside _run_refiner_tiled if needed.
         refiner = getattr(model, "refiner", None)
         if refiner is not None:
             scale = config.refiner_scale
@@ -79,7 +85,7 @@ def run_inference(
             torch.autocast(
                 device_type=device_type,
                 dtype=autocast_dtype,
-                enabled=config.mixed_precision and device_type != "cpu",
+                enabled=autocast_enabled,
             ),
         ):
             output = model(frame.tensor)
@@ -89,11 +95,14 @@ def run_inference(
         if hook_handle is not None:
             hook_handle.remove()
 
-    return InferenceResult(
+    result = InferenceResult(
         alpha=output["alpha"],
         fg=output["fg"],
         meta=frame.meta,
     )
+
+    _free_vram_if_needed(config.device)
+    return result
 
 
 def _free_vram_if_needed(device: str) -> None:

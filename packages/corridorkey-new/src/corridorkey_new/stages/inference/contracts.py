@@ -30,3 +30,15 @@ class InferenceResult:
     alpha: torch.Tensor
     fg: torch.Tensor
     meta: FrameMeta
+
+    def __post_init__(self) -> None:
+        if self.alpha.ndim != 4 or self.alpha.shape[1] != 1:
+            raise ValueError(f"InferenceResult.alpha must be [B, 1, H, W], got {tuple(self.alpha.shape)}")
+        if self.fg.ndim != 4 or self.fg.shape[1] != 3:
+            raise ValueError(f"InferenceResult.fg must be [B, 3, H, W], got {tuple(self.fg.shape)}")
+        if self.alpha.shape[0] != self.fg.shape[0]:
+            raise ValueError(f"InferenceResult batch size mismatch: alpha={self.alpha.shape[0]}, fg={self.fg.shape[0]}")
+        if self.alpha.shape[2:] != self.fg.shape[2:]:
+            raise ValueError(
+                f"InferenceResult spatial size mismatch: alpha={self.alpha.shape[2:]}, fg={self.fg.shape[2:]}"
+            )
