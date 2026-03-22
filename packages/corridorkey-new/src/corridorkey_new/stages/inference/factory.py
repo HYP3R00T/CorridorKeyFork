@@ -182,4 +182,10 @@ def _load_mlx_backend(config: InferenceConfig):  # pragma: no cover
         overlap=_DEFAULT_MLX_TILE_OVERLAP,
     )
     logger.info("MLXBackend ready: %s (img_size=%d)", ckpt.name, config.img_size)
-    return MLXBackend(mlx_engine=engine, img_size=config.img_size, tile_size=_DEFAULT_MLX_TILE_SIZE)
+    return MLXBackend(
+        mlx_engine=engine,
+        img_size=config.img_size,
+        tile_size=_DEFAULT_MLX_TILE_SIZE,
+        overlap=_DEFAULT_MLX_TILE_OVERLAP,
+        refiner_scale=config.refiner_scale,
+    )

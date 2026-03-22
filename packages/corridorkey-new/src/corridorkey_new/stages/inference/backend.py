@@ -129,10 +129,14 @@ class MLXBackend:  # pragma: no cover
         tile_size: Tile size used for tiled inference, or None for full-frame.
     """
 
-    def __init__(self, mlx_engine, img_size: int, tile_size: int | None) -> None:
+    def __init__(
+        self, mlx_engine, img_size: int, tile_size: int | None, overlap: int = 0, refiner_scale: float = 1.0
+    ) -> None:
         self._engine = mlx_engine
         self._img_size = img_size
         self._tile_size = tile_size
+        self._overlap = overlap
+        self._refiner_scale = refiner_scale
 
     @property
     def backend_name(self) -> str:
@@ -140,7 +144,7 @@ class MLXBackend:  # pragma: no cover
 
     @property
     def resolved_config(self) -> dict[str, str]:
-        mode = f"tiled-{self._tile_size}" if self._tile_size else "full-frame"
+        mode = f"tiled-{self._tile_size}px-overlap-{self._overlap}px" if self._tile_size else "full-frame"
         return {
             "backend": "mlx",
             "device": "apple-silicon",
@@ -149,6 +153,7 @@ class MLXBackend:  # pragma: no cover
             "img_size": str(self._img_size),
             "use_refiner": "true",
             "mixed_precision": "n/a",
+            "refiner_scale": str(self._refiner_scale),
         }
 
     def run(self, frame: PreprocessedFrame) -> InferenceResult:
@@ -171,7 +176,7 @@ class MLXBackend:  # pragma: no cover
         mlx_output = self._engine.process_frame(
             image_u8,
             mask_u8,
-            refiner_scale=1.0,
+            refiner_scale=self._refiner_scale,
             input_is_linear=False,
             fg_is_straight=True,
             despill_strength=0.0,  # postprocessor stage handles despill

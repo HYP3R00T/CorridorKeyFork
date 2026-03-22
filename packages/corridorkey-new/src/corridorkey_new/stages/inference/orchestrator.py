@@ -255,13 +255,18 @@ def _run_refiner_tiled(
 
     stride = tile_size - overlap
 
-    # Linear ramp blend window — avoids the near-zero edges of a Hann window
-    # which cause division instability at tile boundaries.
+    # Linear ramp blend window — starts at a small positive value so image
+    # border pixels always accumulate non-zero weight (ramp starting at 0.0
+    # would leave the outermost pixel row/column with weight=0 → output=0).
     safe_overlap = min(overlap, tile_size // 2 - 1)
     flat_len = tile_size - 2 * safe_overlap
-    ramp = torch.linspace(0.0, 1.0, safe_overlap, device=rgb.device)
+    ramp = (
+        torch.linspace(1.0 / (safe_overlap + 1), 1.0, safe_overlap, device=rgb.device)
+        if safe_overlap > 0
+        else torch.empty(0, device=rgb.device)
+    )
     flat = torch.ones(flat_len, device=rgb.device)
-    blend_1d = torch.cat([ramp, flat, ramp.flip(0)])
+    blend_1d = torch.cat([ramp, flat, ramp.flip(0)]) if safe_overlap > 0 else flat
     blend_2d = (blend_1d.unsqueeze(0) * blend_1d.unsqueeze(1)).unsqueeze(0).unsqueeze(0)  # [1,1,T,T]
 
     y = 0

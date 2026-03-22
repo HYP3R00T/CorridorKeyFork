@@ -96,18 +96,8 @@ def load_model(config: InferenceConfig) -> torch.nn.Module:
     # torch.compile: speed mode on CUDA only.
     # Disabled in lowvram mode — hooks + compile are incompatible (Dynamo
     # sees the refiner module twice and raises "already tracked for mutation").
-    # Also disabled for mixed-dtype models (reduced precision backbone
-    # + float32 BN/refiner) because Dynamo tracing can hit dtype mismatches.
-    # A model is "mixed dtype" when the backbone runs in bf16/fp16 but
-    # BN/refiner layers are kept in float32 — i.e. when model_precision != fp32.
     device_type = torch.device(config.device).type
-    is_mixed_dtype = config.model_precision != torch.float32
-    use_compile = (
-        config.optimization_mode == "speed"
-        and not is_mixed_dtype
-        and device_type == "cuda"
-        and sys.platform in ("linux", "win32")
-    )
+    use_compile = config.optimization_mode == "speed" and device_type == "cuda" and sys.platform in ("linux", "win32")
     if use_compile:
         try:
             cache_dir = Path.home() / ".cache" / "corridorkey" / "torch_compile"
