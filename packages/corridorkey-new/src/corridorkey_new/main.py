@@ -29,7 +29,7 @@ def main() -> None:
     print(gpu.model_dump_json(indent=2))
 
     clips = scan(CLIPS_DIR)
-    manifest = load(clips[0])
+    manifest = load(clips.clips[0])
     print(manifest.model_dump_json(indent=2))
 
     device = resolve_device(config.device)

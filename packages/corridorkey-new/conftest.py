@@ -7,6 +7,8 @@ directly (without the root conftest in scope).
 
 from __future__ import annotations
 
+import contextlib
+
 import pytest
 
 
@@ -18,10 +20,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         ("--run-gpu", "Run GPU tests"),
         ("--run-mlx", "Run MLX tests"),
     ):
-        try:
+        with contextlib.suppress(ValueError):
             parser.addoption(opt, action="store_true", default=False, help=help_text)
-        except ValueError:
-            pass  # already registered by root conftest
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

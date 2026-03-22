@@ -5,9 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
-
 from corridorkey_new.stages.scanner.contracts import Clip, ScanResult, SkippedPath
+from pydantic import ValidationError
 
 
 class TestClip:
@@ -52,8 +51,8 @@ class TestClip:
         input_dir = tmp_path / "Input"
         input_dir.mkdir()
         clip = Clip(name="test", root=tmp_path, input_path=input_dir, alpha_path=None)
-        with pytest.raises(Exception):
-            clip.name = "other"  # type: ignore[misc]
+        with pytest.raises(ValidationError):
+            clip.name = "other"
 
 
 class TestSkippedPath:
@@ -68,8 +67,8 @@ class TestSkippedPath:
 
     def test_is_frozen(self, tmp_path: Path):
         s = SkippedPath(path=tmp_path, reason="x")
-        with pytest.raises(Exception):
-            s.reason = "y"  # type: ignore[misc]
+        with pytest.raises(ValidationError):
+            s.reason = "y"
 
 
 class TestScanResult:
@@ -103,5 +102,5 @@ class TestScanResult:
 
     def test_is_frozen(self, tmp_path: Path):
         result = ScanResult(clips=(), skipped=())
-        with pytest.raises(Exception):
-            result.clips = ()  # type: ignore[misc]
+        with pytest.raises(ValidationError):
+            result.clips = ()

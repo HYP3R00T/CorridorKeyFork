@@ -23,7 +23,6 @@ from pathlib import Path
 
 import av
 import cv2
-import numpy as np
 from pydantic import BaseModel
 
 from corridorkey_new.infra.utils import VIDEO_EXTENSIONS

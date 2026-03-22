@@ -2,17 +2,17 @@
 
 from __future__ import annotations
 
-import torch
 import pytest
+import torch
 from corridorkey_new.stages.preprocessor.resize import (
     DEFAULT_ALPHA_UPSAMPLE_MODE,
     DEFAULT_UPSAMPLE_MODE,
     LetterboxPad,
-    letterbox_frame,
-    _srgb_to_linear,
     _linear_to_srgb,
-    _unsharp_mask,
     _multistep_downscale,
+    _srgb_to_linear,
+    _unsharp_mask,
+    letterbox_frame,
 )
 
 
@@ -31,6 +31,7 @@ def _make_alpha(h: int, w: int, fill: float | None = None) -> torch.Tensor:
 # ---------------------------------------------------------------------------
 # LetterboxPad dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestLetterboxPad:
     def test_is_noop_when_all_zero(self):
@@ -52,6 +53,7 @@ class TestLetterboxPad:
 # ---------------------------------------------------------------------------
 # Letterbox output shape
 # ---------------------------------------------------------------------------
+
 
 class TestLetterboxFrameShape:
     def test_output_always_square_image(self):
@@ -89,6 +91,7 @@ class TestLetterboxFrameShape:
 # ---------------------------------------------------------------------------
 # Letterboxing — aspect ratio and padding correctness
 # ---------------------------------------------------------------------------
+
 
 class TestLetterboxAspectRatio:
     def test_landscape_pad_is_top_bottom(self):
@@ -137,24 +140,25 @@ class TestLetterboxAspectRatio:
         fill = 0.4
         img, alp, pad = letterbox_frame(_make_image(1080, 1920, fill=fill), _make_alpha(1080, 1920), 512)
         if pad.top > 0:
-            top_strip = img[:, :, :pad.top, :]
+            top_strip = img[:, :, : pad.top, :]
             assert top_strip.mean().item() == pytest.approx(fill, abs=0.01)
         if pad.bottom > 0:
-            bottom_strip = img[:, :, 512 - pad.bottom:, :]
+            bottom_strip = img[:, :, 512 - pad.bottom :, :]
             assert bottom_strip.mean().item() == pytest.approx(fill, abs=0.01)
 
     def test_alpha_padding_is_zero(self):
         """Alpha padding must be 0.0 (fully transparent border)."""
         img, alp, pad = letterbox_frame(_make_image(1080, 1920), _make_alpha(1080, 1920), 512)
         if pad.top > 0:
-            assert alp[:, :, :pad.top, :].max().item() == pytest.approx(0.0)
+            assert alp[:, :, : pad.top, :].max().item() == pytest.approx(0.0)
         if pad.bottom > 0:
-            assert alp[:, :, 512 - pad.bottom:, :].max().item() == pytest.approx(0.0)
+            assert alp[:, :, 512 - pad.bottom :, :].max().item() == pytest.approx(0.0)
 
 
 # ---------------------------------------------------------------------------
 # Alpha clamp after resize
 # ---------------------------------------------------------------------------
+
 
 class TestAlphaClamp:
     def test_bilinear_alpha_upscale_stays_in_range(self):
@@ -185,6 +189,7 @@ class TestAlphaClamp:
 # Colour-aware downscaling
 # ---------------------------------------------------------------------------
 
+
 class TestColourAwareDownscaling:
     def test_srgb_downscale_differs_from_linear_downscale(self):
         """is_srgb=True should produce a different result than is_srgb=False."""
@@ -214,6 +219,7 @@ class TestColourAwareDownscaling:
 # ---------------------------------------------------------------------------
 # Post-upscale sharpening
 # ---------------------------------------------------------------------------
+
 
 class TestPostUpscaleSharpening:
     def test_sharpening_produces_different_result(self):
@@ -253,6 +259,7 @@ class TestPostUpscaleSharpening:
 # Multi-step downscaling
 # ---------------------------------------------------------------------------
 
+
 class TestMultistepDownscaling:
     def test_extreme_ratio_produces_correct_shape(self):
         """8K → 512 is a 15× ratio — multi-step path must still produce correct shape."""
@@ -264,17 +271,15 @@ class TestMultistepDownscaling:
 
     def test_multistep_differs_from_oneshot(self):
         """Multi-step downscale should produce a different result than one-shot area."""
-        import torch.nn.functional as F
+        import torch.nn.functional as interpolate_fn
+
         src = _make_image(2048, 2048)
         alp = _make_alpha(2048, 2048)
         # Multi-step path (ratio > 4)
         img_multi, _, _ = letterbox_frame(src, alp, 256)
-        # One-shot area (manually)
+        # One-shot area (manually) — kept for reference, not compared directly
         combined = torch.cat([src, alp], dim=1)
-        out = F.interpolate(combined, size=(256, 256), mode="area")
-        img_oneshot = out[:, :3]
-        # They may differ due to intermediate halving steps
-        # (not guaranteed to differ for all inputs, but for random data they will)
+        interpolate_fn.interpolate(combined, size=(256, 256), mode="area")
         # Just verify shape and range
         assert img_multi.shape == (1, 3, 256, 256)
         assert img_multi.min().item() >= 0.0
@@ -290,6 +295,7 @@ class TestMultistepDownscaling:
 # ---------------------------------------------------------------------------
 # Upsample mode behaviour
 # ---------------------------------------------------------------------------
+
 
 class TestUpsampleModes:
     def test_default_upsample_mode_is_bicubic(self):
@@ -332,6 +338,7 @@ class TestUpsampleModes:
 # Half precision
 # ---------------------------------------------------------------------------
 
+
 class TestHalfPrecision:
     def test_float16_input_produces_float16_output(self):
         src = _make_image(64, 64).half()
@@ -344,6 +351,7 @@ class TestHalfPrecision:
 # ---------------------------------------------------------------------------
 # sRGB ↔ linear helpers
 # ---------------------------------------------------------------------------
+
 
 class TestColourspaceHelpers:
     def test_srgb_to_linear_roundtrip(self):
@@ -370,6 +378,7 @@ class TestColourspaceHelpers:
 # ---------------------------------------------------------------------------
 # Unsharp mask helper
 # ---------------------------------------------------------------------------
+
 
 class TestUnsharpMask:
     def test_output_shape_unchanged(self):

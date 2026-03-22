@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from corridorkey_new.errors import FrameMismatchError
 from corridorkey_new.stages.loader.validator import (
     FrameScan,
@@ -75,7 +74,7 @@ class TestScanFrames:
 
     def test_frame_scan_is_frozen(self, tmp_path: Path):
         result = scan_frames(tmp_path)
-        with pytest.raises(Exception):
+        with pytest.raises(AttributeError):
             result.is_linear = True  # type: ignore[misc]
 
 

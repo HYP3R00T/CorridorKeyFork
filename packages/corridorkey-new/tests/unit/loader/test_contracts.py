@@ -5,9 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from corridorkey_new.stages.loader.contracts import ClipManifest
 from corridorkey_new.stages.loader.extractor import DEFAULT_PNG_COMPRESSION
+from pydantic import ValidationError
 
 
 def _make_manifest(tmp_path: Path, **overrides: object) -> ClipManifest:
@@ -26,7 +26,7 @@ def _make_manifest(tmp_path: Path, **overrides: object) -> ClipManifest:
         frame_range=overrides.get("frame_range", (0, 10)),  # type: ignore[arg-type]
         is_linear=bool(overrides.get("is_linear", False)),
         video_meta_path=overrides.get("video_meta_path"),  # type: ignore[arg-type]
-        png_compression=int(overrides.get("png_compression", DEFAULT_PNG_COMPRESSION)),
+        png_compression=int(overrides.get("png_compression", DEFAULT_PNG_COMPRESSION)),  # type: ignore[arg-type]
     )
 
 
@@ -59,8 +59,8 @@ class TestClipManifest:
     def test_is_frozen(self, tmp_path: Path):
         """ClipManifest must be immutable — mutation should raise."""
         m = _make_manifest(tmp_path)
-        with pytest.raises(Exception):
-            m.frame_count = 99  # type: ignore[misc]
+        with pytest.raises(ValidationError):
+            m.frame_count = 99
 
     def test_model_copy_produces_new_instance(self, tmp_path: Path):
         m = _make_manifest(tmp_path, frame_count=5, frame_range=(0, 5))

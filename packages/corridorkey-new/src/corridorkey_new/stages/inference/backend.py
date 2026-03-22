@@ -61,7 +61,7 @@ class ModelBackend(Protocol):
         """
         ...
 
-    def run(self, frame: "PreprocessedFrame") -> "InferenceResult":
+    def run(self, frame: PreprocessedFrame) -> InferenceResult:
         """Run inference on a single preprocessed frame.
 
         Args:
@@ -85,7 +85,7 @@ class TorchBackend:
         model: Loaded GreenFormer in eval mode, already on the correct device.
     """
 
-    def __init__(self, config: "InferenceConfig", model: nn.Module) -> None:
+    def __init__(self, config: InferenceConfig, model: nn.Module) -> None:
         self._config = config
         self._model = model
 
@@ -106,7 +106,7 @@ class TorchBackend:
             "mixed_precision": str(cfg.mixed_precision),
         }
 
-    def run(self, frame: "PreprocessedFrame") -> "InferenceResult":
+    def run(self, frame: PreprocessedFrame) -> InferenceResult:
         from corridorkey_new.stages.inference.orchestrator import run_inference
 
         return run_inference(frame, self._model, self._config)
@@ -151,7 +151,7 @@ class MLXBackend:  # pragma: no cover
             "mixed_precision": "n/a",
         }
 
-    def run(self, frame: "PreprocessedFrame") -> "InferenceResult":
+    def run(self, frame: PreprocessedFrame) -> InferenceResult:
         """Run MLX inference and return an ``InferenceResult``.
 
         Converts the preprocessed tensor back to a uint8 numpy array (MLX

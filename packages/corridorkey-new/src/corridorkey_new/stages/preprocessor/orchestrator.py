@@ -9,7 +9,7 @@ is delegated to its own module.
     Step 4  — capture source_image       (here, CPU — no GPU→CPU transfer)
     Step 5  — move to device tensor      → tensor.py  (single PCIe transfer)
     Step 6  — color space conversion     → colorspace.py
-    Step 7  — resize                     → resize.py
+    Step 7  — letterbox to model resolution → resize.py
     Step 8  — ImageNet normalisation     → normalise.py
     Steps 9–10 — concat + return         (here)
 
@@ -93,7 +93,7 @@ class PreprocessConfig:
     # ------------------------------------------------------------------
 
     @classmethod
-    def quality(cls, device: str = "cpu", img_size: int = 2048) -> "PreprocessConfig":
+    def quality(cls, device: str = "cpu", img_size: int = 2048) -> PreprocessConfig:
         """Highest quality — bicubic image upscale, bilinear alpha, float32, sharpening on.
 
         Best for final renders where quality is the priority.
@@ -109,7 +109,7 @@ class PreprocessConfig:
         )
 
     @classmethod
-    def balanced(cls, device: str = "cpu", img_size: int = 2048) -> "PreprocessConfig":
+    def balanced(cls, device: str = "cpu", img_size: int = 2048) -> PreprocessConfig:
         """Balanced quality and speed — bilinear for both, float32, no sharpening.
 
         Good default for most production workflows.
@@ -125,7 +125,7 @@ class PreprocessConfig:
         )
 
     @classmethod
-    def speed(cls, device: str = "cpu", img_size: int = 2048) -> "PreprocessConfig":
+    def speed(cls, device: str = "cpu", img_size: int = 2048) -> PreprocessConfig:
         """Maximum speed — bilinear for both, float16, no source passthrough, no sharpening.
 
         For previews, proxies, or hardware-constrained environments.
@@ -239,13 +239,7 @@ def preprocess_frame(
     # Note: source_image is always in RGB order for the postprocessor.
     source_image: np.ndarray | None = None
     if config.source_passthrough:
-        if bgr:
-            # [:, :, ::-1] is a strided view (no copy); .copy() makes it contiguous.
-            rgb = image[:, :, ::-1].copy()
-        else:
-            # Already RGB — no reorder needed, but we still need our own copy
-            # since image may be referenced by to_tensors below.
-            rgb = image.copy()
+        rgb = image[:, :, ::-1].copy() if bgr else image.copy()
         source_image = linear_to_srgb_numpy(rgb) if manifest.is_linear else rgb
 
     # Step 5 — move to device; single PCIe transfer for image+alpha combined.
@@ -260,7 +254,9 @@ def preprocess_frame(
     # Preserves aspect ratio; pads remainder with mean pixel value.
     # Returns pad offsets so the postprocessor can crop back.
     img_t, alp_t, pad = letterbox_frame(
-        img_t, alp_t, config.img_size,
+        img_t,
+        alp_t,
+        config.img_size,
         upsample_mode=config.upsample_mode,
         alpha_upsample_mode=config.alpha_upsample_mode,
         sharpen_strength=config.sharpen_strength,

@@ -50,7 +50,9 @@ from dataclasses import dataclass
 from typing import Literal
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as functional
+
+from corridorkey_new.stages.preprocessor.colorspace import linear_to_srgb
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,12 @@ DEFAULT_ALPHA_UPSAMPLE_MODE: UpsampleMode = "bilinear"
 
 # Ratio threshold above which multi-step downscaling is used.
 _MULTISTEP_THRESHOLD = 4.0
+
+# sRGB linearisation threshold (IEC 61966-2-1)
+_SRGB_LINEARISE_THRESHOLD = 0.04045
+_SRGB_LINEARISE_SCALE = 12.92
+_SRGB_LINEARISE_OFFSET = 0.055
+_SRGB_LINEARISE_GAMMA = 2.4
 
 
 @dataclass(frozen=True)
@@ -159,9 +167,12 @@ def letterbox_frame(
         alp_inner = alpha
     else:
         img_inner, alp_inner = _resize_content(
-            image, alpha,
-            inner_h, inner_w,
-            src_h, src_w,
+            image,
+            alpha,
+            inner_h,
+            inner_w,
+            src_h,
+            src_w,
             upsample_mode=upsample_mode,
             alpha_upsample_mode=alpha_upsample_mode,
             sharpen_strength=sharpen_strength,
@@ -180,19 +191,19 @@ def letterbox_frame(
     # Shape: [1, 3, 1, 1] — broadcast-ready.
     mean_val = img_inner.mean(dim=(2, 3), keepdim=True)
 
-    img_out = F.pad(img_inner, (pad_left, pad_right, pad_top, pad_bottom), mode="constant", value=0.0)
+    img_out = functional.pad(img_inner, (pad_left, pad_right, pad_top, pad_bottom), mode="constant", value=0.0)
     # Fill padded regions with mean value per channel
     if pad_top > 0:
         img_out[:, :, :pad_top, :] = mean_val
     if pad_bottom > 0:
-        img_out[:, :, img_size - pad_bottom:, :] = mean_val
+        img_out[:, :, img_size - pad_bottom :, :] = mean_val
     if pad_left > 0:
-        img_out[:, :, pad_top:img_size - pad_bottom, :pad_left] = mean_val
+        img_out[:, :, pad_top : img_size - pad_bottom, :pad_left] = mean_val
     if pad_right > 0:
-        img_out[:, :, pad_top:img_size - pad_bottom, img_size - pad_right:] = mean_val
+        img_out[:, :, pad_top : img_size - pad_bottom, img_size - pad_right :] = mean_val
 
     # Alpha padding is always 0.0 (fully transparent border)
-    alp_out = F.pad(alp_inner, (pad_left, pad_right, pad_top, pad_bottom), mode="constant", value=0.0)
+    alp_out = functional.pad(alp_inner, (pad_left, pad_right, pad_top, pad_bottom), mode="constant", value=0.0)
 
     return img_out, alp_out, pad
 
@@ -221,7 +232,10 @@ def _resize_content(
     if h_down == w_down:
         # Both dimensions go the same direction — single pass
         img_out, alp_out = _single_pass(
-            image, alpha, target_h, target_w,
+            image,
+            alpha,
+            target_h,
+            target_w,
             downscaling=h_down,
             img_mode=upsample_mode,
             alpha_mode=alpha_upsample_mode,
@@ -232,14 +246,20 @@ def _resize_content(
         mid_h = target_h if h_down else src_h
         mid_w = target_w if w_down else src_w
         img_mid, alp_mid = _single_pass(
-            image, alpha, mid_h, mid_w,
+            image,
+            alpha,
+            mid_h,
+            mid_w,
             downscaling=True,
             img_mode=upsample_mode,
             alpha_mode=alpha_upsample_mode,
             is_srgb=is_srgb,
         )
         img_out, alp_out = _single_pass(
-            img_mid, alp_mid, target_h, target_w,
+            img_mid,
+            alp_mid,
+            target_h,
+            target_w,
             downscaling=False,
             img_mode=upsample_mode,
             alpha_mode=alpha_upsample_mode,
@@ -279,7 +299,7 @@ def _single_pass(
             image, alpha = _multistep_downscale(image, alpha, target_h, target_w)
         else:
             combined = torch.cat([image, alpha], dim=1)
-            out = F.interpolate(combined, size=size, mode="area")
+            out = functional.interpolate(combined, size=size, mode="area")
             image, alpha = out[:, :3], out[:, 3:]
 
         if is_srgb:
@@ -290,11 +310,11 @@ def _single_pass(
     # Upscaling
     if img_mode == alpha_mode:
         combined = torch.cat([image, alpha], dim=1)
-        out = F.interpolate(combined, size=size, mode=img_mode, align_corners=False, antialias=True)
+        out = functional.interpolate(combined, size=size, mode=img_mode, align_corners=False, antialias=True)
         return out[:, :3], out[:, 3:]
 
-    img_out = F.interpolate(image, size=size, mode=img_mode, align_corners=False, antialias=True)
-    alp_out = F.interpolate(alpha, size=size, mode=alpha_mode, align_corners=False, antialias=True)
+    img_out = functional.interpolate(image, size=size, mode=img_mode, align_corners=False, antialias=True)
+    alp_out = functional.interpolate(alpha, size=size, mode=alpha_mode, align_corners=False, antialias=True)
     return img_out, alp_out
 
 
@@ -315,14 +335,14 @@ def _multistep_downscale(
         next_h = max(cur_h // 2, target_h)
         next_w = max(cur_w // 2, target_w)
         combined = torch.cat([image, alpha], dim=1)
-        out = F.interpolate(combined, size=(next_h, next_w), mode="area")
+        out = functional.interpolate(combined, size=(next_h, next_w), mode="area")
         image, alpha = out[:, :3], out[:, 3:]
         cur_h, cur_w = next_h, next_w
 
     # Final pass to exact target
     if cur_h != target_h or cur_w != target_w:
         combined = torch.cat([image, alpha], dim=1)
-        out = F.interpolate(combined, size=(target_h, target_w), mode="area")
+        out = functional.interpolate(combined, size=(target_h, target_w), mode="area")
         image, alpha = out[:, :3], out[:, 3:]
 
     return image, alpha
@@ -345,36 +365,33 @@ def _unsharp_mask(image: torch.Tensor, strength: float) -> torch.Tensor:
     kernel_1d = torch.tensor([1.0, 4.0, 6.0, 4.0, 1.0], dtype=image.dtype, device=image.device)
     kernel_1d = kernel_1d / kernel_1d.sum()
     kernel_2d = kernel_1d[:, None] * kernel_1d[None, :]  # [5, 5]
-    # Expand to [C, 1, 5, 5] for depthwise conv
+    # Expand to [C, 1, 5, 5] for depthwise conv; contiguous() required for MPS.
     c = image.shape[1]
-    kernel = kernel_2d.expand(c, 1, 5, 5)
-    blurred = F.conv2d(image, kernel, padding=2, groups=c)
+    kernel = kernel_2d.expand(c, 1, 5, 5).contiguous()
+    blurred = functional.conv2d(image, kernel, padding=2, groups=c)
     sharpened = image + strength * (image - blurred)
     return sharpened.clamp(0.0, 1.0)
 
 
 # ---------------------------------------------------------------------------
 # sRGB ↔ linear transfer functions (on-device)
+# Linearisation (_srgb_to_linear) is only needed here — no shared version
+# exists in colorspace.py. Re-encoding (_linear_to_srgb) delegates to the
+# shared colorspace implementation to avoid duplicating the constants.
 # ---------------------------------------------------------------------------
-
-_LINEAR_THRESHOLD = 0.0031308
-_GAMMA = 1.0 / 2.4
-_SCALE = 1.055
-_OFFSET = 0.055
-_LINEAR_SCALE = 12.92
 
 
 def _srgb_to_linear(x: torch.Tensor) -> torch.Tensor:
     """sRGB → linear light (IEC 61966-2-1), on-device."""
     x = x.clamp(0.0, 1.0)
-    linear = x / _LINEAR_SCALE
-    gamma = ((x + _OFFSET) / _SCALE).clamp(min=1e-12).pow(1.0 / _GAMMA)
-    return torch.where(x <= 0.04045, linear, gamma)
+    linear = x / _SRGB_LINEARISE_SCALE
+    gamma = ((x + _SRGB_LINEARISE_OFFSET) / (1.0 + _SRGB_LINEARISE_OFFSET)).clamp(min=1e-12).pow(_SRGB_LINEARISE_GAMMA)
+    return torch.where(x <= _SRGB_LINEARISE_THRESHOLD, linear, gamma)
 
 
 def _linear_to_srgb(x: torch.Tensor) -> torch.Tensor:
-    """Linear light → sRGB (IEC 61966-2-1), on-device."""
-    x = x.clamp(0.0, 1.0)
-    linear_part = x * _LINEAR_SCALE
-    gamma_part = _SCALE * x.clamp(min=1e-12).pow(_GAMMA) - _OFFSET
-    return torch.where(x <= _LINEAR_THRESHOLD, linear_part, gamma_part)
+    """Linear light → sRGB (IEC 61966-2-1), on-device.
+
+    Delegates to the shared colorspace implementation.
+    """
+    return linear_to_srgb(x)

@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from corridorkey_new.errors import ClipScanError
 from corridorkey_new.events import PipelineEvents
 from corridorkey_new.stages.scanner import ScanResult, scan
@@ -189,13 +188,15 @@ class TestScanPermissionErrors:
         # called inside _find_icase (via try_build_clip). Since we mock
         # try_build_clip out entirely, the only remaining iterdir call is the
         # orchestrator's own `sorted(path.iterdir())`.
-        with patch(
-            "corridorkey_new.stages.scanner.orchestrator.try_build_clip",
-            return_value=(None, None),
+        with (
+            patch(
+                "corridorkey_new.stages.scanner.orchestrator.try_build_clip",
+                return_value=(None, None),
+            ),
+            patch.object(Path, "iterdir", side_effect=PermissionError("denied")),
+            pytest.raises(PermissionError, match="Cannot read directory"),
         ):
-            with patch.object(Path, "iterdir", side_effect=PermissionError("denied")):
-                with pytest.raises(PermissionError, match="Cannot read directory"):
-                    scan(tmp_path)
+            scan(tmp_path)
 
 
 class TestScanEventsExtended:
@@ -233,6 +234,7 @@ class TestScanEventsExtended:
     def test_warning_logged_when_no_clips_found(self, tmp_path: Path, caplog):
         """Empty directory with no clips or skipped paths logs a warning."""
         import logging
+
         with caplog.at_level(logging.WARNING, logger="corridorkey_new.stages.scanner.orchestrator"):
             scan(tmp_path)
         assert any("No clips found" in r.message for r in caplog.records)

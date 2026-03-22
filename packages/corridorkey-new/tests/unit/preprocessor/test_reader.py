@@ -158,19 +158,20 @@ class TestToFloat32UnsupportedDtype:
     def test_unsupported_dtype_raises_frame_read_error(self, tmp_path: Path):
         """int32 arrays are not a supported dtype — must raise FrameReadError."""
         from unittest.mock import patch
+
         import numpy as np
         from corridorkey_new.stages.preprocessor.reader import _read_image
 
         bad_arr = np.zeros((4, 4, 3), dtype=np.int32)
-        with patch("cv2.imread", return_value=bad_arr):
-            with pytest.raises(FrameReadError, match="Unsupported dtype"):
-                _read_image(tmp_path / "fake.png", channels=3)
+        with patch("cv2.imread", return_value=bad_arr), pytest.raises(FrameReadError, match="Unsupported dtype"):
+            _read_image(tmp_path / "fake.png", channels=3)
 
 
 class TestToChannelsEdgeCases:
     def test_grayscale_image_broadcast_to_3_channels(self, tmp_path: Path):
         """1-channel image requested as 3-channel → broadcast, bgr=False."""
         from corridorkey_new.stages.preprocessor.reader import _to_channels
+
         arr = np.ones((4, 4, 1), dtype=np.float32) * 0.5
         out, bgr = _to_channels(arr, channels=3, path=tmp_path / "fake.png")
         assert out.shape == (4, 4, 3)
@@ -180,6 +181,7 @@ class TestToChannelsEdgeCases:
     def test_bgra_image_drops_alpha_channel(self, tmp_path: Path):
         """4-channel BGRA image requested as 3-channel → drop alpha, bgr=True."""
         from corridorkey_new.stages.preprocessor.reader import _to_channels
+
         arr = np.zeros((4, 4, 4), dtype=np.float32)
         arr[:, :, 2] = 1.0  # red in BGR
         out, bgr = _to_channels(arr, channels=3, path=tmp_path / "fake.png")
@@ -190,6 +192,7 @@ class TestToChannelsEdgeCases:
     def test_unsupported_channel_count_for_1ch_output_raises(self, tmp_path: Path):
         """5-channel image cannot be reduced to 1 channel — must raise."""
         from corridorkey_new.stages.preprocessor.reader import _to_channels
+
         arr = np.zeros((4, 4, 5), dtype=np.float32)
         with pytest.raises(FrameReadError, match="Cannot reduce"):
             _to_channels(arr, channels=1, path=tmp_path / "fake.png")
@@ -197,6 +200,7 @@ class TestToChannelsEdgeCases:
     def test_unsupported_channel_count_for_3ch_output_raises(self, tmp_path: Path):
         """5-channel image cannot be converted to 3 channels — must raise."""
         from corridorkey_new.stages.preprocessor.reader import _to_channels
+
         arr = np.zeros((4, 4, 5), dtype=np.float32)
         with pytest.raises(FrameReadError, match="Cannot convert"):
             _to_channels(arr, channels=3, path=tmp_path / "fake.png")

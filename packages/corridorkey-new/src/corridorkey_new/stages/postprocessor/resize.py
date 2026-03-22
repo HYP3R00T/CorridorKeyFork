@@ -18,7 +18,7 @@ import cv2
 import numpy as np
 import torch
 
-from corridorkey_new.stages.preprocessor.resize import LetterboxPad
+from corridorkey_new.stages.preprocessor import LetterboxPad
 
 
 def tensor_to_numpy_hwc(t: torch.Tensor) -> np.ndarray:

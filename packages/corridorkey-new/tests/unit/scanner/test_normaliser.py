@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
+from corridorkey_new.stages.scanner.contracts import SkippedPath
 from corridorkey_new.stages.scanner.normaliser import (
     _find_icase,
     _find_videos_in,
@@ -15,7 +15,6 @@ from corridorkey_new.stages.scanner.normaliser import (
     normalise_video,
     try_build_clip,
 )
-from corridorkey_new.stages.scanner.contracts import SkippedPath
 
 
 class TestSafeMove:
@@ -31,9 +30,8 @@ class TestSafeMove:
         src = tmp_path / "src.mp4"
         src.write_bytes(b"data")
         dst = tmp_path / "dst.mp4"
-        with patch("shutil.copy2", side_effect=OSError("disk full")):
-            with pytest.raises(OSError, match="Failed to copy"):
-                _safe_move(src, dst)
+        with patch("shutil.copy2", side_effect=OSError("disk full")), pytest.raises(OSError, match="Failed to copy"):
+            _safe_move(src, dst)
 
     def test_size_mismatch_raises_oserror(self, tmp_path: Path):
         src = tmp_path / "src.mp4"
@@ -41,18 +39,22 @@ class TestSafeMove:
         dst = tmp_path / "dst.mp4"
         # Write a different-sized file to dst before the move to simulate mismatch
         dst.write_bytes(b"hi")
-        with patch("shutil.copy2"):  # no-op copy — dst already has wrong size
-            with pytest.raises(OSError, match="Copy verification failed"):
-                _safe_move(src, dst)
+        with (
+            patch("shutil.copy2"),
+            pytest.raises(OSError, match="Copy verification failed"),
+        ):  # no-op copy — dst already has wrong size
+            _safe_move(src, dst)
 
     def test_delete_failure_raises_oserror(self, tmp_path: Path):
         src = tmp_path / "src.mp4"
         src.write_bytes(b"data")
         dst = tmp_path / "dst.mp4"
-        with patch("shutil.copy2", side_effect=lambda s, d: Path(d).write_bytes(b"data")):
-            with patch.object(Path, "unlink", side_effect=OSError("locked")):
-                with pytest.raises(OSError, match="failed to delete source"):
-                    _safe_move(src, dst)
+        with (
+            patch("shutil.copy2", side_effect=lambda s, d: Path(d).write_bytes(b"data")),
+            patch.object(Path, "unlink", side_effect=OSError("locked")),
+            pytest.raises(OSError, match="failed to delete source"),
+        ):
+            _safe_move(src, dst)
 
 
 class TestFindAlphaAmbiguous:
@@ -76,9 +78,8 @@ class TestFindVideosInPermission:
 
 class TestFindIcasePermission:
     def test_permission_error_raises(self, tmp_path: Path):
-        with patch("pathlib.Path.iterdir", side_effect=PermissionError("denied")):
-            with pytest.raises(PermissionError):
-                _find_icase(tmp_path, "Input")
+        with patch("pathlib.Path.iterdir", side_effect=PermissionError("denied")), pytest.raises(PermissionError):
+            _find_icase(tmp_path, "Input")
 
 
 class TestTryBuildClipErrors:
@@ -100,7 +101,6 @@ class TestTryBuildClipErrors:
         input_dir.mkdir(parents=True)
 
         import corridorkey_new.stages.scanner.normaliser as mod
-        from pydantic import ValidationError
 
         # Trigger a real ValidationError by passing None for required fields
         original_clip = mod.Clip
@@ -120,6 +120,8 @@ class TestNormaliseVideoErrors:
     def test_mkdir_failure_raises_oserror(self, tmp_path: Path):
         video = tmp_path / "clip.mp4"
         video.write_bytes(b"data")
-        with patch("pathlib.Path.mkdir", side_effect=OSError("no space")):
-            with pytest.raises(OSError, match="Failed to create clip structure"):
-                normalise_video(video)
+        with (
+            patch("pathlib.Path.mkdir", side_effect=OSError("no space")),
+            pytest.raises(OSError, match="Failed to create clip structure"),
+        ):
+            normalise_video(video)

@@ -6,18 +6,18 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from corridorkey_new.errors import ExtractionError, FrameMismatchError
 from corridorkey_new.events import PipelineEvents
 from corridorkey_new.stages.loader.contracts import ClipManifest
 from corridorkey_new.stages.loader.extractor import DEFAULT_PNG_COMPRESSION, VideoMetadata
 from corridorkey_new.stages.loader.orchestrator import load, resolve_alpha
 from corridorkey_new.stages.scanner.contracts import Clip
-
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_frames(directory: Path, count: int = 3, ext: str = ".png") -> None:
     directory.mkdir(parents=True, exist_ok=True)
@@ -52,17 +52,21 @@ def _fake_meta(frame_count: int = 0, **kwargs: object) -> VideoMetadata:
 
 def _patch_extract(output_dir_ref: list[Path], frame_count: int = 5):
     """Return a fake extract_video that writes frames and returns metadata."""
-    def _fake(video_path, output_dir, pattern="frame_{:06d}.png",
-              png_compression=DEFAULT_PNG_COMPRESSION, on_frame=None):
+
+    def _fake(
+        video_path, output_dir, pattern="frame_{:06d}.png", png_compression=DEFAULT_PNG_COMPRESSION, on_frame=None
+    ):
         _make_frames(output_dir, count=frame_count)
         output_dir_ref.append(output_dir)
         return _fake_meta(frame_count=frame_count)
+
     return _fake
 
 
 # ---------------------------------------------------------------------------
 # load() — image sequence inputs
 # ---------------------------------------------------------------------------
+
 
 class TestLoadImageSequence:
     def test_no_alpha(self, tmp_path: Path):
@@ -121,13 +125,14 @@ class TestLoadImageSequence:
     def test_manifest_is_frozen(self, tmp_path: Path):
         clip = _make_clip(tmp_path / "my_clip")
         manifest = load(clip)
-        with pytest.raises(Exception):
-            manifest.frame_count = 99  # type: ignore[misc]
+        with pytest.raises(ValidationError):
+            manifest.frame_count = 99
 
 
 # ---------------------------------------------------------------------------
 # load() — video inputs
 # ---------------------------------------------------------------------------
+
 
 class TestLoadVideoInput:
     def test_extraction_called_on_first_run(self, tmp_path: Path):
@@ -139,10 +144,15 @@ class TestLoadVideoInput:
         clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
 
         extracted: list[Path] = []
-        with patch("corridorkey_new.stages.loader.orchestrator.extract_video",
-                   side_effect=_patch_extract(extracted, frame_count=5)), \
-             patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata",
-                   return_value=_fake_meta(frame_count=5)):
+        with (
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.extract_video",
+                side_effect=_patch_extract(extracted, frame_count=5),
+            ),
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=5)
+            ),
+        ):
             manifest = load(clip)
 
         assert manifest.frame_count == 5
@@ -158,10 +168,15 @@ class TestLoadVideoInput:
 
         from corridorkey_new.stages.loader.extractor import load_video_metadata
 
-        with patch("corridorkey_new.stages.loader.orchestrator.extract_video",
-                   side_effect=_patch_extract([], frame_count=3)), \
-             patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata",
-                   return_value=_fake_meta(frame_count=3)):
+        with (
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.extract_video",
+                side_effect=_patch_extract([], frame_count=3),
+            ),
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=3)
+            ),
+        ):
             load(clip)
 
         saved = load_video_metadata(clip_dir)
@@ -180,13 +195,17 @@ class TestLoadVideoInput:
         _make_frames(frames_dir, count=4)
 
         from corridorkey_new.stages.loader.extractor import save_video_metadata
+
         save_video_metadata(_fake_meta(frame_count=4), clip_dir)
 
         clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
 
-        with patch("corridorkey_new.stages.loader.orchestrator.extract_video") as mock_extract, \
-             patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata",
-                   return_value=_fake_meta(frame_count=4)):
+        with (
+            patch("corridorkey_new.stages.loader.orchestrator.extract_video") as mock_extract,
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=4)
+            ),
+        ):
             manifest = load(clip)
             mock_extract.assert_not_called()
 
@@ -207,10 +226,15 @@ class TestLoadVideoInput:
         clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
 
         extracted: list[Path] = []
-        with patch("corridorkey_new.stages.loader.orchestrator.extract_video",
-                   side_effect=_patch_extract(extracted, frame_count=5)), \
-             patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata",
-                   return_value=_fake_meta(frame_count=5)):
+        with (
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.extract_video",
+                side_effect=_patch_extract(extracted, frame_count=5),
+            ),
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=5)
+            ),
+        ):
             manifest = load(clip)
 
         assert len(extracted) == 1
@@ -224,12 +248,12 @@ class TestLoadVideoInput:
         video.touch()
         clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
 
-        with patch("corridorkey_new.stages.loader.orchestrator.extract_video",
-                   side_effect=RuntimeError("codec error")), \
-             patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata",
-                   return_value=_fake_meta()):
-            with pytest.raises(ExtractionError, match="extraction failed"):
-                load(clip)
+        with (
+            patch("corridorkey_new.stages.loader.orchestrator.extract_video", side_effect=RuntimeError("codec error")),
+            patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta()),
+            pytest.raises(ExtractionError, match="extraction failed"),
+        ):
+            load(clip)
 
     def test_png_compression_passed_to_extract(self, tmp_path: Path):
         clip_dir = tmp_path / "my_clip"
@@ -244,17 +268,24 @@ class TestLoadVideoInput:
             _make_frames(clip_dir / "Frames", count=2) or _fake_meta(frame_count=2)
         )
 
-        with patch("corridorkey_new.stages.loader.orchestrator.extract_video",
-                   side_effect=lambda vp, od, pattern="frame_{:06d}.png",
-                   png_compression=DEFAULT_PNG_COMPRESSION, on_frame=None: (
-                       _make_frames(od, count=2) or _fake_meta(frame_count=2)
-                   )) as m, \
-             patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata",
-                   return_value=_fake_meta()):
+        with (
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.extract_video",
+                side_effect=lambda vp, od, pattern="frame_{:06d}.png", png_compression=DEFAULT_PNG_COMPRESSION, on_frame=None: (
+                    _make_frames(od, count=2) or _fake_meta(frame_count=2)
+                ),
+            ) as m,
+            patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta()),
+        ):
             load(clip, png_compression=0)
             # Verify png_compression=0 was forwarded
             call_kwargs = m.call_args
-            assert call_kwargs.kwargs.get("png_compression", call_kwargs.args[3] if len(call_kwargs.args) > 3 else DEFAULT_PNG_COMPRESSION) == 0
+            assert (
+                call_kwargs.kwargs.get(
+                    "png_compression", call_kwargs.args[3] if len(call_kwargs.args) > 3 else DEFAULT_PNG_COMPRESSION
+                )
+                == 0
+            )
 
 
 class TestLoadEvents:
@@ -269,10 +300,15 @@ class TestLoadEvents:
         stage_starts: list[tuple[str, int]] = []
         events = PipelineEvents(on_stage_start=lambda s, t: stage_starts.append((s, t)))
 
-        with patch("corridorkey_new.stages.loader.orchestrator.extract_video",
-                   side_effect=_patch_extract([], frame_count=3)), \
-             patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata",
-                   return_value=_fake_meta(frame_count=3)):
+        with (
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.extract_video",
+                side_effect=_patch_extract([], frame_count=3),
+            ),
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=3)
+            ),
+        ):
             load(clip, events=events)
 
         assert any(s == "extract" for s, _ in stage_starts)
@@ -289,10 +325,16 @@ class TestLoadEvents:
         totals: list[int] = []
         events = PipelineEvents(on_stage_start=lambda s, t: totals.append(t))
 
-        with patch("corridorkey_new.stages.loader.orchestrator.extract_video",
-                   side_effect=_patch_extract([], frame_count=10)), \
-             patch("corridorkey_new.stages.loader.orchestrator.read_video_metadata",
-                   return_value=_fake_meta(frame_count=10)):
+        with (
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.extract_video",
+                side_effect=_patch_extract([], frame_count=10),
+            ),
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.read_video_metadata",
+                return_value=_fake_meta(frame_count=10),
+            ),
+        ):
             load(clip, events=events)
 
         assert totals[0] == 10  # accurate total, not 0
@@ -301,6 +343,7 @@ class TestLoadEvents:
 # ---------------------------------------------------------------------------
 # resolve_alpha()
 # ---------------------------------------------------------------------------
+
 
 class TestResolveAlpha:
     def _base_manifest(self, tmp_path: Path) -> ClipManifest:
@@ -356,10 +399,10 @@ class TestResolveAlpha:
         alpha_dir = tmp_path / "my_clip" / "AlphaFrames"
         _make_frames(alpha_dir, count=3)
 
-        with patch("corridorkey_new.stages.loader.orchestrator.scan_frames",
-                   wraps=__import__(
-                       "corridorkey_new.stages.loader.validator", fromlist=["scan_frames"]
-                   ).scan_frames) as mock_scan:
+        with patch(
+            "corridorkey_new.stages.loader.orchestrator.scan_frames",
+            wraps=__import__("corridorkey_new.stages.loader.validator", fromlist=["scan_frames"]).scan_frames,
+        ) as mock_scan:
             resolve_alpha(manifest, alpha_dir)
             # scan_frames should only be called for alpha_dir, not frames_dir
             called_paths = [call.args[0] for call in mock_scan.call_args_list]

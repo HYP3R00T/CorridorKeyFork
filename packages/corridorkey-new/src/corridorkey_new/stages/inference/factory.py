@@ -61,7 +61,7 @@ def load_backend(config: InferenceConfig):  # -> ModelBackend
         RuntimeError: If the requested backend is unavailable.
         FileNotFoundError: If no suitable checkpoint is found.
     """
-    from corridorkey_new.stages.inference.backend import MLXBackend, TorchBackend
+    from corridorkey_new.stages.inference.backend import TorchBackend
 
     backend_name = _resolve_backend(config.backend)
 

@@ -8,10 +8,10 @@ from unittest.mock import MagicMock, patch
 import cv2
 import numpy as np
 import torch
-from corridorkey_new.stages.inference import InferenceConfig, InferenceResult
-from corridorkey_new.stages.loader.contracts import ClipManifest
 from corridorkey_new.runtime.queue import STOP, BoundedQueue
 from corridorkey_new.runtime.worker import InferenceWorker, PostWriteWorker, PreprocessWorker
+from corridorkey_new.stages.inference import InferenceConfig, InferenceResult
+from corridorkey_new.stages.loader.contracts import ClipManifest
 from corridorkey_new.stages.preprocessor import FrameMeta, FrameReadError, PreprocessConfig, PreprocessedFrame
 
 # ---------------------------------------------------------------------------

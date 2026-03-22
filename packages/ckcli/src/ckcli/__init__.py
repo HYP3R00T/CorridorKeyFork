@@ -67,11 +67,11 @@ def wizard(
 ) -> None:
     """Scan, configure, and process clips. The default command."""
     from corridorkey_new import load, resolve_alpha, resolve_device, scan, setup_logging
-    from corridorkey_new.inference import load_model
+    from corridorkey_new.inference import load_model  # type: ignore[import]
     from corridorkey_new.infra import APP_NAME, ensure_config_file, load_config_with_metadata
     from corridorkey_new.infra.config import CorridorKeyConfig
     from corridorkey_new.infra.model_hub import ensure_model
-    from corridorkey_new.pipeline import PipelineConfig, PipelineRunner
+    from corridorkey_new.pipeline import PipelineConfig, PipelineRunner  # type: ignore[import]
 
     from ckcli._config_table import print_config_table
 
@@ -95,7 +95,7 @@ def wizard(
         raise typer.Exit(1)
 
     clips = scan(clips_dir)
-    if not clips:
+    if not clips.clip_count:
         console.print("[yellow]No clips found.[/yellow]")
         raise typer.Exit()
 
@@ -135,7 +135,7 @@ def wizard(
     model = load_model(inference_config)
     console.print("[green]Model loaded.[/green]\n")
 
-    for clip in clips:
+    for clip in clips.clips:
         manifest = load(clip)
 
         if manifest.needs_alpha:
@@ -184,7 +184,7 @@ def _print_clip_table(clips, clips_dir: Path) -> None:
     table.add_column("Clip")
     table.add_column("Input")
     table.add_column("Alpha")
-    for clip in clips:
+    for clip in clips.clips:
         has_alpha = "[green]yes[/green]" if clip.alpha_path else "[dim]none[/dim]"
         table.add_row(clip.name, str(clip.input_path), has_alpha)
     console.print(table)
