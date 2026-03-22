@@ -86,19 +86,6 @@ class CorridorKeyConfig(BaseModel):
     ] = Field(default_factory=WriterSettings)
 
     # ------------------------------------------------------------------
-    # Convenience shims — keep old flat field access working during
-    # transition. These delegate to the nested settings blocks.
-    # ------------------------------------------------------------------
-
-    @property
-    def log_dir(self):
-        return self.logging.dir
-
-    @property
-    def log_level(self):
-        return self.logging.level
-
-    # ------------------------------------------------------------------
     # Bridge methods — build stage runtime configs from this config
     # ------------------------------------------------------------------
 
