@@ -7,6 +7,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
+from corridorkey_new.infra.model_hub import default_checkpoint_path
+
 
 class InferenceSettings(BaseModel):
     """User-facing inference settings.
@@ -26,16 +28,16 @@ class InferenceSettings(BaseModel):
     """
 
     checkpoint_path: Annotated[
-        Path | None,
+        Path,
         Field(
-            default=None,
+            default_factory=default_checkpoint_path,
             description=(
                 "Path to the .pth model checkpoint file. "
                 "Defaults to ~/.config/corridorkey/models/CorridorKey_v1.0.pth. "
                 "The model is downloaded automatically on first run if not present."
             ),
         ),
-    ] = None
+    ] = Field(default_factory=default_checkpoint_path)
 
     use_refiner: Annotated[
         bool,

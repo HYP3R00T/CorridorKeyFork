@@ -193,12 +193,11 @@ class CorridorKeyConfig(BaseModel):
         """
         import torch
 
-        from corridorkey_new.infra.model_hub import default_checkpoint_path
         from corridorkey_new.stages.inference import InferenceConfig
         from corridorkey_new.stages.inference.config import adaptive_img_size
         from corridorkey_new.stages.inference.orchestrator import _probe_vram_gb
 
-        checkpoint = self.inference.checkpoint_path or default_checkpoint_path()
+        checkpoint = self.inference.checkpoint_path
         resolved_device = device or self.device
 
         _precision_map = {

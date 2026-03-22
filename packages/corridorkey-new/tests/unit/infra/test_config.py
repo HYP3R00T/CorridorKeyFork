@@ -93,8 +93,10 @@ class TestPreprocessSettings:
 
 class TestInferenceSettings:
     def test_defaults(self):
+        from corridorkey_new.infra.model_hub import default_checkpoint_path
+
         cfg = CorridorKeyConfig()
-        assert cfg.inference.checkpoint_path is None
+        assert cfg.inference.checkpoint_path == default_checkpoint_path()
         assert cfg.inference.use_refiner is True
         assert cfg.inference.mixed_precision is True
         assert cfg.inference.model_precision == "auto"
