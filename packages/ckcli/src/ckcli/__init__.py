@@ -67,11 +67,11 @@ def wizard(
 ) -> None:
     """Scan, configure, and process clips. The default command."""
     from corridorkey_new import load, resolve_alpha, resolve_device, scan, setup_logging
-    from corridorkey_new.inference import load_model  # type: ignore[import]
     from corridorkey_new.infra import APP_NAME, ensure_config_file, load_config_with_metadata
     from corridorkey_new.infra.config import CorridorKeyConfig
     from corridorkey_new.infra.model_hub import ensure_model
-    from corridorkey_new.pipeline import PipelineConfig, PipelineRunner  # type: ignore[import]
+    from corridorkey_new.runtime.runner import PipelineRunner
+    from corridorkey_new.stages.inference.loader import load_model as _load_model
 
     from ckcli._config_table import print_config_table
 
@@ -123,16 +123,19 @@ def wizard(
         },
     })
 
-    inference_config = run_config.to_inference_config(device=device)
+    inference_config, resolved_refiner_mode = run_config.to_inference_config(
+        device=device, _return_resolved_refiner_mode=True
+    )
     ensure_model(dest_dir=inference_config.checkpoint_path.parent)
 
     console.print(f"\nLoading model from [cyan]{inference_config.checkpoint_path}[/cyan] ...")
     console.print(
         f"  img_size=[cyan]{inference_config.img_size}[/cyan]  "
         f"precision=[cyan]{inference_config.model_precision}[/cyan]  "
-        f"refiner_mode=[cyan]{inference_config.refiner_mode}[/cyan]"
+        f"refiner_mode=[cyan]{resolved_refiner_mode}[/cyan]"
     )
-    model = load_model(inference_config)
+
+    model = _load_model(inference_config, resolved_refiner_mode=resolved_refiner_mode)
     console.print("[green]Model loaded.[/green]\n")
 
     for clip in clips.clips:
@@ -144,12 +147,8 @@ def wizard(
             manifest = resolve_alpha(manifest, Path(raw))
 
         printer = RichPrinter(manifest.frame_count)
-        pipeline_config = PipelineConfig(
-            preprocess=run_config.to_preprocess_config(device=device, resolved_img_size=inference_config.img_size),
-            inference=inference_config,
-            model=model,
-            events=printer.as_events(),
-        )
+        pipeline_config = run_config.to_pipeline_config(device=device, model=model)
+        pipeline_config.events = printer.as_events()
 
         console.print(f"Processing '[bold]{manifest.clip_name}[/bold]' ({manifest.frame_count} frames)...\n")
         with printer:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 import time
 
-from corridorkey_new.pipeline import PipelineEvents  # type: ignore[import]
+from corridorkey_new.events import PipelineEvents
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
