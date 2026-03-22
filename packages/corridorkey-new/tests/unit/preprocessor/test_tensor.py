@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 import torch
-from corridorkey_new.stages.preprocessor.tensor import to_tensor, to_tensors
+from corridorkey_new.stages.preprocessor.tensor import to_tensors
 
 
 def _make_image(h: int = 32, w: int = 32) -> np.ndarray:
@@ -60,38 +60,10 @@ class TestToTensors:
         img_rgb, _ = to_tensors(image[:, :, ::-1].copy(), _make_alpha(8, 8), "cpu", bgr=False)
         torch.testing.assert_close(img_bgr, img_rgb)
 
-
-class TestToTensor:
-    def test_output_shape(self):
-        t = to_tensor(_make_image(32, 32), _make_alpha(32, 32), "cpu")
-        assert t.shape == (1, 4, 32, 32)
-
-    def test_output_dtype_float32(self):
-        t = to_tensor(_make_image(), _make_alpha(), "cpu")
-        assert t.dtype == torch.float32
-
-    def test_output_on_cpu(self):
-        t = to_tensor(_make_image(), _make_alpha(), "cpu")
-        assert t.device.type == "cpu"
-
-    def test_channel_order_image_then_alpha(self):
-        image = np.zeros((4, 4, 3), dtype=np.float32)
-        alpha = np.ones((4, 4, 1), dtype=np.float32)
-        image[:, :, 0] = 0.1
-        image[:, :, 1] = 0.2
-        image[:, :, 2] = 0.3
-        # bgr=False so channels pass through as-is
-        t = to_tensor(image, alpha, "cpu", bgr=False)
-        assert t[0, 0, 0, 0].item() == pytest.approx(0.1)
-        assert t[0, 1, 0, 0].item() == pytest.approx(0.2)
-        assert t[0, 2, 0, 0].item() == pytest.approx(0.3)
-        assert t[0, 3, 0, 0].item() == pytest.approx(1.0)
-
-    def test_non_square_input(self):
-        t = to_tensor(_make_image(16, 32), _make_alpha(16, 32), "cpu")
-        assert t.shape == (1, 4, 16, 32)
-
-    @pytest.mark.gpu
-    def test_output_on_cuda(self):
-        t = to_tensor(_make_image(), _make_alpha(), "cuda")
-        assert t.device.type == "cuda"
+    def test_alpha_values_preserved_through_combined_transfer(self):
+        """Alpha channel must survive the combined [4, H, W] PCIe transfer unchanged."""
+        image = _make_image(4, 4)
+        alpha = np.random.rand(4, 4, 1).astype(np.float32)
+        _, alp_t = to_tensors(image, alpha, "cpu")
+        expected = torch.from_numpy(alpha.transpose(2, 0, 1)).unsqueeze(0)
+        torch.testing.assert_close(alp_t, expected)

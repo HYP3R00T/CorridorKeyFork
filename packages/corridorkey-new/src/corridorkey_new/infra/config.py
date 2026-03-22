@@ -14,7 +14,10 @@ Example ``corridorkey.toml``::
 
     [preprocess]
     img_size = 2048
-    resize_strategy = "squish"
+    upsample_mode = "bicubic"
+    alpha_upsample_mode = "bilinear"
+    half_precision = false
+    source_passthrough = true
 
     [inference]
     checkpoint_path = "~/models/greenformer.pth"

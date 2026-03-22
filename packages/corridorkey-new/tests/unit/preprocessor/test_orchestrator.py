@@ -241,6 +241,38 @@ class TestPreprocessFrame:
         assert result.meta.source_image is not None
         assert result.meta.source_image.shape == (32, 32, 3)
 
+    def test_source_image_is_rgb_not_bgr(self, tmp_path: Path):
+        """source_image must be in RGB order — the postprocessor contract requires it."""
+        frames_dir = tmp_path / "Frames"
+        frames_dir.mkdir(parents=True)
+        alpha_dir = tmp_path / "AlphaFrames"
+        alpha_dir.mkdir()
+        output_dir = tmp_path / "Output"
+        output_dir.mkdir()
+        # Pure-red image in BGR (OpenCV native): B=0, G=0, R=255
+        red_bgr = np.zeros((8, 8, 3), dtype=np.uint8)
+        red_bgr[:, :, 2] = 255
+        cv2.imwrite(str(frames_dir / "frame_000000.png"), red_bgr)
+        cv2.imwrite(str(alpha_dir / "frame_000000.png"), np.full((8, 8), 255, dtype=np.uint8))
+        manifest = ClipManifest(
+            clip_name="rgb_test",
+            clip_root=tmp_path,
+            frames_dir=frames_dir,
+            alpha_frames_dir=alpha_dir,
+            output_dir=output_dir,
+            needs_alpha=False,
+            frame_count=1,
+            frame_range=(0, 1),
+            is_linear=False,
+        )
+        config = PreprocessConfig(img_size=8, device="cpu", source_passthrough=True)
+        result = preprocess_frame(manifest, 0, config)
+        assert result.meta.source_image is not None
+        # In RGB order: channel 0 = R = 1.0, channels 1 and 2 = 0.0
+        assert result.meta.source_image[0, 0, 0] == pytest.approx(1.0)
+        assert result.meta.source_image[0, 0, 1] == pytest.approx(0.0)
+        assert result.meta.source_image[0, 0, 2] == pytest.approx(0.0)
+
     @pytest.mark.gpu
     def test_tensor_on_cuda(self, tmp_path: Path):
         manifest = _make_manifest(tmp_path)
@@ -302,3 +334,31 @@ class TestPreprocessConfigProfiles:
         cfg = PreprocessConfig.balanced(device="cuda", img_size=1024)
         assert cfg.device == "cuda"
         assert cfg.img_size == 1024
+
+
+class TestPreprocessConfigValidation:
+    def test_img_size_zero_raises(self):
+        with pytest.raises(ValueError, match="img_size must be > 0"):
+            PreprocessConfig(img_size=0)
+
+    def test_img_size_negative_raises(self):
+        with pytest.raises(ValueError, match="img_size must be > 0"):
+            PreprocessConfig(img_size=-1)
+
+    def test_img_size_positive_is_valid(self):
+        cfg = PreprocessConfig(img_size=1)
+        assert cfg.img_size == 1
+
+
+class TestPreprocessorPackageExports:
+    def test_upsample_mode_importable(self):
+        from corridorkey_new.stages.preprocessor import UpsampleMode
+        assert UpsampleMode is not None
+
+    def test_default_upsample_mode_importable(self):
+        from corridorkey_new.stages.preprocessor import DEFAULT_UPSAMPLE_MODE
+        assert isinstance(DEFAULT_UPSAMPLE_MODE, str)
+
+    def test_default_alpha_upsample_mode_importable(self):
+        from corridorkey_new.stages.preprocessor import DEFAULT_ALPHA_UPSAMPLE_MODE
+        assert isinstance(DEFAULT_ALPHA_UPSAMPLE_MODE, str)

@@ -100,6 +100,25 @@ class TestReadFramePair:
         _, alpha, _ = _read_frame_pair(img_path, alpha_path)
         assert alpha.shape[2] == 1
 
+    def test_multichannel_alpha_dot_product_preserves_precision(self, tmp_path: Path):
+        """Float32 dot product path must preserve sub-uint8 precision.
+
+        A pure-green BGR pixel (B=0, G=1.0, R=0) has luminance 0.587 by the
+        BGR→gray weights [0.114, 0.587, 0.299]. A uint8 round-trip would
+        quantise this to round(0.587 * 255) / 255 ≈ 0.5882, losing precision.
+        The direct float32 dot product must return exactly 0.587.
+        """
+        from corridorkey_new.stages.preprocessor.reader import _to_channels
+
+        # Pure green in BGR float32 — no uint8 quantisation
+        arr = np.zeros((4, 4, 3), dtype=np.float32)
+        arr[:, :, 1] = 1.0  # G channel in BGR
+        out, bgr = _to_channels(arr, channels=1, path=tmp_path / "fake.png")
+        assert bgr is False
+        assert out.shape == (4, 4, 1)
+        # Expected: 0.114*0 + 0.587*1.0 + 0.299*0 = 0.587
+        assert out[0, 0, 0] == pytest.approx(0.587, abs=1e-6)
+
     def test_bgr_flag_true_for_colour_image(self, tmp_path: Path):
         """Reader must return bgr=True for standard colour images — no CPU reorder."""
         img_path = tmp_path / "frame.png"

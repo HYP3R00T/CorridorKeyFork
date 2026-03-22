@@ -68,27 +68,3 @@ def to_tensors(
         img_t = img_t[:, [2, 1, 0], :, :]
 
     return img_t, alp_t
-
-
-def to_tensor(
-    image: np.ndarray,
-    alpha: np.ndarray,
-    device: str,
-    bgr: bool = False,
-) -> torch.Tensor:
-    """Build the final model input tensor by concatenating image and alpha.
-
-    Kept for callers that use the single-tensor API. Prefer ``to_tensors``
-    when transforms need to be applied between construction and concatenation.
-
-    Args:
-        image: float32 [H, W, 3], ImageNet-normalised.
-        alpha: float32 [H, W, 1], linear, range 0.0–1.0.
-        device: PyTorch device string ("cuda", "mps", "cpu").
-        bgr: If True, reorder image channels BGR→RGB on-device after transfer.
-
-    Returns:
-        float32 tensor [1, 4, H, W] on the specified device.
-    """
-    img_t, alp_t = to_tensors(image, alpha, device, bgr=bgr)
-    return torch.cat([img_t, alp_t], dim=1)  # [1, 4, H, W]

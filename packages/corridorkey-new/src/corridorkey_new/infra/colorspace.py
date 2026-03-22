@@ -50,5 +50,7 @@ def lut_apply(x: np.ndarray, lut: np.ndarray) -> np.ndarray:
     Returns:
         float32 array, same shape as x.
     """
-    indices = np.clip(np.rint(np.clip(x, 0.0, 1.0) * (_LUT_SIZE - 1)).astype(np.int32), 0, _LUT_SIZE - 1)
+    # Clip input to [0, 1] first — this guarantees indices land in
+    # [0, _LUT_SIZE-1] exactly, so no second clip on the indices is needed.
+    indices = np.rint(np.clip(x, 0.0, 1.0) * (_LUT_SIZE - 1)).astype(np.int32)
     return lut[indices]

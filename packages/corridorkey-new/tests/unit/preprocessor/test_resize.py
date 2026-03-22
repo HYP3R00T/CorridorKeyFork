@@ -114,3 +114,26 @@ class TestResizeFrameHalfPrecision:
         image_out, alpha_out = resize_frame(src, alp, 32)
         assert image_out.dtype == torch.float16
         assert alpha_out.dtype == torch.float16
+
+
+class TestResizeAlphaRange:
+    def test_bilinear_alpha_upscale_stays_in_range(self):
+        """bilinear alpha upscale must not produce values outside [0, 1]."""
+        src = _make_image(16, 16)
+        # Sharp 0/1 matte — worst case for ringing
+        alp = torch.zeros(1, 1, 16, 16, dtype=torch.float32)
+        alp[:, :, 8:, :] = 1.0
+        _, alpha_out = resize_frame(src, alp, 64, alpha_upsample_mode="bilinear")
+        assert alpha_out.min().item() >= 0.0
+        assert alpha_out.max().item() <= 1.0
+
+    def test_bicubic_alpha_upscale_can_ring(self):
+        """bicubic alpha upscale may ring below 0 on a hard edge — this is expected
+        and is why alpha_upsample_mode defaults to bilinear, not bicubic."""
+        src = _make_image(16, 16)
+        alp = torch.zeros(1, 1, 16, 16, dtype=torch.float32)
+        alp[:, :, 8:, :] = 1.0
+        _, alpha_out = resize_frame(src, alp, 64, alpha_upsample_mode="bicubic")
+        # Shape and dtype must still be correct even if values ring
+        assert alpha_out.shape == (1, 1, 64, 64)
+        assert alpha_out.dtype == torch.float32

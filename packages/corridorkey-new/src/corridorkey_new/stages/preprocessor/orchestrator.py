@@ -23,9 +23,8 @@ Each stage in the pipeline has a corresponding orchestrator.py.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
 
 import numpy as np
 import torch
@@ -133,6 +132,10 @@ class PreprocessConfig:
             source_passthrough=False,
         )
 
+    def __post_init__(self) -> None:
+        if self.img_size <= 0:
+            raise ValueError(f"PreprocessConfig.img_size must be > 0, got {self.img_size}.")
+
 
 @dataclass(frozen=True)
 class FrameMeta:
@@ -142,9 +145,10 @@ class FrameMeta:
         frame_index: Index of this frame within the clip's frame_range.
         original_h: Frame height before resizing, in pixels.
         original_w: Frame width before resizing, in pixels.
-        source_image: Original sRGB image [H, W, 3] float32 at source resolution,
-            used by postprocessor source_passthrough to replace model FG in
-            opaque interior regions. None if source passthrough is disabled.
+        source_image: Original sRGB image [H, W, 3] float32, RGB channel order,
+            at source resolution, used by postprocessor source_passthrough to
+            replace model FG in opaque interior regions. None if source
+            passthrough is disabled.
     """
 
     frame_index: int

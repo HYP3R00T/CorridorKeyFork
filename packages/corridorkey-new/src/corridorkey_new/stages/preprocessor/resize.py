@@ -126,7 +126,7 @@ def _resize_single_pass(
     Concatenating along the channel dimension means one kernel dispatch
     instead of two. The channels are split back out after the resize.
 
-    For downscaling, area mode is always used (ignores img_mode/alpha_mode).
+    For downscaling, area mode is always used (img_mode/alpha_mode ignored).
     For upscaling, img_mode and alpha_mode may differ, so we check whether
     they match and either do one combined call or two separate calls.
     """

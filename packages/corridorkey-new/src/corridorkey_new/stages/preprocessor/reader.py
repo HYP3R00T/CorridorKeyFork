@@ -27,6 +27,10 @@ from corridorkey_new.errors import FrameReadError
 
 logger = logging.getLogger(__name__)
 
+# BGR→GRAY luminance weights (OpenCV convention: B=0.114, G=0.587, R=0.299).
+# Module-level constant — avoids re-allocating a new array on every alpha read.
+_BGR_TO_GRAY = np.array([0.114, 0.587, 0.299], dtype=np.float32)
+
 
 def _read_frame_pair(
     image_path: Path,
@@ -109,16 +113,21 @@ def _read_image(path: Path, channels: int) -> tuple[np.ndarray, bool]:
 def _to_float32(arr: np.ndarray, path: Path) -> np.ndarray:
     """Normalise array to float32 in range 0.0–1.0.
 
-    uint8  -> divide by 255
-    uint16 -> divide by 65535
-    float  -> clamp to [0, 1] (EXR values outside range are clipped)
+    uint8  -> multiply by 1/255   (single allocation, no intermediate)
+    uint16 -> multiply by 1/65535 (single allocation, no intermediate)
+    float  -> clamp to [0, 1]     (EXR values outside range are clipped)
+
+    np.multiply with out=None and dtype=float32 writes directly into the
+    output without creating an intermediate array, unlike astype() / 255.
     """
     if arr.dtype == np.uint8:
-        return arr.astype(np.float32) / 255.0
+        return np.multiply(arr, 1.0 / 255.0, dtype=np.float32)
     if arr.dtype == np.uint16:
-        return arr.astype(np.float32) / 65535.0
+        return np.multiply(arr, 1.0 / 65535.0, dtype=np.float32)
     if np.issubdtype(arr.dtype, np.floating):
-        return np.clip(arr.astype(np.float32), 0.0, 1.0)
+        # Avoid a redundant copy when the array is already float32 (e.g. EXR).
+        f32 = arr if arr.dtype == np.float32 else arr.astype(np.float32)
+        return np.clip(f32, 0.0, 1.0)
     raise FrameReadError(f"Unsupported dtype '{arr.dtype}' in '{path}'.")
 
 
@@ -153,14 +162,10 @@ def _to_channels(arr: np.ndarray, channels: int, path: Path) -> tuple[np.ndarray
             return arr, False
         if c in (3, 4):
             # Convert multi-channel alpha hint to grayscale luminance.
-            # Round-trip through uint8 matches OpenCV's cvtColor precision.
-            gray = (
-                cv2.cvtColor(
-                    (arr[:, :, :3] * 255).astype(np.uint8),
-                    cv2.COLOR_BGR2GRAY,
-                ).astype(np.float32)
-                / 255.0
-            )
+            # Direct float32 dot product — no uint8 round-trip, preserves
+            # full precision from 16-bit or float32 sources.
+            # Weights match OpenCV's BGR→GRAY: B=0.114, G=0.587, R=0.299.
+            gray = np.dot(arr[:, :, :3], _BGR_TO_GRAY)
             return gray[:, :, np.newaxis], False
         raise FrameReadError(f"Cannot reduce {c}-channel image to 1 channel: '{path}'.")
 

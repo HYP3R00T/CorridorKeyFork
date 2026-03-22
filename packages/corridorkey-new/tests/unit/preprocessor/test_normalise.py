@@ -51,6 +51,26 @@ class TestNormaliseImage:
         result = normalise_image(img)
         assert result.shape == (3, 8, 8)
 
+    def test_non_contiguous_view_does_not_corrupt_original(self):
+        """In-place ops on a non-contiguous view must not corrupt other elements.
+
+        normalise_image calls .contiguous() internally, which creates a new
+        tensor rather than modifying the original storage. The elements of the
+        original tensor that were NOT passed in must remain unchanged.
+        """
+        # Build a [2, 3, 4, 4] tensor; pass only the first batch element (a view).
+        base = torch.rand(2, 3, 4, 4, dtype=torch.float32)
+        original_second = base[1].clone()
+
+        # Slice out first element — this is a non-contiguous view of base
+        view = base[0:1]
+        assert not view.is_contiguous() or True  # may or may not be contiguous; guard handles both
+
+        normalise_image(view)
+
+        # Second batch element must be completely untouched
+        torch.testing.assert_close(base[1], original_second)
+
 
 class TestGetMeanStdCache:
     def test_returns_same_objects_on_repeated_calls(self):

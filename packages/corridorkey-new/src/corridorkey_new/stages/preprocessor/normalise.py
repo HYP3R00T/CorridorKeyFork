@@ -56,16 +56,25 @@ def normalise_image(image: torch.Tensor) -> torch.Tensor:
     The input tensor is modified and returned — do not use the original
     reference after calling this function.
 
+    Note on views: in-place ops on a non-contiguous view will modify the
+    underlying storage, which may corrupt other tensors sharing that storage.
+    ``contiguous()`` is called automatically to guard against this — it is a
+    no-op when the tensor is already contiguous (the common case).
+
     Args:
         image: float32 tensor [B, 3, H, W] or [3, H, W], sRGB, range 0.0–1.0.
 
     Returns:
-        The same tensor, normalised in-place. Values will be outside [0, 1] —
-        that is expected and correct.
+        The same tensor (or a contiguous copy if input was a non-contiguous
+        view), normalised in-place. Values will be outside [0, 1] — expected.
     """
     squeezed = image.ndim == 3
     if squeezed:
         image = image.unsqueeze(0)
+
+    # Guard: in-place ops on a non-contiguous view corrupt shared storage.
+    # contiguous() is a no-op when already contiguous (the common case).
+    image = image.contiguous()
 
     mean, std = _get_mean_std(image.dtype, image.device)
     image.sub_(mean).div_(std)
