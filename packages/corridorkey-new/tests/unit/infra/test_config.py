@@ -9,7 +9,7 @@ from corridorkey_new.infra.config import CorridorKeyConfig
 class TestCorridorKeyConfigDefaults:
     def test_default_log_level(self):
         config = CorridorKeyConfig()
-        assert config.log_level == "INFO"
+        assert config.logging.level == "INFO"
 
     def test_default_device(self):
         config = CorridorKeyConfig()
@@ -17,18 +17,23 @@ class TestCorridorKeyConfigDefaults:
 
     def test_default_log_dir_contains_corridorkey(self):
         config = CorridorKeyConfig()
-        assert "corridorkey" in str(config.log_dir)
+        assert "corridorkey" in str(config.logging.dir)
 
 
 class TestCorridorKeyConfigValidation:
     def test_valid_log_levels(self):
+        from corridorkey_new.infra.config import LoggingSettings
+
         for level in ("DEBUG", "INFO", "WARNING", "ERROR"):
-            config = CorridorKeyConfig(log_level=level)
-            assert config.log_level == level
+            config = CorridorKeyConfig(logging=LoggingSettings(level=level))
+            assert config.logging.level == level
 
     def test_invalid_log_level_raises(self):
-        with pytest.raises(Exception, match="log_level"):
-            CorridorKeyConfig(log_level="VERBOSE")  # type: ignore[arg-type]
+        from corridorkey_new.infra.config import LoggingSettings
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            LoggingSettings(level="VERBOSE")  # type: ignore[arg-type]
 
     def test_valid_devices(self):
         for device in ("auto", "cuda", "rocm", "mps", "cpu"):
@@ -42,8 +47,10 @@ class TestCorridorKeyConfigValidation:
 
 class TestCorridorKeyConfigOverrides:
     def test_override_log_level(self):
-        config = CorridorKeyConfig(log_level="DEBUG")
-        assert config.log_level == "DEBUG"
+        from corridorkey_new.infra.config import LoggingSettings
+
+        config = CorridorKeyConfig(logging=LoggingSettings(level="DEBUG"))
+        assert config.logging.level == "DEBUG"
 
     def test_override_device(self):
         config = CorridorKeyConfig(device="cpu")

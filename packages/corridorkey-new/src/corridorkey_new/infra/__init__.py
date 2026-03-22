@@ -21,7 +21,7 @@ detect_gpu() -> GPUInfo
     device info to the user before starting a run.
 
 CorridorKeyConfig
-    The validated configuration model. Inspect fields to understand
+    The validated top-level configuration model. Inspect fields to understand
     what can be configured and what the defaults are.
 
 GPUInfo
@@ -34,7 +34,10 @@ from corridorkey_new.infra.config import (
     APP_NAME,
     CorridorKeyConfig,
     InferenceSettings,
+    LoggingSettings,
+    PostprocessSettings,
     PreprocessSettings,
+    WriterSettings,
     load_config,
     load_config_with_metadata,
 )
@@ -52,7 +55,10 @@ __all__ = [
     "resolve_device",
     "detect_gpu",
     "CorridorKeyConfig",
+    "LoggingSettings",
     "PreprocessSettings",
     "InferenceSettings",
+    "PostprocessSettings",
+    "WriterSettings",
     "GPUInfo",
 ]

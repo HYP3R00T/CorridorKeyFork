@@ -35,7 +35,7 @@ def setup_logging(config: CorridorKeyConfig) -> None:
     Returns:
         Path to the log file created for this run.
     """
-    log_dir = Path(config.log_dir).expanduser()
+    log_dir = Path(config.logging.dir).expanduser()
     log_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
@@ -46,8 +46,8 @@ def setup_logging(config: CorridorKeyConfig) -> None:
     root.setLevel(logging.DEBUG)  # handlers filter individually
 
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
-    file_handler.setLevel(config.log_level)
+    file_handler.setLevel(config.logging.level)
     file_handler.setFormatter(logging.Formatter(_FILE_FORMAT))
     root.addHandler(file_handler)
 
-    logging.getLogger(__name__).debug("Logging initialised: file=%s level=%s", log_file, config.log_level)
+    logging.getLogger(__name__).debug("Logging initialised: file=%s level=%s", log_file, config.logging.level)
