@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.inference.orchestrator.
+"""Unit tests for corridorkey_new.stages.inference.orchestrator.
 
 All tests mock the model — no checkpoint or GPU required.
 """
@@ -9,14 +9,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import torch
-from corridorkey_new.inference.config import InferenceConfig
-from corridorkey_new.inference.contracts import InferenceResult
-from corridorkey_new.inference.orchestrator import (
+from corridorkey_new.stages.inference.config import InferenceConfig
+from corridorkey_new.stages.inference.contracts import InferenceResult
+from corridorkey_new.stages.inference.orchestrator import (
     _probe_vram_gb,
     _should_tile_refiner,
     run_inference,
 )
-from corridorkey_new.preprocessor.orchestrator import FrameMeta, PreprocessedFrame
+from corridorkey_new.stages.preprocessor.orchestrator import FrameMeta, PreprocessedFrame
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -60,18 +60,18 @@ class TestShouldTileRefiner:
 
     def test_auto_low_vram_returns_true(self, tmp_path: Path):
         cfg = _make_config(tmp_path, use_refiner=True, optimization_mode="auto")
-        with patch("corridorkey_new.inference.orchestrator._probe_vram_gb", return_value=8.0):
+        with patch("corridorkey_new.stages.inference.orchestrator._probe_vram_gb", return_value=8.0):
             assert _should_tile_refiner(cfg) is True
 
     def test_auto_high_vram_returns_false(self, tmp_path: Path):
         cfg = _make_config(tmp_path, use_refiner=True, optimization_mode="auto")
-        with patch("corridorkey_new.inference.orchestrator._probe_vram_gb", return_value=24.0):
+        with patch("corridorkey_new.stages.inference.orchestrator._probe_vram_gb", return_value=24.0):
             assert _should_tile_refiner(cfg) is False
 
     def test_auto_zero_vram_returns_false(self, tmp_path: Path):
         """0.0 means VRAM unknown — should not trigger lowvram mode."""
         cfg = _make_config(tmp_path, use_refiner=True, optimization_mode="auto")
-        with patch("corridorkey_new.inference.orchestrator._probe_vram_gb", return_value=0.0):
+        with patch("corridorkey_new.stages.inference.orchestrator._probe_vram_gb", return_value=0.0):
             assert _should_tile_refiner(cfg) is False
 
 

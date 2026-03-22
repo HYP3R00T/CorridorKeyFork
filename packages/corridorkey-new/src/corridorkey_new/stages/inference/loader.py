@@ -28,7 +28,7 @@ from pathlib import Path
 import torch
 from torch.nn import functional
 
-from corridorkey_new.inference.config import InferenceConfig
+from corridorkey_new.stages.inference.config import InferenceConfig
 
 logger = logging.getLogger(__name__)
 

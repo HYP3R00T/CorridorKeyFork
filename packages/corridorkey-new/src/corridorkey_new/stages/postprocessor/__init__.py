@@ -8,9 +8,9 @@ Contracts:
     PostprocessedFrame  — alpha [H,W,1], fg [H,W,3], comp [H,W,3], numpy float32
 """
 
-from corridorkey_new.postprocessor.config import PostprocessConfig
-from corridorkey_new.postprocessor.contracts import PostprocessedFrame
-from corridorkey_new.postprocessor.orchestrator import postprocess_frame
+from corridorkey_new.stages.postprocessor.config import PostprocessConfig
+from corridorkey_new.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey_new.stages.postprocessor.orchestrator import postprocess_frame
 
 __all__ = [
     "postprocess_frame",

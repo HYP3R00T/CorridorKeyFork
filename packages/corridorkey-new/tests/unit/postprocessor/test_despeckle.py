@@ -1,9 +1,9 @@
-"""Unit tests for corridorkey_new.postprocessor.despeckle."""
+"""Unit tests for corridorkey_new.stages.postprocessor.despeckle."""
 
 from __future__ import annotations
 
 import numpy as np
-from corridorkey_new.postprocessor.despeckle import despeckle_alpha
+from corridorkey_new.stages.postprocessor.despeckle import despeckle_alpha
 
 
 def _alpha_with_speck(h: int = 128, w: int = 128) -> np.ndarray:

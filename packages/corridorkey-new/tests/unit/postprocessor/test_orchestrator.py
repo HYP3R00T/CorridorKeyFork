@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.postprocessor.orchestrator."""
+"""Unit tests for corridorkey_new.stages.postprocessor.orchestrator."""
 
 from __future__ import annotations
 
@@ -6,11 +6,11 @@ from unittest.mock import patch
 
 import numpy as np
 import torch
-from corridorkey_new.inference.contracts import InferenceResult
-from corridorkey_new.postprocessor.config import PostprocessConfig
-from corridorkey_new.postprocessor.contracts import PostprocessedFrame
-from corridorkey_new.postprocessor.orchestrator import postprocess_frame
-from corridorkey_new.preprocessor.orchestrator import FrameMeta
+from corridorkey_new.stages.inference.contracts import InferenceResult
+from corridorkey_new.stages.postprocessor.config import PostprocessConfig
+from corridorkey_new.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey_new.stages.postprocessor.orchestrator import postprocess_frame
+from corridorkey_new.stages.preprocessor.orchestrator import FrameMeta
 
 
 def _make_result(h: int = 32, w: int = 32, frame_index: int = 0) -> InferenceResult:
@@ -58,14 +58,14 @@ class TestPostprocessFrame:
 
     def test_despeckle_called_when_enabled(self):
         cfg = PostprocessConfig(auto_despeckle=True, despeckle_size=10)
-        with patch("corridorkey_new.postprocessor.orchestrator.despeckle_alpha") as mock:
+        with patch("corridorkey_new.stages.postprocessor.orchestrator.despeckle_alpha") as mock:
             mock.side_effect = lambda a, min_area: a
             postprocess_frame(_make_result(), cfg)
             mock.assert_called_once()
 
     def test_despeckle_skipped_when_disabled(self):
         cfg = PostprocessConfig(auto_despeckle=False)
-        with patch("corridorkey_new.postprocessor.orchestrator.despeckle_alpha") as mock:
+        with patch("corridorkey_new.stages.postprocessor.orchestrator.despeckle_alpha") as mock:
             postprocess_frame(_make_result(), cfg)
             mock.assert_not_called()
 

@@ -1,9 +1,9 @@
-"""Unit tests for corridorkey_new.preprocessor.resize."""
+"""Unit tests for corridorkey_new.stages.preprocessor.resize."""
 
 from __future__ import annotations
 
 import torch
-from corridorkey_new.preprocessor.resize import resize_frame
+from corridorkey_new.stages.preprocessor.resize import resize_frame
 
 
 def _make_image(h: int, w: int) -> torch.Tensor:

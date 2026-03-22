@@ -2,7 +2,7 @@
 
 Public API::
 
-    from corridorkey_new.preprocessor import (
+    from corridorkey_new.stages.preprocessor import (
         preprocess_frame,
         PreprocessConfig,
         PreprocessedFrame,
@@ -11,7 +11,12 @@ Public API::
     )
 """
 
-from corridorkey_new.preprocessor.orchestrator import FrameMeta, PreprocessConfig, PreprocessedFrame, preprocess_frame
-from corridorkey_new.preprocessor.reader import FrameReadError
+from corridorkey_new.stages.preprocessor.orchestrator import (
+    FrameMeta,
+    PreprocessConfig,
+    PreprocessedFrame,
+    preprocess_frame,
+)
+from corridorkey_new.stages.preprocessor.reader import FrameReadError
 
 __all__ = ["preprocess_frame", "PreprocessConfig", "PreprocessedFrame", "FrameMeta", "FrameReadError"]

@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.loader.validator."""
+"""Unit tests for corridorkey_new.stages.loader.validator."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from corridorkey_new.errors import FrameMismatchError
-from corridorkey_new.loader.validator import (
+from corridorkey_new.stages.loader.validator import (
     count_frames,
     detect_is_linear,
     get_frame_files,

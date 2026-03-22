@@ -1,9 +1,9 @@
-"""Unit tests for corridorkey_new.postprocessor.despill."""
+"""Unit tests for corridorkey_new.stages.postprocessor.despill."""
 
 from __future__ import annotations
 
 import numpy as np
-from corridorkey_new.postprocessor.despill import remove_spill
+from corridorkey_new.stages.postprocessor.despill import remove_spill
 
 
 def _green_image(h: int = 8, w: int = 8) -> np.ndarray:

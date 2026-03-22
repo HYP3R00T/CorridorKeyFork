@@ -19,14 +19,14 @@ from pathlib import Path
 import torch.nn as nn
 
 from corridorkey_new.events import PipelineEvents
-from corridorkey_new.inference import InferenceConfig, InferenceResult, run_inference
-from corridorkey_new.inference.orchestrator import _free_vram_if_needed
-from corridorkey_new.loader.contracts import ClipManifest
-from corridorkey_new.loader.validator import get_frame_files
-from corridorkey_new.pipeline.queue import STOP, BoundedQueue
-from corridorkey_new.postprocessor import PostprocessConfig, postprocess_frame
-from corridorkey_new.preprocessor import FrameReadError, PreprocessConfig, PreprocessedFrame, preprocess_frame
-from corridorkey_new.writer import WriteConfig, write_frame
+from corridorkey_new.runtime.queue import STOP, BoundedQueue
+from corridorkey_new.stages.inference import InferenceConfig, InferenceResult, run_inference
+from corridorkey_new.stages.inference.orchestrator import _free_vram_if_needed
+from corridorkey_new.stages.loader.contracts import ClipManifest
+from corridorkey_new.stages.loader.validator import get_frame_files
+from corridorkey_new.stages.postprocessor import PostprocessConfig, postprocess_frame
+from corridorkey_new.stages.preprocessor import FrameReadError, PreprocessConfig, PreprocessedFrame, preprocess_frame
+from corridorkey_new.stages.writer import WriteConfig, write_frame
 
 logger = logging.getLogger(__name__)
 

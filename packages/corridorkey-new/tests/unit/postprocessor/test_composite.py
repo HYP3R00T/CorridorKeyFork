@@ -1,9 +1,9 @@
-"""Unit tests for corridorkey_new.postprocessor.composite."""
+"""Unit tests for corridorkey_new.stages.postprocessor.composite."""
 
 from __future__ import annotations
 
 import numpy as np
-from corridorkey_new.postprocessor.composite import make_preview
+from corridorkey_new.stages.postprocessor.composite import make_preview
 
 
 class TestMakePreview:

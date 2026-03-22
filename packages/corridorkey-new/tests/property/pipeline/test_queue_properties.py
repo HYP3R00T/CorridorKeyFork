@@ -1,10 +1,10 @@
-"""Property-based tests for corridorkey_new.pipeline.queue."""
+"""Property-based tests for corridorkey_new.runtime.queue."""
 
 from __future__ import annotations
 
 import threading
 
-from corridorkey_new.pipeline.queue import STOP, BoundedQueue
+from corridorkey_new.runtime.queue import STOP, BoundedQueue
 from hypothesis import given, settings
 from hypothesis import strategies as st
 

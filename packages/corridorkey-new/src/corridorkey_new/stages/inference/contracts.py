@@ -11,7 +11,7 @@ from dataclasses import dataclass
 
 import torch
 
-from corridorkey_new.preprocessor.orchestrator import FrameMeta
+from corridorkey_new.stages.preprocessor.orchestrator import FrameMeta
 
 
 @dataclass(frozen=True)

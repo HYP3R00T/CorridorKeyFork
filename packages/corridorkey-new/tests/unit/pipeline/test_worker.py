@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.pipeline.worker."""
+"""Unit tests for corridorkey_new.runtime.worker."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ from unittest.mock import MagicMock, patch
 import cv2
 import numpy as np
 import torch
-from corridorkey_new.inference import InferenceConfig, InferenceResult
-from corridorkey_new.loader.contracts import ClipManifest
-from corridorkey_new.pipeline.queue import STOP, BoundedQueue
-from corridorkey_new.pipeline.worker import InferenceWorker, PostWriteWorker, PreprocessWorker
-from corridorkey_new.preprocessor import FrameMeta, FrameReadError, PreprocessConfig, PreprocessedFrame
+from corridorkey_new.stages.inference import InferenceConfig, InferenceResult
+from corridorkey_new.stages.loader.contracts import ClipManifest
+from corridorkey_new.runtime.queue import STOP, BoundedQueue
+from corridorkey_new.runtime.worker import InferenceWorker, PostWriteWorker, PreprocessWorker
+from corridorkey_new.stages.preprocessor import FrameMeta, FrameReadError, PreprocessConfig, PreprocessedFrame
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -116,7 +116,7 @@ class TestPreprocessWorker:
         q: BoundedQueue = BoundedQueue(10)
 
         call_count = 0
-        original_preprocess = __import__("corridorkey_new.preprocessor", fromlist=["preprocess_frame"]).preprocess_frame
+        original_preprocess = __import__("corridorkey_new.stages.preprocessor", fromlist=["preprocess_frame"]).preprocess_frame
 
         def patched_preprocess(m, i, c, **kwargs):
             nonlocal call_count
@@ -125,7 +125,7 @@ class TestPreprocessWorker:
                 raise FrameReadError("simulated read error")
             return original_preprocess(m, i, c, **kwargs)
 
-        with patch("corridorkey_new.pipeline.worker.preprocess_frame", side_effect=patched_preprocess):
+        with patch("corridorkey_new.runtime.worker.preprocess_frame", side_effect=patched_preprocess):
             worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q)
             t = worker.start()
             t.join(timeout=10)
@@ -149,7 +149,7 @@ class TestPreprocessWorker:
         q: BoundedQueue = BoundedQueue(10)
 
         with patch(
-            "corridorkey_new.pipeline.worker.preprocess_frame",
+            "corridorkey_new.runtime.worker.preprocess_frame",
             side_effect=FrameReadError("all broken"),
         ):
             worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q)
@@ -223,7 +223,7 @@ class TestInferenceWorker:
         in_q.put(frame)
         in_q.put_stop()
 
-        with patch("corridorkey_new.pipeline.worker.run_inference", return_value=result):
+        with patch("corridorkey_new.runtime.worker.run_inference", return_value=result):
             worker = InferenceWorker(
                 input_queue=in_q,
                 output_queue=out_q,
@@ -262,7 +262,7 @@ class TestInferenceWorker:
             in_q.put(f)
         in_q.put_stop()
 
-        with patch("corridorkey_new.pipeline.worker.run_inference", side_effect=results):
+        with patch("corridorkey_new.runtime.worker.run_inference", side_effect=results):
             worker = InferenceWorker(
                 input_queue=in_q,
                 output_queue=out_q,
@@ -298,7 +298,7 @@ class TestInferenceWorker:
                 raise RuntimeError("simulated inference failure")
             return result2
 
-        with patch("corridorkey_new.pipeline.worker.run_inference", side_effect=side_effect):
+        with patch("corridorkey_new.runtime.worker.run_inference", side_effect=side_effect):
             worker = InferenceWorker(
                 input_queue=in_q,
                 output_queue=out_q,
@@ -318,7 +318,7 @@ class TestInferenceWorker:
         in_q.put(self._make_fake_frame())
         in_q.put_stop()
 
-        with patch("corridorkey_new.pipeline.worker.run_inference", side_effect=RuntimeError("boom")):
+        with patch("corridorkey_new.runtime.worker.run_inference", side_effect=RuntimeError("boom")):
             worker = InferenceWorker(
                 input_queue=in_q,
                 output_queue=out_q,
@@ -353,8 +353,8 @@ class TestPostWriteWorker:
         in_q.put_stop()
 
         with (
-            patch("corridorkey_new.pipeline.worker.postprocess_frame", return_value=MagicMock()),
-            patch("corridorkey_new.pipeline.worker.write_frame"),
+            patch("corridorkey_new.runtime.worker.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey_new.runtime.worker.write_frame"),
         ):
             worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
             t = worker.start()
@@ -390,8 +390,8 @@ class TestPostWriteWorker:
         in_q.put_stop()
 
         with (
-            patch("corridorkey_new.pipeline.worker.postprocess_frame", return_value=MagicMock()) as mock_pp,
-            patch("corridorkey_new.pipeline.worker.write_frame") as mock_wf,
+            patch("corridorkey_new.runtime.worker.postprocess_frame", return_value=MagicMock()) as mock_pp,
+            patch("corridorkey_new.runtime.worker.write_frame") as mock_wf,
         ):
             worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
             t = worker.start()
@@ -407,8 +407,8 @@ class TestPostWriteWorker:
         in_q.put_stop()
 
         with (
-            patch("corridorkey_new.pipeline.worker.postprocess_frame", side_effect=RuntimeError("boom")),
-            patch("corridorkey_new.pipeline.worker.write_frame"),
+            patch("corridorkey_new.runtime.worker.postprocess_frame", side_effect=RuntimeError("boom")),
+            patch("corridorkey_new.runtime.worker.write_frame"),
         ):
             worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
             t = worker.start()

@@ -9,10 +9,10 @@ Contracts:
     InferenceResult   — alpha [1,1,H,W], fg [1,3,H,W], FrameMeta
 """
 
-from corridorkey_new.inference.config import InferenceConfig, OptimizationMode
-from corridorkey_new.inference.contracts import InferenceResult
-from corridorkey_new.inference.loader import load_model
-from corridorkey_new.inference.orchestrator import run_inference
+from corridorkey_new.stages.inference.config import InferenceConfig, OptimizationMode
+from corridorkey_new.stages.inference.contracts import InferenceResult
+from corridorkey_new.stages.inference.loader import load_model
+from corridorkey_new.stages.inference.orchestrator import run_inference
 
 __all__ = [
     "load_model",

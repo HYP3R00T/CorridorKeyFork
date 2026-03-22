@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.writer.orchestrator."""
+"""Unit tests for corridorkey_new.stages.writer.orchestrator."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from corridorkey_new.postprocessor.contracts import PostprocessedFrame
-from corridorkey_new.writer.contracts import WriteConfig
-from corridorkey_new.writer.orchestrator import _alpha_to_bgr, _exr_flags, write_frame
+from corridorkey_new.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey_new.stages.writer.contracts import WriteConfig
+from corridorkey_new.stages.writer.orchestrator import _alpha_to_bgr, _exr_flags, write_frame
 
 
 def _make_frame(h: int = 16, w: int = 16, stem: str = "frame_000000") -> PostprocessedFrame:

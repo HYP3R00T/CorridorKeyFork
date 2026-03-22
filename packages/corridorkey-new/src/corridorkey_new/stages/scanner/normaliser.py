@@ -12,7 +12,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from corridorkey_new.scanner.contracts import Clip
+from corridorkey_new.stages.scanner.contracts import Clip
 
 logger = logging.getLogger(__name__)
 

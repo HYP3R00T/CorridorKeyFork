@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.scanner.orchestrator — scan()."""
+"""Unit tests for corridorkey_new.stages.scanner.orchestrator — scan()."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from corridorkey_new.errors import ClipScanError
-from corridorkey_new.scanner import scan
+from corridorkey_new.stages.scanner import scan
 
 
 def _make_clip_dir(root: Path, with_alpha: bool = True) -> Path:

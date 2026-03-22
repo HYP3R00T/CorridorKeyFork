@@ -37,8 +37,8 @@ from enum import Enum
 from pathlib import Path
 
 from corridorkey_new.errors import InvalidStateTransitionError
-from corridorkey_new.loader.validator import count_frames, get_frame_files
-from corridorkey_new.scanner.contracts import Clip
+from corridorkey_new.stages.loader.validator import count_frames, get_frame_files
+from corridorkey_new.stages.scanner.contracts import Clip
 
 logger = logging.getLogger(__name__)
 
@@ -301,7 +301,7 @@ def _resolve_state(clip: Clip) -> ClipState:
     Returns:
         The most advanced state the clip has reached.
     """
-    from corridorkey_new.loader.extractor import is_video
+    from corridorkey_new.stages.loader.extractor import is_video
 
     # Input is a raw video — frames haven't been extracted yet.
     if is_video(clip.input_path):

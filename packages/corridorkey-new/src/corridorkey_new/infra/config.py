@@ -40,7 +40,7 @@ APP_NAME = "corridorkey"
 class PreprocessSettings(BaseModel):
     """User-facing preprocessing settings.
 
-    Mirrors :class:`~corridorkey_new.preprocessor.PreprocessConfig` but lives
+    Mirrors :class:`~corridorkey_new.stages.preprocessor.PreprocessConfig` but lives
     in the config layer so it can be loaded from TOML / env vars.
     """
 
@@ -73,7 +73,7 @@ class PreprocessSettings(BaseModel):
 class InferenceSettings(BaseModel):
     """User-facing inference settings.
 
-    Mirrors :class:`~corridorkey_new.inference.InferenceConfig` but lives in
+    Mirrors :class:`~corridorkey_new.stages.inference.InferenceConfig` but lives in
     the config layer so it can be loaded from TOML / env vars.
 
     ``checkpoint_path`` is the only required field — all others have sensible
@@ -207,7 +207,7 @@ class CorridorKeyConfig(BaseModel):
     def to_preprocess_config(
         self, device: str | None = None, resolved_img_size: int | None = None
     ):  # -> PreprocessConfig
-        """Build a :class:`~corridorkey_new.preprocessor.PreprocessConfig` from this config.
+        """Build a :class:`~corridorkey_new.stages.preprocessor.PreprocessConfig` from this config.
 
         Args:
             device: Override the device string. If None, uses ``self.device``
@@ -218,7 +218,7 @@ class CorridorKeyConfig(BaseModel):
         Returns:
             PreprocessConfig ready to pass to ``preprocess_frame``.
         """
-        from corridorkey_new.preprocessor import PreprocessConfig
+        from corridorkey_new.stages.preprocessor import PreprocessConfig
 
         img_size = resolved_img_size or self.preprocess.img_size or 2048
 
@@ -229,7 +229,7 @@ class CorridorKeyConfig(BaseModel):
         )
 
     def to_inference_config(self, device: str | None = None):  # -> InferenceConfig
-        """Build an :class:`~corridorkey_new.inference.InferenceConfig` from this config.
+        """Build an :class:`~corridorkey_new.stages.inference.InferenceConfig` from this config.
 
         Args:
             device: Override the device string. If None, uses ``self.device``.
@@ -239,10 +239,10 @@ class CorridorKeyConfig(BaseModel):
         """
         import torch
 
-        from corridorkey_new.inference import InferenceConfig
-        from corridorkey_new.inference.config import adaptive_img_size
-        from corridorkey_new.inference.orchestrator import _probe_vram_gb
         from corridorkey_new.infra.model_hub import default_checkpoint_path
+        from corridorkey_new.stages.inference import InferenceConfig
+        from corridorkey_new.stages.inference.config import adaptive_img_size
+        from corridorkey_new.stages.inference.orchestrator import _probe_vram_gb
 
         checkpoint = self.inference.checkpoint_path or default_checkpoint_path()
         resolved_device = device or self.device

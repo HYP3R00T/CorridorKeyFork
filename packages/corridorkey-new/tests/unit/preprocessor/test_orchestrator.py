@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.preprocessor.orchestrator — preprocess_frame()."""
+"""Unit tests for corridorkey_new.stages.preprocessor.orchestrator — preprocess_frame()."""
 
 from __future__ import annotations
 
@@ -8,9 +8,9 @@ import cv2
 import numpy as np
 import pytest
 import torch
-from corridorkey_new.loader.contracts import ClipManifest
-from corridorkey_new.loader.validator import get_frame_files
-from corridorkey_new.preprocessor import PreprocessConfig, PreprocessedFrame, preprocess_frame
+from corridorkey_new.stages.loader.contracts import ClipManifest
+from corridorkey_new.stages.loader.validator import get_frame_files
+from corridorkey_new.stages.preprocessor import PreprocessConfig, PreprocessedFrame, preprocess_frame
 
 
 def _write_png(path: Path, h: int = 64, w: int = 64, channels: int = 3) -> None:

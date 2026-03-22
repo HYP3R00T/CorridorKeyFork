@@ -1,11 +1,11 @@
-"""Unit tests for corridorkey_new.pipeline.queue."""
+"""Unit tests for corridorkey_new.runtime.queue."""
 
 from __future__ import annotations
 
 import threading
 
 import pytest
-from corridorkey_new.pipeline.queue import STOP, BoundedQueue
+from corridorkey_new.runtime.queue import STOP, BoundedQueue
 
 
 class TestBoundedQueue:

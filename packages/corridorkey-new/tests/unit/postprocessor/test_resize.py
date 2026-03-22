@@ -1,10 +1,10 @@
-"""Unit tests for corridorkey_new.postprocessor.resize."""
+"""Unit tests for corridorkey_new.stages.postprocessor.resize."""
 
 from __future__ import annotations
 
 import numpy as np
 import torch
-from corridorkey_new.postprocessor.resize import resize_to_source, tensor_to_numpy_hwc
+from corridorkey_new.stages.postprocessor.resize import resize_to_source, tensor_to_numpy_hwc
 
 
 class TestTensorToNumpyHwc:

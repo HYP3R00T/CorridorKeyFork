@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.preprocessor.reader."""
+"""Unit tests for corridorkey_new.stages.preprocessor.reader."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from corridorkey_new.preprocessor.reader import FrameReadError, _read_frame_pair
+from corridorkey_new.stages.preprocessor.reader import FrameReadError, _read_frame_pair
 
 
 def _write_png(path: Path, h: int = 64, w: int = 64, channels: int = 3) -> None:

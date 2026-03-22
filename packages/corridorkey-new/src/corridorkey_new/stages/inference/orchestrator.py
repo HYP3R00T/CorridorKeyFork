@@ -22,14 +22,14 @@ import torch
 import torch.nn as nn
 from torch.nn import functional
 
-from corridorkey_new.inference.config import (
+from corridorkey_new.stages.inference.config import (
     _VRAM_LOWVRAM_THRESHOLD_GB,
     REFINER_TILE_OVERLAP,
     REFINER_TILE_SIZE,
     InferenceConfig,
 )
-from corridorkey_new.inference.contracts import InferenceResult
-from corridorkey_new.preprocessor.orchestrator import PreprocessedFrame
+from corridorkey_new.stages.inference.contracts import InferenceResult
+from corridorkey_new.stages.preprocessor.orchestrator import PreprocessedFrame
 
 logger = logging.getLogger(__name__)
 

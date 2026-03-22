@@ -19,8 +19,8 @@ import cv2
 import numpy as np
 
 from corridorkey_new.errors import WriteFailureError
-from corridorkey_new.postprocessor.contracts import PostprocessedFrame
-from corridorkey_new.writer.contracts import WriteConfig
+from corridorkey_new.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey_new.stages.writer.contracts import WriteConfig
 
 logger = logging.getLogger(__name__)
 

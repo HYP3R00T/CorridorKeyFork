@@ -1,11 +1,11 @@
-"""Unit tests for corridorkey_new.preprocessor.tensor."""
+"""Unit tests for corridorkey_new.stages.preprocessor.tensor."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 import torch
-from corridorkey_new.preprocessor.tensor import to_tensor, to_tensors
+from corridorkey_new.stages.preprocessor.tensor import to_tensor, to_tensors
 
 
 def _make_image(h: int = 32, w: int = 32) -> np.ndarray:

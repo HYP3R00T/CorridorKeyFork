@@ -15,10 +15,10 @@ from pathlib import Path
 
 from corridorkey_new.errors import ExtractionError
 from corridorkey_new.events import PipelineEvents
-from corridorkey_new.loader.contracts import ClipManifest
-from corridorkey_new.loader.extractor import extract_video, is_video, save_video_metadata
-from corridorkey_new.loader.validator import count_frames, detect_is_linear, validate
-from corridorkey_new.scanner.contracts import Clip
+from corridorkey_new.stages.loader.contracts import ClipManifest
+from corridorkey_new.stages.loader.extractor import extract_video, is_video, save_video_metadata
+from corridorkey_new.stages.loader.validator import count_frames, detect_is_linear, validate
+from corridorkey_new.stages.scanner.contracts import Clip
 
 logger = logging.getLogger(__name__)
 

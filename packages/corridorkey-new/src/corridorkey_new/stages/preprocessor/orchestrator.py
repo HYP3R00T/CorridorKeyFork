@@ -30,13 +30,13 @@ from typing import Literal
 import numpy as np
 import torch
 
-from corridorkey_new.loader.contracts import ClipManifest
-from corridorkey_new.loader.validator import get_frame_files
-from corridorkey_new.preprocessor.colorspace import linear_to_srgb
-from corridorkey_new.preprocessor.normalise import normalise_image
-from corridorkey_new.preprocessor.reader import _read_frame_pair
-from corridorkey_new.preprocessor.resize import resize_frame
-from corridorkey_new.preprocessor.tensor import to_tensors
+from corridorkey_new.stages.loader.contracts import ClipManifest
+from corridorkey_new.stages.loader.validator import get_frame_files
+from corridorkey_new.stages.preprocessor.colorspace import linear_to_srgb
+from corridorkey_new.stages.preprocessor.normalise import normalise_image
+from corridorkey_new.stages.preprocessor.reader import _read_frame_pair
+from corridorkey_new.stages.preprocessor.resize import resize_frame
+from corridorkey_new.stages.preprocessor.tensor import to_tensors
 
 logger = logging.getLogger(__name__)
 

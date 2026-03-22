@@ -72,7 +72,6 @@ FrameMeta
     postprocessing so outputs can be resized back to source resolution.
 """
 
-from corridorkey_new.clip_state import ClipEntry, ClipState, InOutRange
 from corridorkey_new.errors import (
     ClipScanError,
     CorridorKeyError,
@@ -85,12 +84,6 @@ from corridorkey_new.errors import (
     ModelError,
     VRAMInsufficientError,
     WriteFailureError,
-)
-from corridorkey_new.inference import (
-    InferenceConfig,
-    InferenceResult,
-    load_model,
-    run_inference,
 )
 from corridorkey_new.infra import (
     APP_NAME,
@@ -107,16 +100,23 @@ from corridorkey_new.infra import (
     setup_logging,
     write_config,
 )
-from corridorkey_new.loader import ClipManifest, VideoMetadata, load, load_video_metadata, resolve_alpha
-from corridorkey_new.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
-from corridorkey_new.preprocessor import (
+from corridorkey_new.runtime.clip_state import ClipEntry, ClipState, InOutRange
+from corridorkey_new.stages.inference import (
+    InferenceConfig,
+    InferenceResult,
+    load_model,
+    run_inference,
+)
+from corridorkey_new.stages.loader import ClipManifest, VideoMetadata, load, load_video_metadata, resolve_alpha
+from corridorkey_new.stages.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
+from corridorkey_new.stages.preprocessor import (
     FrameMeta,
     PreprocessConfig,
     PreprocessedFrame,
     preprocess_frame,
 )
-from corridorkey_new.scanner import Clip, scan
-from corridorkey_new.writer import WriteConfig, write_frame
+from corridorkey_new.stages.scanner import Clip, scan
+from corridorkey_new.stages.writer import WriteConfig, write_frame
 
 __all__ = [
     # Pipeline

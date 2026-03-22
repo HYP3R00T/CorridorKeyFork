@@ -1,9 +1,9 @@
-"""Property-based tests for corridorkey_new.preprocessor.colorspace."""
+"""Property-based tests for corridorkey_new.stages.preprocessor.colorspace."""
 
 from __future__ import annotations
 
 import torch
-from corridorkey_new.preprocessor.colorspace import linear_to_srgb
+from corridorkey_new.stages.preprocessor.colorspace import linear_to_srgb
 from hypothesis import given
 from hypothesis import strategies as st
 

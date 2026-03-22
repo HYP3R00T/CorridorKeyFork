@@ -1,11 +1,11 @@
-"""Unit tests for corridorkey_new.scanner.contracts — Clip."""
+"""Unit tests for corridorkey_new.stages.scanner.contracts — Clip."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-from corridorkey_new.scanner.contracts import Clip
+from corridorkey_new.stages.scanner.contracts import Clip
 from pydantic import ValidationError
 
 

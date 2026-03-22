@@ -1,10 +1,10 @@
-"""Unit tests for corridorkey_new.inference.contracts."""
+"""Unit tests for corridorkey_new.stages.inference.contracts."""
 
 from __future__ import annotations
 
 import torch
-from corridorkey_new.inference.contracts import InferenceResult
-from corridorkey_new.preprocessor.orchestrator import FrameMeta
+from corridorkey_new.stages.inference.contracts import InferenceResult
+from corridorkey_new.stages.preprocessor.orchestrator import FrameMeta
 
 
 def _make_result(h: int = 32, w: int = 32) -> InferenceResult:

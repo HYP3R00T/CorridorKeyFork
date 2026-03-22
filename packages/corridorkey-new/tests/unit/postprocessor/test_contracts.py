@@ -1,10 +1,10 @@
-"""Unit tests for corridorkey_new.postprocessor.contracts."""
+"""Unit tests for corridorkey_new.stages.postprocessor.contracts."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
-from corridorkey_new.postprocessor.contracts import PostprocessedFrame
+from corridorkey_new.stages.postprocessor.contracts import PostprocessedFrame
 
 
 def _make_frame(h: int = 32, w: int = 32) -> PostprocessedFrame:

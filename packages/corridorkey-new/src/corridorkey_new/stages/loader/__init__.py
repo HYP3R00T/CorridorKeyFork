@@ -22,8 +22,8 @@ ClipManifest
     or re-validate what stage 1 already checked.
 """
 
-from corridorkey_new.loader.contracts import ClipManifest
-from corridorkey_new.loader.extractor import VideoMetadata, load_video_metadata
-from corridorkey_new.loader.orchestrator import load, resolve_alpha
+from corridorkey_new.stages.loader.contracts import ClipManifest
+from corridorkey_new.stages.loader.extractor import VideoMetadata, load_video_metadata
+from corridorkey_new.stages.loader.orchestrator import load, resolve_alpha
 
 __all__ = ["load", "resolve_alpha", "ClipManifest", "VideoMetadata", "load_video_metadata"]

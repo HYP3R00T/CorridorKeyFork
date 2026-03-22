@@ -15,8 +15,8 @@ import logging
 from pathlib import Path
 
 from corridorkey_new.errors import ClipScanError
-from corridorkey_new.scanner.contracts import Clip
-from corridorkey_new.scanner.normaliser import VIDEO_EXTENSIONS, normalise_video, try_build_clip
+from corridorkey_new.stages.scanner.contracts import Clip
+from corridorkey_new.stages.scanner.normaliser import VIDEO_EXTENSIONS, normalise_video, try_build_clip
 
 logger = logging.getLogger(__name__)
 

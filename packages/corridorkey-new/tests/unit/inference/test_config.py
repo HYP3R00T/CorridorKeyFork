@@ -1,11 +1,11 @@
-"""Unit tests for corridorkey_new.inference.config."""
+"""Unit tests for corridorkey_new.stages.inference.config."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import torch
-from corridorkey_new.inference.config import (
+from corridorkey_new.stages.inference.config import (
     _VRAM_LOWVRAM_THRESHOLD_GB,
     REFINER_TILE_OVERLAP,
     REFINER_TILE_SIZE,

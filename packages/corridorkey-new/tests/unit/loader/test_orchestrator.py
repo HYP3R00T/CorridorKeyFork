@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.loader.orchestrator — load(), resolve_alpha()."""
+"""Unit tests for corridorkey_new.stages.loader.orchestrator — load(), resolve_alpha()."""
 
 from __future__ import annotations
 
@@ -7,9 +7,9 @@ from unittest.mock import patch
 
 import pytest
 from corridorkey_new.errors import FrameMismatchError
-from corridorkey_new.loader.contracts import ClipManifest
-from corridorkey_new.loader.orchestrator import load, resolve_alpha
-from corridorkey_new.scanner.contracts import Clip
+from corridorkey_new.stages.loader.contracts import ClipManifest
+from corridorkey_new.stages.loader.orchestrator import load, resolve_alpha
+from corridorkey_new.stages.scanner.contracts import Clip
 
 
 def _make_frames(directory: Path, count: int = 3, ext: str = ".png") -> None:
@@ -82,7 +82,7 @@ class TestLoad:
         video = input_dir / "clip.mp4"
         video.touch()
 
-        from corridorkey_new.loader.extractor import VideoMetadata
+        from corridorkey_new.stages.loader.extractor import VideoMetadata
 
         fake_meta = VideoMetadata(
             filename="clip.mp4",
@@ -99,7 +99,7 @@ class TestLoad:
             return fake_meta
 
         clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
-        with patch("corridorkey_new.loader.orchestrator.extract_video", side_effect=fake_extract):
+        with patch("corridorkey_new.stages.loader.orchestrator.extract_video", side_effect=fake_extract):
             manifest = load(clip)
 
         assert manifest.frame_count == 5
@@ -113,7 +113,7 @@ class TestLoad:
         video = input_dir / "clip.mp4"
         video.touch()
 
-        from corridorkey_new.loader.extractor import VideoMetadata, load_video_metadata
+        from corridorkey_new.stages.loader.extractor import VideoMetadata, load_video_metadata
 
         fake_meta = VideoMetadata(
             filename="clip.mp4",
@@ -131,7 +131,7 @@ class TestLoad:
             return fake_meta
 
         clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
-        with patch("corridorkey_new.loader.orchestrator.extract_video", side_effect=fake_extract):
+        with patch("corridorkey_new.stages.loader.orchestrator.extract_video", side_effect=fake_extract):
             load(clip)
 
         saved = load_video_metadata(clip_dir)
@@ -149,7 +149,7 @@ class TestLoad:
         frames_dir = clip_dir / "Frames"
         _make_frames(frames_dir, count=4)
 
-        from corridorkey_new.loader.extractor import VideoMetadata, save_video_metadata
+        from corridorkey_new.stages.loader.extractor import VideoMetadata, save_video_metadata
 
         save_video_metadata(
             VideoMetadata(
@@ -165,7 +165,7 @@ class TestLoad:
         )
 
         clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
-        with patch("corridorkey_new.loader.orchestrator.extract_video") as mock_extract:
+        with patch("corridorkey_new.stages.loader.orchestrator.extract_video") as mock_extract:
             manifest = load(clip)
             mock_extract.assert_not_called()
 

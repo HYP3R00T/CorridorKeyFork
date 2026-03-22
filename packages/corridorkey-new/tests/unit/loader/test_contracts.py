@@ -1,11 +1,11 @@
-"""Unit tests for corridorkey_new.loader.contracts — ClipManifest."""
+"""Unit tests for corridorkey_new.stages.loader.contracts — ClipManifest."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-from corridorkey_new.loader.contracts import ClipManifest
+from corridorkey_new.stages.loader.contracts import ClipManifest
 
 
 def _make_manifest(tmp_path: Path, **overrides: object) -> ClipManifest:

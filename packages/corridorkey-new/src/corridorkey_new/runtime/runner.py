@@ -25,13 +25,13 @@ from dataclasses import dataclass, field
 import torch.nn as nn
 
 from corridorkey_new.events import PipelineEvents
-from corridorkey_new.inference import InferenceConfig
-from corridorkey_new.loader.contracts import ClipManifest
-from corridorkey_new.pipeline.queue import BoundedQueue
-from corridorkey_new.pipeline.worker import InferenceWorker, PostWriteWorker, PreprocessWorker
-from corridorkey_new.postprocessor import PostprocessConfig
-from corridorkey_new.preprocessor import PreprocessConfig
-from corridorkey_new.writer import WriteConfig
+from corridorkey_new.runtime.queue import BoundedQueue
+from corridorkey_new.runtime.worker import InferenceWorker, PostWriteWorker, PreprocessWorker
+from corridorkey_new.stages.inference import InferenceConfig
+from corridorkey_new.stages.loader.contracts import ClipManifest
+from corridorkey_new.stages.postprocessor import PostprocessConfig
+from corridorkey_new.stages.preprocessor import PreprocessConfig
+from corridorkey_new.stages.writer import WriteConfig
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ class PipelineRunner:
         inference_cfg: InferenceConfig = cfg.inference
 
         if cfg.model is None:
-            from corridorkey_new.inference import load_model
+            from corridorkey_new.stages.inference import load_model
 
             logger.info("pipeline_runner: loading model from %s", inference_cfg.checkpoint_path)
             loaded_model = load_model(inference_cfg)

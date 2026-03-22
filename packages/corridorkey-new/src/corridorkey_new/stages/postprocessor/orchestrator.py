@@ -17,13 +17,13 @@ from __future__ import annotations
 
 import logging
 
-from corridorkey_new.inference.contracts import InferenceResult
-from corridorkey_new.postprocessor.composite import apply_source_passthrough, make_preview, make_processed
-from corridorkey_new.postprocessor.config import PostprocessConfig
-from corridorkey_new.postprocessor.contracts import PostprocessedFrame
-from corridorkey_new.postprocessor.despeckle import despeckle_alpha
-from corridorkey_new.postprocessor.despill import remove_spill
-from corridorkey_new.postprocessor.resize import resize_to_source
+from corridorkey_new.stages.inference.contracts import InferenceResult
+from corridorkey_new.stages.postprocessor.composite import apply_source_passthrough, make_preview, make_processed
+from corridorkey_new.stages.postprocessor.config import PostprocessConfig
+from corridorkey_new.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey_new.stages.postprocessor.despeckle import despeckle_alpha
+from corridorkey_new.stages.postprocessor.despill import remove_spill
+from corridorkey_new.stages.postprocessor.resize import resize_to_source
 
 logger = logging.getLogger(__name__)
 

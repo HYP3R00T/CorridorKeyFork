@@ -1,10 +1,10 @@
-"""Unit tests for corridorkey_new.loader.extractor (non-video parts)."""
+"""Unit tests for corridorkey_new.stages.loader.extractor (non-video parts)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from corridorkey_new.loader.extractor import (
+from corridorkey_new.stages.loader.extractor import (
     VideoMetadata,
     is_video,
     load_video_metadata,

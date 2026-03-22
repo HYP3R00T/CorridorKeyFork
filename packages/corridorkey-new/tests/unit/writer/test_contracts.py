@@ -1,11 +1,11 @@
-"""Unit tests for corridorkey_new.writer.contracts."""
+"""Unit tests for corridorkey_new.stages.writer.contracts."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
 import pytest
-from corridorkey_new.writer.contracts import WriteConfig
+from corridorkey_new.stages.writer.contracts import WriteConfig
 
 
 class TestWriteConfigDefaults:

@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey_new.inference.loader helpers.
+"""Unit tests for corridorkey_new.stages.inference.loader helpers.
 
 We test the two pure helper functions that are unit-testable without a
 real checkpoint or model: _strip_compiled_prefix and _resize_pos_embeds.
@@ -11,7 +11,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 import torch
-from corridorkey_new.inference.loader import _resize_pos_embeds, _strip_compiled_prefix
+from corridorkey_new.stages.inference.loader import _resize_pos_embeds, _strip_compiled_prefix
 
 
 class TestStripCompiledPrefix:

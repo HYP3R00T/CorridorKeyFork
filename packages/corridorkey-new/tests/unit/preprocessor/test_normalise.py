@@ -1,9 +1,9 @@
-"""Unit tests for corridorkey_new.preprocessor.normalise."""
+"""Unit tests for corridorkey_new.stages.preprocessor.normalise."""
 
 from __future__ import annotations
 
 import torch
-from corridorkey_new.preprocessor.normalise import _MEAN, _STD, normalise_image
+from corridorkey_new.stages.preprocessor.normalise import _MEAN, _STD, normalise_image
 
 
 class TestNormaliseImage:

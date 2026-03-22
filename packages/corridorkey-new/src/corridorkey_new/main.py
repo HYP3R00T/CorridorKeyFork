@@ -15,11 +15,11 @@ def main() -> None:
     from utilityhub_config import ensure_config_file
 
     from corridorkey_new import detect_gpu, load, load_config, resolve_device, scan, setup_logging
-    from corridorkey_new.inference import load_model
     from corridorkey_new.infra import APP_NAME
     from corridorkey_new.infra.config import CorridorKeyConfig
     from corridorkey_new.infra.model_hub import ensure_model
-    from corridorkey_new.pipeline import PipelineConfig, PipelineRunner
+    from corridorkey_new.runtime import PipelineConfig, PipelineRunner
+    from corridorkey_new.stages.inference import load_model
 
     ensure_config_file(CorridorKeyConfig(), APP_NAME)
     config = load_config()

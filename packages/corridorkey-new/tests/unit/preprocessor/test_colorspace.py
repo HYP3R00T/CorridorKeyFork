@@ -1,10 +1,10 @@
-"""Unit tests for corridorkey_new.preprocessor.colorspace."""
+"""Unit tests for corridorkey_new.stages.preprocessor.colorspace."""
 
 from __future__ import annotations
 
 import pytest
 import torch
-from corridorkey_new.preprocessor.colorspace import linear_to_srgb
+from corridorkey_new.stages.preprocessor.colorspace import linear_to_srgb
 
 
 def _img(value: float, shape=(1, 3, 1, 1)) -> torch.Tensor:
