@@ -99,7 +99,7 @@ class TorchBackend:
         return {
             "backend": "torch",
             "device": str(cfg.device),
-            "optimization_mode": str(cfg.optimization_mode),
+            "refiner_mode": str(cfg.refiner_mode),
             "precision": str(cfg.model_precision).replace("torch.", ""),
             "img_size": str(cfg.img_size),
             "use_refiner": str(cfg.use_refiner),

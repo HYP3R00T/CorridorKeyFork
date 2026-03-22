@@ -88,7 +88,14 @@ class TestPreprocessSettings:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            PreprocessSettings(img_size=-1)  # below ge=0
+            PreprocessSettings(img_size=768)  # not in valid set
+
+    def test_valid_img_sizes_accepted(self):
+        from corridorkey_new.infra.config import PreprocessSettings
+
+        for size in (0, 512, 1024, 1536, 2048):
+            cfg = CorridorKeyConfig(preprocess=PreprocessSettings(img_size=size))
+            assert cfg.preprocess.img_size == size
 
 
 class TestInferenceSettings:
@@ -100,7 +107,7 @@ class TestInferenceSettings:
         assert cfg.inference.use_refiner is True
         assert cfg.inference.mixed_precision is True
         assert cfg.inference.model_precision == "auto"
-        assert cfg.inference.optimization_mode == "auto"
+        assert cfg.inference.refiner_mode == "auto"
 
     def test_override_checkpoint_path(self, tmp_path):
         from corridorkey_new.infra.config import InferenceSettings
@@ -112,15 +119,15 @@ class TestInferenceSettings:
     def test_override_optimization_mode(self):
         from corridorkey_new.infra.config import InferenceSettings
 
-        cfg = CorridorKeyConfig(inference=InferenceSettings(optimization_mode="lowvram"))
-        assert cfg.inference.optimization_mode == "lowvram"
+        cfg = CorridorKeyConfig(inference=InferenceSettings(refiner_mode="tiled"))
+        assert cfg.inference.refiner_mode == "tiled"
 
     def test_invalid_optimization_mode_raises(self):
         from corridorkey_new.infra.config import InferenceSettings
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            InferenceSettings(optimization_mode="turbo")  # type: ignore[arg-type]
+            InferenceSettings(refiner_mode="turbo")  # type: ignore[arg-type]
 
     def test_invalid_model_precision_raises(self):
         from corridorkey_new.infra.config import InferenceSettings

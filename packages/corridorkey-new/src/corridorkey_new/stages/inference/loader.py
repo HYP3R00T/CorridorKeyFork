@@ -10,10 +10,10 @@ and handling the two edge cases that arise in practice:
      img_size is loaded for a different img_size, pos_embed tensors are
      bicubically interpolated to the new grid size.
 
-Post-load fixups (matching core engine behaviour):
+Post-load fixups:
   - Refiner kept in float32 (GroupNorm does not support bf16 on CUDA).
   - All BatchNorm2d layers kept in float32 for the same reason.
-  - torch.compile applied in speed mode on CUDA (disabled in lowvram mode
+  - torch.compile applied in full_frame mode on CUDA (disabled in tiled mode
     because hooks + compile are incompatible with Dynamo tracing).
 """
 
@@ -93,11 +93,11 @@ def load_model(config: InferenceConfig) -> torch.nn.Module:
                 module.float()
         logger.info("BatchNorm2d layers kept in float32")
 
-    # torch.compile: speed mode on CUDA only.
-    # Disabled in lowvram mode — hooks + compile are incompatible (Dynamo
+    # torch.compile: full_frame mode on CUDA only.
+    # Disabled in tiled mode — hooks + compile are incompatible (Dynamo
     # sees the refiner module twice and raises "already tracked for mutation").
     device_type = torch.device(config.device).type
-    use_compile = config.optimization_mode == "speed" and device_type == "cuda" and sys.platform in ("linux", "win32")
+    use_compile = config.refiner_mode == "full_frame" and device_type == "cuda" and sys.platform in ("linux", "win32")
     if use_compile:
         try:
             cache_dir = Path.home() / ".cache" / "corridorkey" / "torch_compile"

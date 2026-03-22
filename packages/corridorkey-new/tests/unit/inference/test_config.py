@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 import torch
 from corridorkey_new.stages.inference.config import (
-    _VRAM_LOWVRAM_THRESHOLD_GB,
+    _VRAM_TILED_THRESHOLD_GB,
     REFINER_TILE_OVERLAP,
     REFINER_TILE_SIZE,
+    VALID_IMG_SIZES,
     InferenceConfig,
 )
 
@@ -34,9 +36,9 @@ class TestInferenceConfigDefaults:
         cfg = InferenceConfig(checkpoint_path=tmp_path / "m.pth")
         assert cfg.model_precision == torch.float32
 
-    def test_optimization_mode_default(self, tmp_path: Path):
+    def test_refiner_mode_default(self, tmp_path: Path):
         cfg = InferenceConfig(checkpoint_path=tmp_path / "m.pth")
-        assert cfg.optimization_mode == "auto"
+        assert cfg.refiner_mode == "auto"
 
 
 class TestInferenceConfigOverrides:
@@ -48,13 +50,13 @@ class TestInferenceConfigOverrides:
         cfg = InferenceConfig(checkpoint_path=tmp_path / "m.pth", img_size=512)
         assert cfg.img_size == 512
 
-    def test_optimization_mode_lowvram(self, tmp_path: Path):
-        cfg = InferenceConfig(checkpoint_path=tmp_path / "m.pth", optimization_mode="lowvram")
-        assert cfg.optimization_mode == "lowvram"
+    def test_refiner_mode_tiled(self, tmp_path: Path):
+        cfg = InferenceConfig(checkpoint_path=tmp_path / "m.pth", refiner_mode="tiled")
+        assert cfg.refiner_mode == "tiled"
 
-    def test_optimization_mode_speed(self, tmp_path: Path):
-        cfg = InferenceConfig(checkpoint_path=tmp_path / "m.pth", optimization_mode="speed")
-        assert cfg.optimization_mode == "speed"
+    def test_refiner_mode_full_frame(self, tmp_path: Path):
+        cfg = InferenceConfig(checkpoint_path=tmp_path / "m.pth", refiner_mode="full_frame")
+        assert cfg.refiner_mode == "full_frame"
 
     def test_checkpoint_path_stored(self, tmp_path: Path):
         p = tmp_path / "weights.pth"
@@ -62,9 +64,24 @@ class TestInferenceConfigOverrides:
         assert cfg.checkpoint_path == p
 
 
+class TestInferenceConfigValidation:
+    @pytest.mark.parametrize("size", [0, 512, 1024, 1536, 2048])
+    def test_valid_img_sizes_accepted(self, tmp_path: Path, size: int):
+        cfg = InferenceConfig(checkpoint_path=tmp_path / "m.pth", img_size=size)
+        assert cfg.img_size == size
+
+    @pytest.mark.parametrize("size", [256, 768, 1000, 1920, 4096, -1])
+    def test_invalid_img_size_raises(self, tmp_path: Path, size: int):
+        with pytest.raises(ValueError, match="img_size must be one of"):
+            InferenceConfig(checkpoint_path=tmp_path / "m.pth", img_size=size)
+
+    def test_valid_img_sizes_constant(self):
+        assert set(VALID_IMG_SIZES) == {0, 512, 1024, 1536, 2048}
+
+
 class TestModuleConstants:
     def test_vram_threshold_positive(self):
-        assert _VRAM_LOWVRAM_THRESHOLD_GB > 0
+        assert _VRAM_TILED_THRESHOLD_GB > 0
 
     def test_tile_size_positive(self):
         assert REFINER_TILE_SIZE > 0

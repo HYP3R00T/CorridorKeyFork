@@ -51,26 +51,26 @@ class TestShouldTileRefiner:
         assert _should_tile_refiner(cfg) is False
 
     def test_true_when_lowvram(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, use_refiner=True, optimization_mode="lowvram")
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="tiled")
         assert _should_tile_refiner(cfg) is True
 
     def test_false_when_speed(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, use_refiner=True, optimization_mode="speed")
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="full_frame")
         assert _should_tile_refiner(cfg) is False
 
     def test_auto_low_vram_returns_true(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, use_refiner=True, optimization_mode="auto")
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="auto")
         with patch("corridorkey_new.stages.inference.orchestrator._probe_vram_gb", return_value=8.0):
             assert _should_tile_refiner(cfg) is True
 
     def test_auto_high_vram_returns_false(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, use_refiner=True, optimization_mode="auto")
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="auto")
         with patch("corridorkey_new.stages.inference.orchestrator._probe_vram_gb", return_value=24.0):
             assert _should_tile_refiner(cfg) is False
 
     def test_auto_zero_vram_returns_false(self, tmp_path: Path):
-        """0.0 means VRAM unknown — should not trigger lowvram mode."""
-        cfg = _make_config(tmp_path, use_refiner=True, optimization_mode="auto")
+        """0.0 means VRAM unknown — should not trigger tiled mode."""
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="auto")
         with patch("corridorkey_new.stages.inference.orchestrator._probe_vram_gb", return_value=0.0):
             assert _should_tile_refiner(cfg) is False
 
@@ -154,7 +154,7 @@ class TestRunInference:
         model.refiner.register_forward_hook.assert_not_called()
 
     def test_refiner_hook_registered_in_lowvram(self, tmp_path: Path):
-        cfg = _make_config(tmp_path, use_refiner=True, optimization_mode="lowvram")
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="tiled")
         frame = _make_frame()
         model = MagicMock(return_value=_make_model_output())
         handle = MagicMock()

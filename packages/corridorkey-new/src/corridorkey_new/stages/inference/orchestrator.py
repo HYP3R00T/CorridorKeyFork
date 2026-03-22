@@ -4,8 +4,8 @@ Public entry point: ``run_inference(frame, model, config) -> InferenceResult``.
 
 Owns:
   - fp16 autocast
-  - tiled refiner (lowvram mode)
-  - VRAM probing for "auto" optimization mode
+  - tiled refiner (tiled refiner_mode)
+  - VRAM probing for "auto" refiner_mode
   - converting raw model output to InferenceResult
 
 Does NOT own:
@@ -23,7 +23,7 @@ import torch.nn as nn
 from torch.nn import functional
 
 from corridorkey_new.stages.inference.config import (
-    _VRAM_LOWVRAM_THRESHOLD_GB,
+    _VRAM_TILED_THRESHOLD_GB,
     REFINER_TILE_OVERLAP,
     REFINER_TILE_SIZE,
     InferenceConfig,
@@ -67,7 +67,7 @@ def run_inference(
             hook_handle = refiner.register_forward_hook(hook_fn)
     elif config.use_refiner and config.refiner_scale != 1.0:
         # Scale hook — only active when NOT tiling (tiled path handles scale internally).
-        # Note: if optimization_mode resolves to lowvram, tile_refiner=True takes
+        # Note: if refiner_mode resolves to tiled, tile_refiner=True takes
         # priority and this branch is skipped, meaning refiner_scale is ignored in
         # tiled mode. Apply the scale inside _run_refiner_tiled if needed.
         refiner = getattr(model, "refiner", None)
@@ -125,7 +125,7 @@ def _free_vram_if_needed(device: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Optimization mode resolution
+# Refiner mode resolution
 # ---------------------------------------------------------------------------
 
 
@@ -133,23 +133,23 @@ def _should_tile_refiner(config: InferenceConfig) -> bool:
     """Return True if the refiner should run in tiled mode."""
     if not config.use_refiner:
         return False
-    mode = config.optimization_mode
+    mode = config.refiner_mode
 
     # MPS: Triton/inductor does not support Metal — always tile.
     if torch.device(config.device).type == "mps":
         return True
 
-    if mode == "lowvram":
+    if mode == "tiled":
         return True
-    if mode == "speed":
+    if mode == "full_frame":
         return False
 
     # auto — probe VRAM
     vram_gb = _probe_vram_gb(config.device)
-    if vram_gb > 0 and vram_gb < _VRAM_LOWVRAM_THRESHOLD_GB:
-        logger.info("Auto mode: %.1f GB VRAM detected — using tiled refiner", vram_gb)
+    if vram_gb > 0 and vram_gb < _VRAM_TILED_THRESHOLD_GB:
+        logger.info("Auto refiner_mode: %.1f GB VRAM → tiled refiner", vram_gb)
         return True
-    logger.info("Auto mode: %.1f GB VRAM detected — using full-frame refiner", vram_gb)
+    logger.info("Auto refiner_mode: %.1f GB VRAM → full-frame refiner", vram_gb)
     return False
 
 

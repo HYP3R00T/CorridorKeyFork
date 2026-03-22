@@ -242,6 +242,6 @@ class CorridorKeyConfig(BaseModel):
             use_refiner=self.inference.use_refiner,
             mixed_precision=self.inference.mixed_precision,
             model_precision=model_dtype,
-            optimization_mode=self.inference.optimization_mode,
+            refiner_mode=self.inference.refiner_mode,
             refiner_scale=self.inference.refiner_scale,
         )

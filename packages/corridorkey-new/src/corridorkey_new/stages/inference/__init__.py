@@ -12,7 +12,7 @@ Contracts:
 """
 
 from corridorkey_new.stages.inference.backend import ModelBackend, TorchBackend
-from corridorkey_new.stages.inference.config import BackendChoice, InferenceConfig, OptimizationMode
+from corridorkey_new.stages.inference.config import BackendChoice, InferenceConfig, RefinerMode
 from corridorkey_new.stages.inference.contracts import InferenceResult
 from corridorkey_new.stages.inference.factory import discover_checkpoint, load_backend
 from corridorkey_new.stages.inference.loader import load_model
@@ -27,7 +27,7 @@ __all__ = [
     # Contracts
     "InferenceConfig",
     "InferenceResult",
-    "OptimizationMode",
+    "RefinerMode",
     "BackendChoice",
     # Backend protocol + implementations
     "ModelBackend",

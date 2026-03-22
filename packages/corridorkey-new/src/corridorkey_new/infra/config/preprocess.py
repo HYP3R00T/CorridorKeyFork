@@ -24,15 +24,15 @@ class PreprocessSettings(BaseModel):
     """
 
     img_size: Annotated[
-        int,
+        Literal[0, 512, 1024, 1536, 2048],
         Field(
             default=0,
-            ge=0,
             description=(
                 "Square resolution the model runs at. "
                 "0 (default) = auto-select based on available VRAM: "
-                "<6 GB → 1024, 6–12 GB → 1536, 12+ GB → 2048 (native training resolution). "
-                "Set explicitly to override (e.g. 2048 for maximum quality regardless of VRAM)."
+                "<6 GB → 1024, 6–12 GB → 1536, 12+ GB → 2048. "
+                "2048 is the native training resolution and produces the best output. "
+                "Smaller values reduce VRAM usage at the cost of output quality."
             ),
         ),
     ] = 0

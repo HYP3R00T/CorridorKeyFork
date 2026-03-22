@@ -23,7 +23,7 @@ class InferenceSettings(BaseModel):
         use_refiner = true
         mixed_precision = true
         model_precision = "auto"
-        optimization_mode = "auto"
+        refiner_mode = "auto"
         refiner_scale = 1.0
     """
 
@@ -43,7 +43,12 @@ class InferenceSettings(BaseModel):
         bool,
         Field(
             default=True,
-            description="Enable the CNN refiner module for sharper alpha edges.",
+            description=(
+                "Enable the CNN refiner module. "
+                "The refiner corrects transformer macroblocking artifacts at subject edges, "
+                "producing sharp, production-quality alpha mattes. "
+                "Disabling it is faster but results in visibly coarser edges."
+            ),
         ),
     ] = True
 
@@ -52,8 +57,9 @@ class InferenceSettings(BaseModel):
         Field(
             default=True,
             description=(
-                "Run the forward pass under fp16 autocast. "
-                "Ignored on CPU. Reduces VRAM usage with minimal quality impact."
+                "Run the model forward pass under autocast (fp16/bf16). "
+                "Ignored on CPU. Reduces VRAM usage with minimal quality impact. "
+                "Disable only if you observe numerical instability."
             ),
         ),
     ] = True
@@ -65,19 +71,24 @@ class InferenceSettings(BaseModel):
             description=(
                 "Weight dtype for the model forward pass. "
                 "'auto' selects bfloat16 on Ampere+/Apple Silicon, float16 on older GPUs, float32 on CPU. "
-                "'float32' is the safe choice for debugging or maximum numerical stability."
+                "'float32' is the safe fallback for debugging or maximum numerical stability. "
+                "'float16' / 'bfloat16' reduce VRAM usage on supported hardware."
             ),
         ),
     ] = "auto"
 
-    optimization_mode: Annotated[
-        Literal["auto", "speed", "lowvram"],
+    refiner_mode: Annotated[
+        Literal["auto", "full_frame", "tiled"],
         Field(
             default="auto",
             description=(
-                "'auto' probes VRAM and selects the best mode automatically. "
-                "'speed' uses a full-frame refiner pass. "
-                "'lowvram' tiles the refiner (512×512, 128px overlap) to fit in less VRAM."
+                "Controls how the CNN refiner executes. Output quality is identical for all modes. "
+                "'auto' probes available VRAM and selects the best mode automatically "
+                "(<12 GB → tiled, 12+ GB → full_frame). "
+                "'full_frame' runs the refiner on the entire image at once — "
+                "best throughput on GPUs with 12+ GB VRAM. "
+                "'tiled' runs the refiner in 512×512 overlapping tiles — "
+                "keeps peak VRAM flat, required on low-VRAM GPUs."
             ),
         ),
     ] = "auto"
@@ -89,9 +100,10 @@ class InferenceSettings(BaseModel):
             ge=0.0,
             le=1.0,
             description=(
-                "Scale factor for the CNN edge refiner's delta corrections. "
-                "1.0 applies full refinement. 0.0 skips the refiner output entirely. "
-                "Reducing toward 0.0 speeds up processing at the cost of edge quality."
+                "Scale factor applied to the CNN refiner's edge correction output. "
+                "1.0 (default) applies full refinement. "
+                "0.0 disables the refiner corrections entirely. "
+                "Values between 0 and 1 blend between no refinement and full refinement."
             ),
         ),
     ] = 1.0
