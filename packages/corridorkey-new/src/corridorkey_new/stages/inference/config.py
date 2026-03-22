@@ -9,6 +9,7 @@ from typing import Literal
 import torch
 
 OptimizationMode = Literal["auto", "speed", "lowvram"]
+BackendChoice = Literal["auto", "torch", "mlx"]
 
 # VRAM threshold below which lowvram mode is selected automatically.
 _VRAM_LOWVRAM_THRESHOLD_GB = 12.0
@@ -64,6 +65,11 @@ class InferenceConfig:
         refiner_scale: Multiplier applied to the CNN refiner's delta output.
             1.0 applies full refinement. 0.0 skips the refiner output entirely.
             Reducing toward 0.0 speeds up processing at the cost of edge quality.
+        backend: Which inference backend to use.
+            "auto"  — Apple Silicon + corridorkey-mlx installed → mlx, else → torch.
+            "torch" — always use PyTorch (CUDA / ROCm / MPS / CPU).
+            "mlx"   — always use MLX (Apple Silicon only, requires corridorkey-mlx).
+            Can also be overridden via the CORRIDORKEY_BACKEND environment variable.
     """
 
     checkpoint_path: Path
@@ -74,3 +80,4 @@ class InferenceConfig:
     model_precision: torch.dtype = field(default=torch.float32)
     optimization_mode: OptimizationMode = "auto"
     refiner_scale: float = 1.0
+    backend: BackendChoice = "auto"
