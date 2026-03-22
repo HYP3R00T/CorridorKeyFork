@@ -33,7 +33,7 @@ from corridorkey_new.stages.inference.config import InferenceConfig
 logger = logging.getLogger(__name__)
 
 
-def load_model(config: InferenceConfig) -> torch.nn.Module:
+def load_model(config: InferenceConfig, resolved_refiner_mode: str | None = None) -> torch.nn.Module:
     """Load a GreenFormer model from a checkpoint.
 
     Constructs the model architecture, moves it to the configured device,
@@ -42,7 +42,10 @@ def load_model(config: InferenceConfig) -> torch.nn.Module:
 
     Args:
         config: InferenceConfig with checkpoint_path, device, img_size,
-            use_refiner, model_precision, and optimization_mode.
+            use_refiner, model_precision, and refiner_mode.
+        resolved_refiner_mode: The concrete refiner mode after "auto" has been
+            resolved (either "full_frame" or "tiled"). If None, uses
+            config.refiner_mode directly (must not be "auto").
 
     Returns:
         GreenFormer in eval mode on config.device, ready for inference.
@@ -55,6 +58,11 @@ def load_model(config: InferenceConfig) -> torch.nn.Module:
 
     if not config.checkpoint_path.is_file():
         raise FileNotFoundError(f"Checkpoint not found: {config.checkpoint_path}")
+
+    # Use the pre-resolved mode so compile decisions are made on the concrete
+    # value, not "auto". Callers (factory.load_backend) resolve this before
+    # calling load_model.
+    effective_mode = resolved_refiner_mode or config.refiner_mode
 
     logger.info("Building GreenFormer (img_size=%d, refiner=%s)", config.img_size, config.use_refiner)
     model = GreenFormer(
@@ -96,8 +104,10 @@ def load_model(config: InferenceConfig) -> torch.nn.Module:
     # torch.compile: full_frame mode on CUDA only.
     # Disabled in tiled mode — hooks + compile are incompatible (Dynamo
     # sees the refiner module twice and raises "already tracked for mutation").
+    # Uses effective_mode (already resolved from "auto") so that auto→full_frame
+    # correctly enables compile.
     device_type = torch.device(config.device).type
-    use_compile = config.refiner_mode == "full_frame" and device_type == "cuda" and sys.platform in ("linux", "win32")
+    use_compile = effective_mode == "full_frame" and device_type == "cuda" and sys.platform in ("linux", "win32")
     if use_compile:
         try:
             cache_dir = Path.home() / ".cache" / "corridorkey" / "torch_compile"
@@ -105,7 +115,11 @@ def load_model(config: InferenceConfig) -> torch.nn.Module:
             os.environ["TORCHINDUCTOR_CACHE_DIR"] = str(cache_dir)
             compiled = torch.compile(model)
             logger.info("Warming up compiled model...")
-            dummy = torch.zeros(1, 4, config.img_size, config.img_size, dtype=torch.float32, device=config.device)
+            # Use model_precision for the dummy — the compiled graph is traced
+            # with this dtype and must match what inference will send.
+            dummy = torch.zeros(
+                1, 4, config.img_size, config.img_size, dtype=config.model_precision, device=config.device
+            )
             with torch.inference_mode():
                 compiled(dummy)
             del dummy

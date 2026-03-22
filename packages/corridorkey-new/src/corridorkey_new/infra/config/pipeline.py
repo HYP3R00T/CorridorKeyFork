@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Literal
+import re
+from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from corridorkey_new.infra.config.inference import InferenceSettings
 from corridorkey_new.infra.config.logging import LoggingSettings
@@ -48,17 +49,34 @@ class CorridorKeyConfig(BaseModel):
     """
 
     device: Annotated[
-        Literal["auto", "cuda", "rocm", "mps", "cpu"],
+        str,
         Field(
             default="auto",
             description=(
-                "Compute device for inference. "
+                "Compute device(s) for inference. "
                 "'auto' detects the best available device at runtime (ROCm > CUDA > MPS > CPU). "
-                "'cuda' forces NVIDIA GPU. 'rocm' forces AMD GPU. "
+                "'cuda' / 'cuda:0' forces NVIDIA GPU 0. "
+                "'cuda:N' targets a specific GPU by index (e.g. 'cuda:1'). "
+                "'all' uses every available CUDA GPU in parallel (frame-level dispatch). "
+                "'rocm' / 'rocm:N' forces AMD GPU. "
                 "'mps' forces Apple Silicon. 'cpu' forces CPU."
             ),
         ),
     ] = "auto"
+
+    @field_validator("device", mode="before")
+    @classmethod
+    def _validate_device(cls, v: object) -> str:
+        if not isinstance(v, str):
+            raise ValueError(f"device must be a string, got {type(v).__name__}")
+        v = v.strip().lower()
+        # Valid simple tokens
+        if v in ("auto", "cuda", "rocm", "mps", "cpu", "all"):
+            return v
+        # cuda:N or rocm:N
+        if re.fullmatch(r"(cuda|rocm):\d+", v):
+            return v
+        raise ValueError(f"Invalid device '{v}'. Valid options: auto, cuda, cuda:N, rocm, rocm:N, mps, cpu, all.")
 
     logging: Annotated[
         LoggingSettings,

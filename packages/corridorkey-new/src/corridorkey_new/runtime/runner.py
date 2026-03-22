@@ -4,13 +4,21 @@ PipelineRunner wires the queues and workers together and runs the full
 pipeline for a single clip. This is what main.py (and eventually the CLI/GUI)
 calls instead of a manual frame loop.
 
-Assembly line:
+Single-GPU assembly line:
 
     PreprocessWorker
         → input_queue (bounded)
             → InferenceWorker
                 → output_queue (bounded)
                     → PostWriteWorker
+
+Multi-GPU assembly line (MultiGPURunner):
+
+    PreprocessWorker
+        → input_queue (bounded, shared)
+            → InferenceWorker[cuda:0]  ─┐
+            → InferenceWorker[cuda:1]  ─┤→ output_queue (bounded, shared)
+            → InferenceWorker[cuda:N]  ─┘       → PostWriteWorker
 
 All workers run concurrently in daemon threads. The runner blocks until all
 workers have finished and all queues are drained.
@@ -65,7 +73,7 @@ class PipelineConfig:
 
 
 class PipelineRunner:
-    """Runs the full pipeline for a single clip.
+    """Runs the full pipeline for a single clip on a single device.
 
     Instantiate once per clip, call ``run()``, then discard.
 
@@ -142,3 +150,269 @@ class PipelineRunner:
             t.join()
 
         logger.info("pipeline_runner: clip='%s' complete", manifest.clip_name)
+
+
+@dataclass
+class MultiGPUConfig:
+    """Configuration for multi-GPU frame-level parallel inference.
+
+    Each device gets its own model instance and InferenceWorker thread.
+    All workers share a single input queue (preprocessed frames) and a
+    single output queue (inference results), so the pipeline naturally
+    load-balances — whichever GPU finishes first picks up the next frame.
+
+    Attributes:
+        devices: List of PyTorch device strings to use (e.g. ["cuda:0", "cuda:1"]).
+            Must have at least one entry. Use ``resolve_devices("all")`` to
+            populate this from all available CUDA GPUs.
+        inference: Base InferenceConfig. The ``device`` field is overridden
+            per-worker — all other fields (checkpoint, precision, etc.) are
+            shared across all GPUs.
+        preprocess: Preprocessing config. Runs on CPU (device-agnostic).
+        postprocess: Postprocessing config.
+        write: Writer config. None → default derived from manifest output_dir.
+        input_queue_depth: Shared input queue depth. Scale with GPU count —
+            a depth of 2×N gives each GPU a frame in flight plus one buffered.
+        output_queue_depth: Shared output queue depth.
+        events: Optional pipeline event callbacks.
+    """
+
+    devices: list[str]
+    inference: InferenceConfig
+    preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
+    postprocess: PostprocessConfig = field(default_factory=PostprocessConfig)
+    write: WriteConfig | None = None
+    input_queue_depth: int = 4
+    output_queue_depth: int = 4
+    events: PipelineEvents | None = None
+
+
+class MultiGPURunner:
+    """Runs the pipeline across multiple GPUs in parallel (frame-level dispatch).
+
+    Each GPU gets its own model instance loaded in its own thread. All GPU
+    workers pull from a single shared input queue and push to a single shared
+    output queue. The preprocessor and postwriter are single-threaded as usual.
+
+    Frame ordering: output frames may arrive out of order when multiple GPUs
+    are running at different speeds. The PostWriteWorker writes frames as they
+    arrive — if strict ordering is required, the caller should sort by
+    ``InferenceResult.meta.frame_index`` after the run.
+
+    Args:
+        manifest: ClipManifest from the loader stage.
+        config: MultiGPUConfig with a list of device strings.
+    """
+
+    def __init__(self, manifest: ClipManifest, config: MultiGPUConfig) -> None:
+        if not config.devices:
+            raise ValueError("MultiGPUConfig.devices must have at least one entry.")
+        self._manifest = manifest
+        self._config = config
+
+    def run(self) -> None:
+        """Run the pipeline. Blocks until all frames are written."""
+        cfg = self._config
+        manifest = self._manifest
+        n_gpus = len(cfg.devices)
+
+        logger.info(
+            "multi_gpu_runner: starting clip='%s' frames=%d gpus=%d devices=%s",
+            manifest.clip_name,
+            manifest.frame_count,
+            n_gpus,
+            cfg.devices,
+        )
+
+        # Scale queue depth with GPU count so each GPU always has work buffered.
+        input_depth = max(cfg.input_queue_depth, n_gpus * 2)
+        output_depth = max(cfg.output_queue_depth, n_gpus * 2)
+
+        input_queue: BoundedQueue = BoundedQueue(input_depth)
+        output_queue: BoundedQueue = BoundedQueue(output_depth)
+
+        # Preprocess runs on CPU — device field is informational only here.
+        preprocess_worker = PreprocessWorker(
+            manifest=manifest,
+            config=cfg.preprocess,
+            output_queue=input_queue,
+            postwrite_queue=output_queue,
+            events=cfg.events,
+        )
+
+        # Load one model per GPU in parallel to minimise startup time.
+        models = self._load_models_parallel(cfg.devices, cfg.inference)
+
+        # One InferenceWorker per GPU — all share the same input/output queues.
+        # The STOP sentinel propagation pattern: the last worker to see STOP
+        # re-puts it so the next consumer (PostWriteWorker) also sees it.
+        # With N workers all reading from the same queue, we need N STOPs so
+        # each worker gets one. The PreprocessWorker puts exactly one STOP.
+        # Solution: each InferenceWorker re-puts STOP when it sees it, but only
+        # the last one should propagate downstream. We use a shared counter.
+        active_workers = _AtomicCounter(n_gpus)
+
+        inference_threads: list[threading.Thread] = []
+        for i, (device, model) in enumerate(zip(cfg.devices, models, strict=True)):
+            # Build a per-device config by overriding the device field.
+            device_cfg = _override_device(cfg.inference, device)
+            worker = _MultiGPUInferenceWorker(
+                input_queue=input_queue,
+                output_queue=output_queue,
+                model=model,
+                config=device_cfg,
+                active_workers=active_workers,
+                worker_index=i,
+                events=cfg.events,
+            )
+            inference_threads.append(worker.start())
+
+        postwrite_worker = PostWriteWorker(
+            input_queue=output_queue,
+            output_dir=manifest.output_dir,
+            postprocess_config=cfg.postprocess,
+            write_config=cfg.write,
+            total_frames=manifest.frame_count,
+            events=cfg.events,
+        )
+
+        all_threads = [preprocess_worker.start(), *inference_threads, postwrite_worker.start()]
+        for t in all_threads:
+            t.join()
+
+        logger.info("multi_gpu_runner: clip='%s' complete", manifest.clip_name)
+
+    def _load_models_parallel(self, devices: list[str], base_config: InferenceConfig) -> list[nn.Module]:
+        """Load one model per device in parallel threads.
+
+        Returns models in the same order as ``devices``.
+        """
+        from corridorkey_new.stages.inference.loader import load_model
+
+        models: list[nn.Module | None] = [None] * len(devices)
+        errors: list[Exception | None] = [None] * len(devices)
+
+        def _load(idx: int, device: str) -> None:
+            try:
+                device_cfg = _override_device(base_config, device)
+                logger.info("multi_gpu_runner: loading model on %s (worker %d)", device, idx)
+                models[idx] = load_model(device_cfg)
+                logger.info("multi_gpu_runner: model ready on %s", device)
+            except Exception as e:
+                errors[idx] = e
+                logger.error("multi_gpu_runner: failed to load model on %s — %s", device, e)
+
+        threads = [threading.Thread(target=_load, args=(i, d), daemon=True) for i, d in enumerate(devices)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+
+        # Raise the first error encountered, if any.
+        for i, err in enumerate(errors):
+            if err is not None:
+                raise RuntimeError(f"Failed to load model on {devices[i]}: {err}") from err
+
+        return models  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
+# Multi-GPU helpers
+# ---------------------------------------------------------------------------
+
+
+class _AtomicCounter:
+    """Thread-safe integer counter."""
+
+    def __init__(self, value: int) -> None:
+        self._value = value
+        self._lock = threading.Lock()
+
+    def decrement(self) -> int:
+        """Decrement and return the new value."""
+        with self._lock:
+            self._value -= 1
+            return self._value
+
+
+@dataclass
+class _MultiGPUInferenceWorker:
+    """InferenceWorker variant for multi-GPU dispatch.
+
+    Identical to InferenceWorker except for STOP propagation: instead of
+    always re-putting STOP on the input queue (for a single downstream
+    consumer), it uses a shared counter. Only the last worker to finish
+    puts STOP on the output queue — earlier workers just decrement the
+    counter and exit.
+
+    This prevents N duplicate STOPs from reaching PostWriteWorker.
+    """
+
+    input_queue: BoundedQueue
+    output_queue: BoundedQueue
+    model: nn.Module
+    config: InferenceConfig
+    active_workers: _AtomicCounter
+    worker_index: int
+    events: PipelineEvents | None = None
+
+    def run(self) -> None:
+        from corridorkey_new.runtime.queue import STOP
+        from corridorkey_new.stages.inference.orchestrator import run_inference
+        from corridorkey_new.stages.preprocessor import PreprocessedFrame
+
+        if self.events:
+            self.events.stage_start(f"inference[{self.config.device}]", 0)
+        try:
+            while True:
+                item = self.input_queue.get()
+                if item is STOP:
+                    # Re-put so sibling workers also see STOP.
+                    self.input_queue.put_stop()
+                    break
+                assert isinstance(item, PreprocessedFrame)
+                try:
+                    if self.events:
+                        self.events.inference_start(item.meta.frame_index)
+                    result = run_inference(item, self.model, self.config)
+                    self.output_queue.put(result)
+                    logger.debug(
+                        "multi_gpu_inference[%s]: queued frame %d",
+                        self.config.device,
+                        item.meta.frame_index,
+                    )
+                    if self.events:
+                        self.events.inference_queued(item.meta.frame_index)
+                except Exception as e:
+                    logger.error(
+                        "multi_gpu_inference[%s]: skipping frame %d — %s",
+                        self.config.device,
+                        item.meta.frame_index,
+                        e,
+                    )
+                    if self.events:
+                        self.events.frame_error(f"inference[{self.config.device}]", item.meta.frame_index, e)
+        finally:
+            # Last worker to finish sends STOP downstream.
+            remaining = self.active_workers.decrement()
+            if remaining == 0:
+                self.output_queue.put_stop()
+                logger.debug("multi_gpu_inference: last worker done, sent STOP downstream")
+            if self.events:
+                self.events.stage_done(f"inference[{self.config.device}]")
+
+    def start(self) -> threading.Thread:
+        t = threading.Thread(
+            target=self.run,
+            name=f"inference-worker-{self.config.device}",
+            daemon=True,
+        )
+        t.start()
+        return t
+
+
+def _override_device(config: InferenceConfig, device: str) -> InferenceConfig:
+    """Return a copy of ``config`` with ``device`` replaced."""
+    from dataclasses import replace
+
+    return replace(config, device=device)

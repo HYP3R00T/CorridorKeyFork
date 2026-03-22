@@ -94,15 +94,21 @@ def detect_gpu() -> GPUInfo:
 def resolve_device(requested: str | None = None) -> str:
     """Resolve and validate a device string.
 
-    Args:
-        requested: One of "auto", "cuda", "rocm", "mps", "cpu", or None.
-            None and "auto" trigger auto-detection via detect_gpu().
+    Accepts:
+        - "auto" / None  — auto-detect via detect_gpu()
+        - "cuda"         — CUDA device 0
+        - "cuda:N"       — specific CUDA device index N (e.g. "cuda:1")
+        - "rocm"         — AMD ROCm (maps to "cuda" in PyTorch)
+        - "rocm:N"       — specific ROCm device index N
+        - "mps"          — Apple Silicon
+        - "cpu"          — CPU
 
     Returns:
-        Validated PyTorch device string ("cuda", "mps", or "cpu").
+        Validated PyTorch device string (e.g. "cuda", "cuda:1", "mps", "cpu").
 
     Raises:
-        DeviceError: If the requested backend is unavailable.
+        DeviceError: If the requested backend is unavailable or the device
+            index is out of range.
     """
     if not requested or requested == "auto":
         gpu = detect_gpu()
@@ -111,12 +117,28 @@ def resolve_device(requested: str | None = None) -> str:
 
     requested = requested.lower()
 
-    if requested in ("cuda", "rocm"):
+    # Handle cuda:N and rocm:N
+    if requested.startswith(("cuda", "rocm")):
         if not torch.cuda.is_available():
             raise DeviceError(
                 f"'{requested}' requested but torch.cuda.is_available() is False. "
                 "Install a CUDA or ROCm-enabled PyTorch build."
             )
+        # Parse optional index suffix
+        if ":" in requested:
+            try:
+                idx = int(requested.split(":", 1)[1])
+            except ValueError:
+                raise DeviceError(
+                    f"Invalid device index in '{requested}'. Expected 'cuda:N' where N is an integer."
+                ) from None
+            device_count = torch.cuda.device_count()
+            if idx >= device_count:
+                raise DeviceError(
+                    f"Device index {idx} out of range — {device_count} CUDA device(s) available "
+                    f"(valid indices: 0–{device_count - 1})."
+                )
+            return f"cuda:{idx}"
         return "cuda"
 
     if requested == "mps":
@@ -129,7 +151,39 @@ def resolve_device(requested: str | None = None) -> str:
     if requested == "cpu":
         return "cpu"
 
-    raise DeviceError(f"Unknown device '{requested}'. Valid options: auto, cuda, rocm, mps, cpu.")
+    raise DeviceError(f"Unknown device '{requested}'. Valid options: auto, cuda, cuda:N, rocm, rocm:N, mps, cpu.")
+
+
+def resolve_devices(requested: str | list[str] | None = None) -> list[str]:
+    """Resolve one or more device strings for multi-GPU dispatch.
+
+    Args:
+        requested: A single device string, a list of device strings, or
+            "all" to use every available CUDA device.
+
+    Returns:
+        List of validated PyTorch device strings. Always has at least one entry.
+
+    Examples:
+        resolve_devices("cuda")          → ["cuda"]
+        resolve_devices("cuda:1")        → ["cuda:1"]
+        resolve_devices(["cuda:0", "cuda:1"]) → ["cuda:0", "cuda:1"]
+        resolve_devices("all")           → ["cuda:0", "cuda:1", ...] (all GPUs)
+    """
+    if requested == "all":
+        if not torch.cuda.is_available():
+            raise DeviceError("'all' requested but no CUDA devices are available.")
+        count = torch.cuda.device_count()
+        if count == 0:
+            raise DeviceError("'all' requested but torch.cuda.device_count() returned 0.")
+        devices = [f"cuda:{i}" for i in range(count)]
+        logger.info("Device 'all' resolved to %d CUDA device(s): %s", count, devices)
+        return devices
+
+    if isinstance(requested, list):
+        return [resolve_device(d) for d in requested]
+
+    return [resolve_device(requested)]
 
 
 def clear_device_cache(device: str) -> None:

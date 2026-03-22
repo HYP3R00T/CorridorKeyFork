@@ -101,3 +101,8 @@ class InferenceConfig:
             raise ValueError(
                 f"img_size must be one of {VALID_IMG_SIZES}, got {self.img_size}. Use 0 for auto-select based on VRAM."
             )
+        # mixed_precision is a no-op when the model is already float16 — autocast
+        # would cast to float16 but the weights are already there. Disable it to
+        # avoid misleading resolved_config output and the small autocast overhead.
+        if self.mixed_precision and self.model_precision == torch.float16:
+            self.mixed_precision = False

@@ -83,11 +83,17 @@ class TorchBackend:
     Args:
         config: Fully resolved ``InferenceConfig`` (no "auto" values remaining).
         model: Loaded GreenFormer in eval mode, already on the correct device.
+        resolved_refiner_mode: The concrete refiner mode after "auto" resolution
+            ("full_frame" or "tiled"). Stored separately so ``resolved_config``
+            always reports the actual runtime behaviour, not "auto".
     """
 
-    def __init__(self, config: InferenceConfig, model: nn.Module) -> None:
+    def __init__(self, config: InferenceConfig, model: nn.Module, resolved_refiner_mode: str | None = None) -> None:
         self._config = config
         self._model = model
+        # Fall back to config value if not provided (covers direct construction
+        # with an already-concrete mode like "full_frame" or "tiled").
+        self._resolved_refiner_mode = resolved_refiner_mode or config.refiner_mode
 
     @property
     def backend_name(self) -> str:
@@ -99,7 +105,7 @@ class TorchBackend:
         return {
             "backend": "torch",
             "device": str(cfg.device),
-            "refiner_mode": str(cfg.refiner_mode),
+            "refiner_mode": self._resolved_refiner_mode,
             "precision": str(cfg.model_precision).replace("torch.", ""),
             "img_size": str(cfg.img_size),
             "use_refiner": str(cfg.use_refiner),
@@ -148,7 +154,7 @@ class MLXBackend:  # pragma: no cover
         return {
             "backend": "mlx",
             "device": "apple-silicon",
-            "optimization_mode": mode,
+            "refiner_mode": mode,
             "precision": "mlx-default",
             "img_size": str(self._img_size),
             "use_refiner": "true",

@@ -154,19 +154,28 @@ def _should_tile_refiner(config: InferenceConfig) -> bool:
 
 
 def _probe_vram_gb(device: str) -> float:
-    """Return total VRAM in GB for the given device. Returns 0.0 on failure."""
+    """Return total VRAM in GB for the given device. Returns 0.0 on failure.
+
+    Correctly handles multi-GPU setups by parsing the device index from the
+    device string (e.g. "cuda:1" → index 1). Falls back to index 0 for bare
+    "cuda" or "rocm" strings.
+    """
+    dev = torch.device(device)
+    # Parse the device index — torch.device("cuda:1").index == 1,
+    # torch.device("cuda").index is None (defaults to 0).
+    device_index = dev.index if dev.index is not None else 0
     try:
         import pynvml
 
         pynvml.nvmlInit()
-        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+        handle = pynvml.nvmlDeviceGetHandleByIndex(device_index)
         mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
         return mem.total / (1024**3)
     except Exception:
         pass
     try:
         if torch.cuda.is_available():
-            return torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            return torch.cuda.get_device_properties(device_index).total_memory / (1024**3)
     except Exception:
         pass
     return 0.0

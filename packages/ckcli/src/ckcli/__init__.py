@@ -19,24 +19,24 @@ from ckcli.commands.init import init
 from ckcli.commands.reset import reset
 
 _ENGINE_PRESET_ALIASES: dict[str, str] = {
-    "d": "speed",
-    "default": "speed",
-    "s": "speed",
+    "d": "full_frame",
+    "default": "full_frame",
+    "s": "full_frame",
     "b": "balanced",
     "q": "quality",
     "mq": "max_quality",
     "max": "max_quality",
-    "l": "lowvram",
+    "l": "tiled",
     "m": "manual",
     "man": "manual",
 }
 
 _PRESETS: dict[str, tuple[str, str, int]] = {
-    "speed": ("speed", "float16", 1024),
+    "full_frame": ("full_frame", "float16", 1024),
     "balanced": ("auto", "auto", 1536),
-    "quality": ("speed", "bfloat16", 2048),
-    "max_quality": ("speed", "float32", 2560),
-    "lowvram": ("lowvram", "float16", 1024),
+    "quality": ("full_frame", "bfloat16", 2048),
+    "max_quality": ("full_frame", "float32", 2048),
+    "tiled": ("tiled", "float16", 1024),
 }
 
 app = typer.Typer(
@@ -102,7 +102,7 @@ def wizard(
     _print_clip_table(clips, clips_dir)
 
     if yes:
-        opt_mode = config_obj.inference.optimization_mode
+        opt_mode = config_obj.inference.refiner_mode
         precision = config_obj.inference.model_precision
         img_size = config_obj.preprocess.img_size or 0
     else:
@@ -114,7 +114,7 @@ def wizard(
         **config_obj.model_dump(),
         "inference": {
             **config_obj.inference.model_dump(),
-            "optimization_mode": opt_mode,
+            "refiner_mode": opt_mode,
             "model_precision": precision,
         },
         "preprocess": {
@@ -130,7 +130,7 @@ def wizard(
     console.print(
         f"  img_size=[cyan]{inference_config.img_size}[/cyan]  "
         f"precision=[cyan]{inference_config.model_precision}[/cyan]  "
-        f"optimization=[cyan]{inference_config.optimization_mode}[/cyan]"
+        f"refiner_mode=[cyan]{inference_config.refiner_mode}[/cyan]"
     )
     model = load_model(inference_config)
     console.print("[green]Model loaded.[/green]\n")
@@ -194,9 +194,9 @@ def _prompt_engine_settings(config_obj) -> tuple[str, str, int]:
     console.print()
     console.print(Panel("[bold]Engine Settings[/bold]", border_style="cyan", expand=False))
     _show_settings([
-        ("optimization_mode", config_obj.inference.optimization_mode, "auto / speed / lowvram"),
+        ("refiner_mode", config_obj.inference.refiner_mode, "auto / full_frame / tiled"),
         ("model_precision", config_obj.inference.model_precision, "auto / float16 / bfloat16 / float32"),
-        ("img_size", str(config_obj.preprocess.img_size or "auto"), "0=auto / 1024 / 1536 / 2048 / 2560"),
+        ("img_size", str(config_obj.preprocess.img_size or "auto"), "0=auto / 512 / 1024 / 1536 / 2048"),
     ])
 
     preset = _ask_preset()
@@ -206,7 +206,7 @@ def _prompt_engine_settings(config_obj) -> tuple[str, str, int]:
     opt_mode, precision, img_size = _PRESETS[preset]
     _show_settings([
         ("preset", preset, "selected"),
-        ("optimization_mode", opt_mode, "resolved"),
+        ("refiner_mode", opt_mode, "resolved"),
         ("model_precision", precision, "resolved"),
         ("img_size", str(img_size), "resolved"),
     ])
@@ -218,9 +218,9 @@ def _prompt_engine_settings(config_obj) -> tuple[str, str, int]:
 
 def _prompt_manual(config_obj) -> tuple[str, str, int]:
     opt_mode = Prompt.ask(
-        "optimization_mode",
-        choices=["auto", "speed", "lowvram"],
-        default=config_obj.inference.optimization_mode,
+        "refiner_mode",
+        choices=["auto", "full_frame", "tiled"],
+        default=config_obj.inference.refiner_mode,
     )
     precision = Prompt.ask(
         "model_precision",
@@ -229,7 +229,7 @@ def _prompt_manual(config_obj) -> tuple[str, str, int]:
     )
     img_size_str = Prompt.ask(
         "img_size",
-        choices=["0", "1024", "1536", "2048", "2560"],
+        choices=["0", "512", "1024", "1536", "2048"],
         default=str(config_obj.preprocess.img_size or 0),
     )
     return opt_mode, precision, int(img_size_str)
@@ -238,13 +238,13 @@ def _prompt_manual(config_obj) -> tuple[str, str, int]:
 def _ask_preset() -> str:
     choices = " / ".join(_PRESETS) + " / manual"
     while True:
-        raw = Prompt.ask(f"preset [{choices}]", default="speed").strip().lower()
+        raw = Prompt.ask(f"preset [{choices}]", default="full_frame").strip().lower()
         if raw in _PRESETS or raw == "manual":
             return raw
         if raw in _ENGINE_PRESET_ALIASES:
             return _ENGINE_PRESET_ALIASES[raw]
         console.print(
-            "[yellow]Invalid preset.[/yellow] Options: speed, balanced, quality, max_quality, lowvram, manual"
+            "[yellow]Invalid preset.[/yellow] Options: full_frame, balanced, quality, max_quality, tiled, manual"
         )
 
 

@@ -78,6 +78,32 @@ class TestInferenceConfigValidation:
     def test_valid_img_sizes_constant(self):
         assert set(VALID_IMG_SIZES) == {0, 512, 1024, 1536, 2048}
 
+    def test_mixed_precision_cleared_when_model_precision_float16(self, tmp_path: Path):
+        """mixed_precision=True is a no-op with float16 weights — should be silently cleared."""
+        cfg = InferenceConfig(
+            checkpoint_path=tmp_path / "m.pth",
+            mixed_precision=True,
+            model_precision=torch.float16,
+        )
+        assert cfg.mixed_precision is False
+
+    def test_mixed_precision_kept_when_model_precision_bfloat16(self, tmp_path: Path):
+        """mixed_precision=True with bfloat16 is valid — autocast still applies."""
+        cfg = InferenceConfig(
+            checkpoint_path=tmp_path / "m.pth",
+            mixed_precision=True,
+            model_precision=torch.bfloat16,
+        )
+        assert cfg.mixed_precision is True
+
+    def test_mixed_precision_kept_when_model_precision_float32(self, tmp_path: Path):
+        cfg = InferenceConfig(
+            checkpoint_path=tmp_path / "m.pth",
+            mixed_precision=True,
+            model_precision=torch.float32,
+        )
+        assert cfg.mixed_precision is True
+
 
 class TestModuleConstants:
     def test_vram_threshold_positive(self):

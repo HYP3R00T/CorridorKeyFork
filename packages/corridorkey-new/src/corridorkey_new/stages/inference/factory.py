@@ -47,8 +47,9 @@ _DEFAULT_MLX_TILE_OVERLAP = 64
 def load_backend(config: InferenceConfig):  # -> ModelBackend
     """Construct and return the appropriate inference backend.
 
-    Resolves the backend (torch or mlx), loads the model/engine, and returns
-    a ``ModelBackend`` instance ready to call ``.run(frame)``.
+    Resolves the backend (torch or mlx), resolves "auto" refiner_mode to a
+    concrete value, loads the model/engine, and returns a ``ModelBackend``
+    instance ready to call ``.run(frame)``.
 
     Args:
         config: ``InferenceConfig`` with all fields populated. The
@@ -68,12 +69,23 @@ def load_backend(config: InferenceConfig):  # -> ModelBackend
     if backend_name == "mlx":  # pragma: no cover
         return _load_mlx_backend(config)
 
-    # Torch (default)
+    # Resolve "auto" refiner_mode to a concrete value before loading the model.
+    # This ensures torch.compile decisions are made on the real mode, not "auto".
+    from corridorkey_new.stages.inference.orchestrator import _should_tile_refiner
+
+    resolved_refiner_mode = "tiled" if _should_tile_refiner(config) else "full_frame"
+    logger.info(
+        "Refiner mode resolved: %s → %s (device=%s)",
+        config.refiner_mode,
+        resolved_refiner_mode,
+        config.device,
+    )
+
     from corridorkey_new.stages.inference.loader import load_model
 
-    model = load_model(config)
+    model = load_model(config, resolved_refiner_mode=resolved_refiner_mode)
     logger.info("TorchBackend ready (device=%s, precision=%s)", config.device, config.model_precision)
-    return TorchBackend(config=config, model=model)
+    return TorchBackend(config=config, model=model, resolved_refiner_mode=resolved_refiner_mode)
 
 
 def discover_checkpoint(checkpoint_dir: str | Path, backend: str = "torch") -> Path:

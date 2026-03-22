@@ -36,13 +36,22 @@ class TestCorridorKeyConfigValidation:
             LoggingSettings(level="VERBOSE")  # type: ignore[arg-type]
 
     def test_valid_devices(self):
-        for device in ("auto", "cuda", "rocm", "mps", "cpu"):
+        for device in ("auto", "cuda", "rocm", "mps", "cpu", "all", "cuda:0", "cuda:1", "rocm:0"):
+            config = CorridorKeyConfig(device=device)
+            assert config.device == device
+
+    def test_cuda_index_devices(self):
+        for device in ("cuda:0", "cuda:1", "cuda:7"):
             config = CorridorKeyConfig(device=device)
             assert config.device == device
 
     def test_invalid_device_raises(self):
-        with pytest.raises(Exception, match="device"):
-            CorridorKeyConfig(device="tpu")  # type: ignore[arg-type]
+        with pytest.raises(ValueError):
+            CorridorKeyConfig(device="tpu")
+
+    def test_invalid_device_index_raises(self):
+        with pytest.raises(ValueError):
+            CorridorKeyConfig(device="cuda:abc")
 
 
 class TestCorridorKeyConfigOverrides:
@@ -88,7 +97,7 @@ class TestPreprocessSettings:
         from pydantic import ValidationError
 
         with pytest.raises(ValidationError):
-            PreprocessSettings(img_size=768)  # not in valid set
+            PreprocessSettings(img_size=768)  # type: ignore[call-arg]  # intentionally invalid
 
     def test_valid_img_sizes_accepted(self):
         from corridorkey_new.infra.config import PreprocessSettings
