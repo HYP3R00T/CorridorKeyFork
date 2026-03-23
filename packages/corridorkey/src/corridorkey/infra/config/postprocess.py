@@ -16,11 +16,13 @@ class PostprocessSettings(BaseModel):
     In ``corridorkey.toml``::
 
         [postprocess]
-        fg_upsample_mode = "bicubic"
+        fg_upsample_mode = "lanczos4"
         alpha_upsample_mode = "lanczos4"
-        despill_strength = 1.0
+        despill_strength = 0.5
         auto_despeckle = true
         despeckle_size = 400
+        despeckle_dilation = 25
+        despeckle_blur = 5
         source_passthrough = true
         edge_erode_px = 3
         edge_blur_px = 7
@@ -29,15 +31,15 @@ class PostprocessSettings(BaseModel):
     fg_upsample_mode: Annotated[
         Literal["bilinear", "bicubic", "lanczos4"],
         Field(
-            default="bicubic",
+            default="lanczos4",
             description=(
                 "Interpolation mode for upscaling the foreground when the model resolution "
-                "is smaller than the source. 'bicubic' (default) is sharp and accurate. "
-                "'lanczos4' is slightly sharper but slower. 'bilinear' is fastest. "
+                "is smaller than the source. 'lanczos4' (default) gives the sharpest result. "
+                "'bicubic' is slightly faster. 'bilinear' is fastest. "
                 "Downscaling always uses INTER_AREA regardless of this setting."
             ),
         ),
-    ] = "bicubic"
+    ] = "lanczos4"
 
     alpha_upsample_mode: Annotated[
         Literal["bilinear", "lanczos4"],
@@ -55,12 +57,12 @@ class PostprocessSettings(BaseModel):
     despill_strength: Annotated[
         float,
         Field(
-            default=1.0,
+            default=0.5,
             ge=0.0,
             le=1.0,
             description="Green spill suppression strength. 0.0 = off, 1.0 = full suppression.",
         ),
-    ] = 1.0
+    ] = 0.5
 
     auto_despeckle: Annotated[
         bool,
@@ -78,6 +80,26 @@ class PostprocessSettings(BaseModel):
             description="Minimum connected region area in pixels to keep when auto_despeckle is enabled.",
         ),
     ] = 400
+
+    despeckle_dilation: Annotated[
+        int,
+        Field(
+            default=25,
+            ge=0,
+            description=(
+                "Dilation radius in pixels applied after component removal to recover edges lost during binarisation."
+            ),
+        ),
+    ] = 25
+
+    despeckle_blur: Annotated[
+        int,
+        Field(
+            default=5,
+            ge=0,
+            description="Gaussian blur radius applied after dilation to soften the hard mask edge.",
+        ),
+    ] = 5
 
     source_passthrough: Annotated[
         bool,

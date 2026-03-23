@@ -77,13 +77,17 @@ def apply_source_passthrough(
     """
     alpha_2d = alpha[:, :, 0] if alpha.ndim == 3 else alpha
 
-    # Build interior mask via erosion of the alpha matte.
+    # Build interior mask: only pixels that are confidently fully opaque.
+    # Using a hard threshold first (matching reference behaviour) ensures we
+    # never pass through source pixels in semi-transparent edge regions.
+    interior = (alpha_2d > 0.95).astype(np.float32)
+
+    # Erode inward to create a safety buffer around edges so we never use
+    # original pixels where green spill might still exist.
     if edge_erode_px > 0:
         k = edge_erode_px * 2 + 1
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
-        interior = cv2.erode(alpha_2d, kernel, iterations=1)
-    else:
-        interior = alpha_2d.copy()
+        interior = cv2.erode(interior, kernel)
 
     # Soft blend seam.
     if edge_blur_px > 0:

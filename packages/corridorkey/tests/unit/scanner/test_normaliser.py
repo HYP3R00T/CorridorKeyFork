@@ -138,8 +138,7 @@ class TestNormaliseVideoIdempotent:
         # So create a video at tmp_path level that already has a matching dest
         video_src = tmp_path / "clip.mp4"
         video_src.write_bytes(b"data")
-        # Pre-create the dest with same content
-        dest = input_dir / "clip.mp4"
+        # Pre-create the dest with same content (input_dir / "clip.mp4" already exists)
         # dest already exists from above — normalise_video should skip _safe_move
         with patch("corridorkey.stages.scanner.normaliser._safe_move") as mock_move:
             normalise_video(video_src)

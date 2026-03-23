@@ -36,11 +36,13 @@ Config file structure (``corridorkey.toml``)::
     refiner_scale = 1.0
 
     [postprocess]
-    fg_upsample_mode = "bicubic"
+    fg_upsample_mode = "lanczos4"
     alpha_upsample_mode = "lanczos4"
-    despill_strength = 1.0
+    despill_strength = 0.5
     auto_despeckle = true
     despeckle_size = 400
+    despeckle_dilation = 25
+    despeckle_blur = 5
     source_passthrough = true
     edge_erode_px = 3
     edge_blur_px = 7

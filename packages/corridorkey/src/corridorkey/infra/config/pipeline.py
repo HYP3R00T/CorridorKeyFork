@@ -179,6 +179,8 @@ class CorridorKeyConfig(BaseModel):
             despill_strength=self.postprocess.despill_strength,
             auto_despeckle=self.postprocess.auto_despeckle,
             despeckle_size=self.postprocess.despeckle_size,
+            despeckle_dilation=self.postprocess.despeckle_dilation,
+            despeckle_blur=self.postprocess.despeckle_blur,
             source_passthrough=self.postprocess.source_passthrough,
             edge_erode_px=self.postprocess.edge_erode_px,
             edge_blur_px=self.postprocess.edge_blur_px,

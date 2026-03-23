@@ -16,7 +16,7 @@ class PreprocessSettings(BaseModel):
     In ``corridorkey.toml``::
 
         [preprocess]
-        img_size = 2048
+        img_size = 0  # 0 = auto-select based on VRAM
         image_upsample_mode = "bicubic"
         sharpen_strength = 0.3
         half_precision = false
@@ -31,8 +31,7 @@ class PreprocessSettings(BaseModel):
                 "Square resolution the model runs at. "
                 "0 (default) = auto-select based on available VRAM: "
                 "<6 GB → 1024, 6–12 GB → 1536, 12+ GB → 2048. "
-                "2048 is the native training resolution and produces the best output. "
-                "Smaller values reduce VRAM usage at the cost of output quality."
+                "2048 is the native training resolution and produces the best output."
             ),
         ),
     ] = 0
@@ -45,8 +44,7 @@ class PreprocessSettings(BaseModel):
                 "Interpolation mode when the source frame is smaller than img_size. "
                 "'bicubic' (default) gives the sharpest result. "
                 "'bilinear' is faster but slightly softer. "
-                "Has no effect when downscaling — area mode is always used then. "
-                "Alpha upscale is always bilinear internally (bicubic rings on matte edges)."
+                "Has no effect when downscaling — area mode is always used then."
             ),
         ),
     ] = "bicubic"
@@ -59,9 +57,8 @@ class PreprocessSettings(BaseModel):
             le=1.0,
             description=(
                 "Unsharp mask strength applied after upscaling. "
-                "0.3 (default) recovers softness introduced by the antialias filter. "
-                "0.0 disables sharpening. Typical range 0.1–0.5. "
-                "Has no effect when downscaling."
+                "0.3 (default) recovers softness from the antialias filter. "
+                "0.0 disables. Has no effect when downscaling."
             ),
         ),
     ] = 0.3
@@ -70,11 +67,7 @@ class PreprocessSettings(BaseModel):
         bool,
         Field(
             default=False,
-            description=(
-                "Cast tensors to float16 before inference. "
-                "Halves VRAM usage and PCIe bandwidth. "
-                "Requires the model and device to support float16."
-            ),
+            description=("Cast tensors to float16 before inference. Halves VRAM usage and PCIe bandwidth."),
         ),
     ] = False
 
@@ -85,8 +78,7 @@ class PreprocessSettings(BaseModel):
             description=(
                 "Carry the original sRGB source image through to the postprocessor. "
                 "Enables replacing model FG in opaque interior regions with original "
-                "source pixels, eliminating dark fringing. "
-                "Disable for a small speed gain if fringing is not a concern."
+                "source pixels, eliminating dark fringing."
             ),
         ),
     ] = True

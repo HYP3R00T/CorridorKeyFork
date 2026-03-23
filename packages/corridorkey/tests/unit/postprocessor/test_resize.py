@@ -72,26 +72,3 @@ class TestResizeToSource:
         a_np, fg_np = resize_to_source(alpha, fg, 16, 16)
         assert np.allclose(a_np, 0.7, atol=1e-5)
         assert np.allclose(fg_np, 0.3, atol=1e-5)
-
-
-class TestResizeToSourceWithPad:
-    def test_letterbox_pad_crop_applied(self):
-        from corridorkey.stages.preprocessor.resize import LetterboxPad
-
-        # 32x32 model output with 4px top/bottom padding (content is 24px tall)
-        alpha = torch.zeros(1, 1, 32, 32)
-        fg = torch.zeros(1, 3, 32, 32)
-        pad = LetterboxPad(top=4, bottom=4, left=0, right=0, inner_h=24, inner_w=32)
-        a_np, fg_np = resize_to_source(alpha, fg, 24, 32, pad=pad)
-        assert a_np.shape == (24, 32, 1)
-        assert fg_np.shape == (24, 32, 3)
-
-    def test_noop_pad_skips_crop(self):
-        from corridorkey.stages.preprocessor.resize import LetterboxPad
-
-        alpha = torch.zeros(1, 1, 16, 16)
-        fg = torch.zeros(1, 3, 16, 16)
-        pad = LetterboxPad(top=0, bottom=0, left=0, right=0, inner_h=16, inner_w=16)
-        a_np, fg_np = resize_to_source(alpha, fg, 16, 16, pad=pad)
-        assert a_np.shape == (16, 16, 1)
-        assert fg_np.shape == (16, 16, 3)

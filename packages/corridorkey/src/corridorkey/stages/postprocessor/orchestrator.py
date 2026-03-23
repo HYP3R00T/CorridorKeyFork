@@ -4,9 +4,9 @@ Runs steps 1–6 in order. Owns no transformation logic itself — each step
 is delegated to its own module.
 
     Step 1 — resize tensors back to source resolution  → resize.py
-    Step 2 — green spill removal                       → despill.py
+    Step 2 — source passthrough (interior FG replace)  → composite.py
     Step 3 — alpha matte cleanup (despeckle)           → despeckle.py
-    Step 4 — source passthrough (interior FG replace)  → composite.py
+    Step 4 — green spill removal                       → despill.py
     Step 5 — build processed RGBA + checkerboard comp  → composite.py
     Step 6 — return PostprocessedFrame                 (here)
 
@@ -46,27 +46,21 @@ def postprocess_frame(
     """
     meta = result.meta
 
-    # Step 1 — crop letterbox padding and resize tensors back to source resolution
+    # Step 1 — resize tensors back to source resolution
     alpha_np, fg_np = resize_to_source(
         result.alpha,
         result.fg,
         meta.original_h,
         meta.original_w,
-        pad=meta.pad,
         fg_upsample_mode=config.fg_upsample_mode,
         alpha_upsample_mode=config.alpha_upsample_mode,
     )
 
-    # Step 2 — green spill removal (on straight sRGB FG)
-    fg_np = remove_spill(fg_np, config.despill_strength)
-
-    # Step 3 — alpha matte cleanup
-    if config.auto_despeckle:
-        alpha_np = despeckle_alpha(alpha_np, config.despeckle_size)
-
-    # Step 4 — source passthrough: replace model FG in opaque interior regions
+    # Step 2 — source passthrough: replace model FG in opaque interior regions
     # with original source pixels to eliminate dark fringing from background
     # contamination in the model FG prediction.
+    # Must run before despill so that despill is applied to the already-blended
+    # FG (including the passed-through source pixels).
     if config.source_passthrough and meta.source_image is not None:
         fg_np = apply_source_passthrough(
             fg_np,
@@ -75,6 +69,13 @@ def postprocess_frame(
             config.edge_erode_px,
             config.edge_blur_px,
         )
+
+    # Step 3 — alpha matte cleanup
+    if config.auto_despeckle:
+        alpha_np = despeckle_alpha(alpha_np, config.despeckle_size, config.despeckle_dilation, config.despeckle_blur)
+
+    # Step 4 — green spill removal (on straight sRGB FG, after passthrough is blended in)
+    fg_np = remove_spill(fg_np, config.despill_strength)
 
     # Step 5 — build outputs
     processed_np = make_processed(fg_np, alpha_np)

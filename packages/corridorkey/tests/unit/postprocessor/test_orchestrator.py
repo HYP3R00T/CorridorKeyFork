@@ -59,7 +59,7 @@ class TestPostprocessFrame:
     def test_despeckle_called_when_enabled(self):
         cfg = PostprocessConfig(auto_despeckle=True, despeckle_size=10)
         with patch("corridorkey.stages.postprocessor.orchestrator.despeckle_alpha") as mock:
-            mock.side_effect = lambda a, min_area: a
+            mock.side_effect = lambda a, min_area, dilation, blur_size: a
             postprocess_frame(_make_result(), cfg)
             mock.assert_called_once()
 

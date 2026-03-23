@@ -31,8 +31,8 @@ def remove_spill(fg: np.ndarray, strength: float) -> np.ndarray:
     spill_amount = np.maximum(g - green_limit, 0.0)
 
     g_new = g - spill_amount
-    r_new = np.clip(r + spill_amount * 0.5, 0.0, 1.0)
-    b_new = np.clip(b + spill_amount * 0.5, 0.0, 1.0)
+    r_new = r + spill_amount * 0.5
+    b_new = b + spill_amount * 0.5
 
     despilled = np.stack([r_new, g_new, b_new], axis=-1).astype(np.float32)
 
