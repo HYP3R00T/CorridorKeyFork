@@ -94,7 +94,7 @@ class PostprocessSettings(BaseModel):
     edge_erode_px: Annotated[
         int,
         Field(
-            default=3,
+            default=0,
             ge=0,
             description=(
                 "Erosion radius in pixels for the interior mask used by source_passthrough. "
@@ -106,7 +106,7 @@ class PostprocessSettings(BaseModel):
     edge_blur_px: Annotated[
         int,
         Field(
-            default=7,
+            default=0,
             ge=1,
             description=(
                 "Gaussian blur radius for the source_passthrough blend seam. "
