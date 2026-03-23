@@ -8,7 +8,7 @@ from rich import box
 from rich.table import Table
 from rich.text import Text
 
-from ckcli._console import console
+from corridorkey_cli._console import console
 
 # Source → colour mapping
 _SOURCE_STYLE: dict[str, str] = {

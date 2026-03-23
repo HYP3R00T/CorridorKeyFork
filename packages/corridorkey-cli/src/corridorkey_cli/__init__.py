@@ -1,4 +1,4 @@
-"""ckcli — command-line interface for CorridorKey."""
+"""corridorkey_cli — command-line interface for CorridorKey."""
 
 from __future__ import annotations
 
@@ -12,11 +12,11 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
-from ckcli._console import console, err_console
-from ckcli._printer import RichPrinter
-from ckcli.commands.config import config
-from ckcli.commands.init import init
-from ckcli.commands.reset import reset
+from corridorkey_cli._console import console, err_console
+from corridorkey_cli._printer import RichPrinter
+from corridorkey_cli.commands.config import config
+from corridorkey_cli.commands.init import init
+from corridorkey_cli.commands.reset import reset
 
 _ENGINE_PRESET_ALIASES: dict[str, str] = {
     "d": "full_frame",
@@ -66,14 +66,14 @@ def wizard(
     ] = False,
 ) -> None:
     """Scan, configure, and process clips. The default command."""
-    from corridorkey_new import load, resolve_alpha, resolve_device, scan, setup_logging
-    from corridorkey_new.infra import APP_NAME, ensure_config_file, load_config_with_metadata
-    from corridorkey_new.infra.config import CorridorKeyConfig
-    from corridorkey_new.infra.model_hub import ensure_model
-    from corridorkey_new.runtime.runner import PipelineRunner
-    from corridorkey_new.stages.inference.loader import load_model as _load_model
+    from corridorkey import load, resolve_alpha, resolve_device, scan, setup_logging
+    from corridorkey.infra import APP_NAME, ensure_config_file, load_config_with_metadata
+    from corridorkey.infra.config import CorridorKeyConfig
+    from corridorkey.infra.model_hub import ensure_model
+    from corridorkey.runtime.runner import PipelineRunner
+    from corridorkey.stages.inference.loader import load_model as _load_model
 
-    from ckcli._config_table import print_config_table
+    from corridorkey_cli._config_table import print_config_table
 
     console.print(Panel("[bold cyan]CorridorKey[/bold cyan]", expand=False))
 

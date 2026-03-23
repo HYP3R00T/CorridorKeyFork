@@ -5,14 +5,14 @@ from __future__ import annotations
 import threading
 import time
 
-from corridorkey_new.events import PipelineEvents
+from corridorkey.events import PipelineEvents
 from rich.live import Live
 from rich.panel import Panel
 from rich.progress import BarColumn, MofNCompleteColumn, Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
 from rich.table import Table
 from rich.text import Text
 
-from ckcli._console import console
+from corridorkey_cli._console import console
 
 
 class RichPrinter:

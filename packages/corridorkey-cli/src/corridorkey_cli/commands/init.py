@@ -6,17 +6,17 @@ import platform
 import sys
 
 import typer
-from corridorkey_new import detect_gpu
-from corridorkey_new.infra import APP_NAME, get_config_path, load_config_with_metadata
-from corridorkey_new.infra.config import CorridorKeyConfig
-from corridorkey_new.infra.model_hub import MODEL_FILENAME, MODEL_URL, default_checkpoint_path, ensure_model
+from corridorkey import detect_gpu
+from corridorkey.infra import APP_NAME, get_config_path, load_config_with_metadata
+from corridorkey.infra.config import CorridorKeyConfig
+from corridorkey.infra.model_hub import MODEL_FILENAME, MODEL_URL, default_checkpoint_path, ensure_model
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TransferSpeedColumn
 from rich.prompt import Confirm
 from rich.table import Table
 from utilityhub_config import ensure_config_file
 
-from ckcli._config_table import print_config_table
-from ckcli._console import console, err_console
+from corridorkey_cli._config_table import print_config_table
+from corridorkey_cli._console import console, err_console
 
 _PASS = "[green]OK[/green]"
 _FAIL = "[red]FAIL[/red]"

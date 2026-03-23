@@ -8,7 +8,7 @@ from typing import Annotated
 
 import typer
 
-from ckcli._console import console
+from corridorkey_cli._console import console
 
 _CONFIG_DIR = Path("~/.config/corridorkey")
 

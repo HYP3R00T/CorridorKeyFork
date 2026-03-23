@@ -16,7 +16,7 @@ rocm = ["corridorkey[rocm] ; sys_platform == 'linux'"]
 
 [dependency-groups]
 dev = [
-    "ckcli>=0.1.0",
+    "corridorkey-cli>=0.1.0",
     "corridorkey>=0.1.0",
     "git-cliff>=2.12.0",
     "hypothesis>=6.151.9",
@@ -67,4 +67,4 @@ conflicts = [
 
 [tool.uv.sources]
 corridorkey = { workspace = true }
-ckcli = { workspace = true }
+corridorkey-cli = { workspace = true }
