@@ -5,10 +5,6 @@ from __future__ import annotations
 import torch
 from corridorkey.stages.preprocessor.resize import (
     DEFAULT_IMAGE_UPSAMPLE_MODE,
-    _linear_to_srgb,
-    _multistep_downscale,
-    _srgb_to_linear,
-    _unsharp_mask,
     resize_frame,
 )
 
@@ -57,6 +53,14 @@ class TestResizeFrameShape:
         assert img.dtype == torch.float32
         assert alp.dtype == torch.float32
 
+    def test_extreme_ratio_produces_correct_shape(self):
+        # Large downscale — bilinear handles any ratio in one pass
+        src = _make_image(4320, 7680)
+        alp = _make_alpha(4320, 7680)
+        img, alp_out = resize_frame(src, alp, 512)
+        assert img.shape == (1, 3, 512, 512)
+        assert alp_out.shape == (1, 1, 512, 512)
+
 
 # ---------------------------------------------------------------------------
 # Alpha clamp after resize
@@ -79,111 +83,37 @@ class TestAlphaClamp:
 
 
 # ---------------------------------------------------------------------------
-# Colour-aware downscaling
+# Bilinear resize — reference-matching behaviour
 # ---------------------------------------------------------------------------
 
 
-class TestColourAwareDownscaling:
-    def test_srgb_downscale_differs_from_linear_downscale(self):
-        src = _make_image(512, 512)
-        alp = _make_alpha(512, 512)
-        img_srgb, _ = resize_frame(src, alp, 128, is_srgb=True)
-        img_linear, _ = resize_frame(src, alp, 128, is_srgb=False)
-        assert not torch.allclose(img_srgb, img_linear)
-
-    def test_srgb_downscale_output_in_range(self):
-        src = _make_image(512, 512)
-        alp = _make_alpha(512, 512)
-        img, _ = resize_frame(src, alp, 128, is_srgb=True)
-        assert img.min().item() >= 0.0
-        assert img.max().item() <= 1.0
-
-    def test_upscale_not_affected_by_is_srgb(self):
-        src = _make_image(32, 32)
-        alp = _make_alpha(32, 32)
-        img_srgb, _ = resize_frame(src, alp, 128, is_srgb=True)
-        img_linear, _ = resize_frame(src, alp, 128, is_srgb=False)
-        torch.testing.assert_close(img_srgb, img_linear)
-
-
-# ---------------------------------------------------------------------------
-# Post-upscale sharpening
-# ---------------------------------------------------------------------------
-
-
-class TestPostUpscaleSharpening:
-    def test_sharpening_produces_different_result(self):
-        src = _make_image(32, 32)
-        alp = _make_alpha(32, 32)
-        img_sharp, _ = resize_frame(src, alp, 128, sharpen_strength=0.3)
-        img_plain, _ = resize_frame(src, alp, 128, sharpen_strength=0.0)
-        assert not torch.allclose(img_sharp, img_plain)
-
-    def test_sharpening_output_in_range(self):
-        src = _make_image(32, 32)
-        alp = _make_alpha(32, 32)
-        img, _ = resize_frame(src, alp, 128, sharpen_strength=0.5)
-        assert img.min().item() >= 0.0
-        assert img.max().item() <= 1.0
-
-    def test_sharpening_disabled_on_downscale(self):
-        src = _make_image(512, 512)
-        alp = _make_alpha(512, 512)
-        img_sharp, _ = resize_frame(src, alp, 128, sharpen_strength=0.5)
-        img_plain, _ = resize_frame(src, alp, 128, sharpen_strength=0.0)
-        torch.testing.assert_close(img_sharp, img_plain)
-
-    def test_sharpening_does_not_affect_alpha(self):
-        src = _make_image(32, 32)
-        alp = _make_alpha(32, 32)
-        _, alp_sharp = resize_frame(src, alp, 128, sharpen_strength=0.5)
-        _, alp_plain = resize_frame(src, alp, 128, sharpen_strength=0.0)
-        torch.testing.assert_close(alp_sharp, alp_plain)
-
-
-# ---------------------------------------------------------------------------
-# Multi-step downscaling
-# ---------------------------------------------------------------------------
-
-
-class TestMultistepDownscaling:
-    def test_extreme_ratio_produces_correct_shape(self):
-        src = _make_image(4320, 7680)  # 8K
-        alp = _make_alpha(4320, 7680)
-        img, alp_out = resize_frame(src, alp, 512)
-        assert img.shape == (1, 3, 512, 512)
-        assert alp_out.shape == (1, 1, 512, 512)
-
-    def test_multistep_helper_produces_correct_shape(self):
-        img = _make_image(4096, 4096)
-        alp = _make_alpha(4096, 4096)
-        img_out, alp_out = _multistep_downscale(img, alp, 256, 256)
-        assert img_out.shape == (1, 3, 256, 256)
-        assert alp_out.shape == (1, 1, 256, 256)
-
-
-# ---------------------------------------------------------------------------
-# Upsample mode behaviour
-# ---------------------------------------------------------------------------
-
-
-class TestUpsampleModes:
+class TestBilinearResize:
     def test_default_image_upsample_mode_is_bicubic(self):
+        # DEFAULT_IMAGE_UPSAMPLE_MODE is kept for API compatibility
         assert DEFAULT_IMAGE_UPSAMPLE_MODE == "bicubic"
 
-    def test_bilinear_differs_from_bicubic_on_upscale(self):
-        src = _make_image(32, 32)
-        alp = _make_alpha(32, 32)
-        img_bicubic, _ = resize_frame(src, alp, 128, image_upsample_mode="bicubic")
-        img_bilinear, _ = resize_frame(src, alp, 128, image_upsample_mode="bilinear")
-        assert not torch.allclose(img_bicubic, img_bilinear)
-
-    def test_upsample_mode_no_effect_when_downscaling(self):
+    def test_ignored_params_do_not_change_output(self):
+        # image_upsample_mode, sharpen_strength, is_srgb are all ignored —
+        # resize always uses plain bilinear to match the reference pipeline.
         src = _make_image(512, 512)
         alp = _make_alpha(512, 512)
-        img_bicubic, _ = resize_frame(src, alp, 128, image_upsample_mode="bicubic")
-        img_bilinear, _ = resize_frame(src, alp, 128, image_upsample_mode="bilinear")
-        torch.testing.assert_close(img_bicubic, img_bilinear)
+        img_a, _ = resize_frame(src, alp, 128, image_upsample_mode="bicubic", sharpen_strength=0.5, is_srgb=True)
+        img_b, _ = resize_frame(src, alp, 128, image_upsample_mode="bilinear", sharpen_strength=0.0, is_srgb=False)
+        torch.testing.assert_close(img_a, img_b)
+
+    def test_output_in_range_downscale(self):
+        src = _make_image(512, 512)
+        alp = _make_alpha(512, 512)
+        img, _ = resize_frame(src, alp, 128)
+        assert img.min().item() >= 0.0
+        assert img.max().item() <= 1.0
+
+    def test_output_in_range_upscale(self):
+        src = _make_image(32, 32)
+        alp = _make_alpha(32, 32)
+        img, _ = resize_frame(src, alp, 128)
+        assert img.min().item() >= 0.0
+        assert img.max().item() <= 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -198,53 +128,3 @@ class TestHalfPrecision:
         img, alp_out = resize_frame(src, alp, 32)
         assert img.dtype == torch.float16
         assert alp_out.dtype == torch.float16
-
-
-# ---------------------------------------------------------------------------
-# sRGB ↔ linear helpers
-# ---------------------------------------------------------------------------
-
-
-class TestColourspaceHelpers:
-    def test_srgb_to_linear_roundtrip(self):
-        x = torch.linspace(0.0, 1.0, 256).reshape(1, 1, 16, 16)
-        roundtrip = _linear_to_srgb(_srgb_to_linear(x))
-        torch.testing.assert_close(roundtrip, x, atol=1e-4, rtol=0)
-
-    def test_linear_to_srgb_roundtrip(self):
-        x = torch.linspace(0.0, 1.0, 256).reshape(1, 1, 16, 16)
-        roundtrip = _srgb_to_linear(_linear_to_srgb(x))
-        torch.testing.assert_close(roundtrip, x, atol=1e-4, rtol=0)
-
-    def test_srgb_to_linear_output_in_range(self):
-        x = torch.rand(1, 3, 32, 32)
-        assert _srgb_to_linear(x).min().item() >= 0.0
-        assert _srgb_to_linear(x).max().item() <= 1.0
-
-    def test_linear_to_srgb_output_in_range(self):
-        x = torch.rand(1, 3, 32, 32)
-        assert _linear_to_srgb(x).min().item() >= 0.0
-        assert _linear_to_srgb(x).max().item() <= 1.0
-
-
-# ---------------------------------------------------------------------------
-# Unsharp mask helper
-# ---------------------------------------------------------------------------
-
-
-class TestUnsharpMask:
-    def test_output_shape_unchanged(self):
-        x = _make_image(64, 64)
-        out = _unsharp_mask(x, strength=0.3)
-        assert out.shape == x.shape
-
-    def test_output_in_range(self):
-        x = _make_image(64, 64)
-        out = _unsharp_mask(x, strength=0.5)
-        assert out.min().item() >= 0.0
-        assert out.max().item() <= 1.0
-
-    def test_zero_strength_is_identity(self):
-        x = _make_image(64, 64)
-        out = _unsharp_mask(x, strength=0.0)
-        torch.testing.assert_close(out, x)
