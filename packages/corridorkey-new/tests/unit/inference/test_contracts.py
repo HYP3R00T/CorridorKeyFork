@@ -80,3 +80,10 @@ class TestInferenceResultValidation:
         meta = FrameMeta(frame_index=0, original_h=32, original_w=32)
         with pytest.raises(ValueError, match="spatial size mismatch"):
             InferenceResult(alpha=torch.zeros(1, 1, 32, 32), fg=torch.zeros(1, 3, 16, 16), meta=meta)
+
+    def test_batch_size_mismatch_raises(self):
+        import pytest
+
+        meta = FrameMeta(frame_index=0, original_h=32, original_w=32)
+        with pytest.raises(ValueError, match="batch size mismatch"):
+            InferenceResult(alpha=torch.zeros(1, 1, 32, 32), fg=torch.zeros(2, 3, 32, 32), meta=meta)

@@ -238,3 +238,42 @@ class TestScanEventsExtended:
         with caplog.at_level(logging.WARNING, logger="corridorkey_new.stages.scanner.orchestrator"):
             scan(tmp_path)
         assert any("No clips found" in r.message for r in caplog.records)
+
+
+class TestScanDirectoryLoopEvents:
+    def test_clip_found_event_fires_in_directory_loop(self, tmp_path: Path):
+        """on_clip_found fires for clips discovered in the directory loop."""
+        _make_clip_dir(tmp_path, name="clip_a")
+        _make_clip_dir(tmp_path, name="clip_b")
+        found: list[str] = []
+        events = PipelineEvents(on_clip_found=lambda name, root: found.append(name))
+        scan(tmp_path, events=events)
+        assert sorted(found) == ["clip_a", "clip_b"]
+
+    def test_clip_skipped_event_fires_in_directory_loop(self, tmp_path: Path):
+        """on_clip_skipped fires for ambiguous clips in the directory loop."""
+        clip_dir = tmp_path / "bad_clip"
+        input_dir = clip_dir / "Input"
+        input_dir.mkdir(parents=True)
+        (input_dir / "a.mp4").touch()
+        (input_dir / "b.mp4").touch()
+        skipped_reasons: list[str] = []
+        events = PipelineEvents(on_clip_skipped=lambda reason, path: skipped_reasons.append(reason))
+        scan(tmp_path, events=events)
+        assert len(skipped_reasons) == 1
+
+    def test_loose_video_reorganised_event_fires_in_directory_loop(self, tmp_path: Path):
+        """on_clip_found fires when a loose video in a directory is reorganised."""
+        (tmp_path / "clip.mp4").touch()
+        found: list[str] = []
+        events = PipelineEvents(on_clip_found=lambda name, root: found.append(name))
+        scan(tmp_path, reorganise=True, events=events)
+        assert len(found) == 1
+
+    def test_loose_video_skipped_event_fires_in_directory_loop(self, tmp_path: Path):
+        """on_clip_skipped fires when reorganise=False and a loose video is in a directory."""
+        (tmp_path / "clip.mp4").touch()
+        skipped: list[str] = []
+        events = PipelineEvents(on_clip_skipped=lambda reason, path: skipped.append(reason))
+        scan(tmp_path, reorganise=False, events=events)
+        assert len(skipped) == 1

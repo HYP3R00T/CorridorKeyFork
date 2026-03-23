@@ -407,3 +407,86 @@ class TestResolveAlpha:
             # scan_frames should only be called for alpha_dir, not frames_dir
             called_paths = [call.args[0] for call in mock_scan.call_args_list]
             assert manifest.frames_dir not in called_paths
+
+
+class TestLoadVideoMetaPath:
+    def test_video_meta_path_set_when_json_exists(self, tmp_path: Path):
+        """video_meta_path is set when video_meta.json already exists in clip root."""
+        clip_dir = tmp_path / "my_clip"
+        input_dir = clip_dir / "Input"
+        input_dir.mkdir(parents=True)
+        video = input_dir / "clip.mp4"
+        video.touch()
+        clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
+
+        # Pre-create video_meta.json so the candidate.exists() branch is hit
+        from corridorkey_new.stages.loader.extractor import save_video_metadata
+
+        save_video_metadata(_fake_meta(frame_count=3), clip_dir)
+
+        with (
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.extract_video",
+                side_effect=_patch_extract([], frame_count=3),
+            ),
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.read_video_metadata",
+                return_value=_fake_meta(frame_count=3),
+            ),
+        ):
+            manifest = load(clip)
+
+        assert manifest.video_meta_path is not None
+        assert manifest.video_meta_path.name == "video_meta.json"
+
+    def test_read_video_metadata_runtime_error_during_cache_check(self, tmp_path: Path):
+        """RuntimeError from read_video_metadata during cache check sets expected=0 (skip re-extract)."""
+        clip_dir = tmp_path / "my_clip"
+        input_dir = clip_dir / "Input"
+        input_dir.mkdir(parents=True)
+        video = input_dir / "clip.mp4"
+        video.touch()
+
+        # Pre-populate Frames/ so the cache check branch is entered
+        frames_dir = clip_dir / "Frames"
+        _make_frames(frames_dir, count=3)
+
+        clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
+
+        with (
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.read_video_metadata",
+                side_effect=RuntimeError("no container"),
+            ),
+        ):
+            # expected=0 means existing.count == 0 is False but expected == 0 → skip re-extract
+            manifest = load(clip)
+
+        assert manifest.frame_count == 3
+
+    def test_read_video_metadata_runtime_error_before_extraction(self, tmp_path: Path):
+        """RuntimeError from read_video_metadata before extraction sets total_frames=0."""
+        clip_dir = tmp_path / "my_clip"
+        input_dir = clip_dir / "Input"
+        input_dir.mkdir(parents=True)
+        video = input_dir / "clip.mp4"
+        video.touch()
+        clip = Clip(name="my_clip", root=clip_dir, input_path=video, alpha_path=None)
+
+        totals: list[int] = []
+        events = PipelineEvents(on_stage_start=lambda s, t: totals.append(t))
+
+        with (
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.extract_video",
+                side_effect=_patch_extract([], frame_count=2),
+            ),
+            patch(
+                "corridorkey_new.stages.loader.orchestrator.read_video_metadata",
+                side_effect=RuntimeError("no container"),
+            ),
+        ):
+            load(clip, events=events)
+
+        # total_frames falls back to 0 when metadata read fails
+        assert totals[0] == 0

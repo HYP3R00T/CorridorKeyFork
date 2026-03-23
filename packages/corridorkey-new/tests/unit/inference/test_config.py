@@ -117,3 +117,20 @@ class TestModuleConstants:
 
     def test_tile_overlap_positive(self):
         assert REFINER_TILE_OVERLAP > 0
+
+
+class TestAdaptiveImgSize:
+    def test_returns_default_for_high_vram(self):
+        from corridorkey_new.stages.inference.config import _VRAM_IMG_SIZE_DEFAULT, adaptive_img_size
+
+        assert adaptive_img_size(16.0) == _VRAM_IMG_SIZE_DEFAULT
+
+    def test_returns_1024_for_low_vram(self):
+        from corridorkey_new.stages.inference.config import adaptive_img_size
+
+        assert adaptive_img_size(4.0) == 1024
+
+    def test_returns_1536_for_mid_vram(self):
+        from corridorkey_new.stages.inference.config import adaptive_img_size
+
+        assert adaptive_img_size(8.0) == 1536

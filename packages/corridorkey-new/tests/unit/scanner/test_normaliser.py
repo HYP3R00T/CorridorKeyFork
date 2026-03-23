@@ -125,3 +125,42 @@ class TestNormaliseVideoErrors:
             pytest.raises(OSError, match="Failed to create clip structure"),
         ):
             normalise_video(video)
+
+
+class TestNormaliseVideoIdempotent:
+    def test_already_in_place_skips_move(self, tmp_path: Path):
+        """If dest already exists with same size, _safe_move is not called."""
+        input_dir = tmp_path / "Input"
+        input_dir.mkdir()
+        video = input_dir / "clip.mp4"
+        video.write_bytes(b"data")
+        # normalise_video expects the video to be at clip_root level, not inside Input/
+        # So create a video at tmp_path level that already has a matching dest
+        video_src = tmp_path / "clip.mp4"
+        video_src.write_bytes(b"data")
+        # Pre-create the dest with same content
+        dest = input_dir / "clip.mp4"
+        # dest already exists from above — normalise_video should skip _safe_move
+        with patch("corridorkey_new.stages.scanner.normaliser._safe_move") as mock_move:
+            normalise_video(video_src)
+            mock_move.assert_not_called()
+
+
+class TestTryBuildClipNoInputFolder:
+    def test_no_input_folder_returns_none_none(self, tmp_path: Path):
+        """Directory with no Input/ folder returns (None, None)."""
+        clip_dir = tmp_path / "not_a_clip"
+        clip_dir.mkdir()
+        clip, skip = try_build_clip(clip_dir)
+        assert clip is None
+        assert skip is None
+
+
+class TestNormaliseVideoMove:
+    def test_moves_video_when_dest_does_not_exist(self, tmp_path: Path):
+        """When dest doesn't exist, normalise_video calls _safe_move."""
+        video = tmp_path / "clip.mp4"
+        video.write_bytes(b"video_data")
+        clip = normalise_video(video)
+        assert clip.input_path.exists()
+        assert not video.exists()  # source was moved

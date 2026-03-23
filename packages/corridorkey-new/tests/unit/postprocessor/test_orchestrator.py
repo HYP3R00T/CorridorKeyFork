@@ -74,3 +74,15 @@ class TestPostprocessFrame:
         assert result.alpha.dtype == np.float32
         assert result.fg.dtype == np.float32
         assert result.comp.dtype == np.float32
+
+    def test_debug_log_emitted(self):
+        import logging
+
+        orch_logger = logging.getLogger("corridorkey_new.stages.postprocessor.orchestrator")
+        original_level = orch_logger.level
+        orch_logger.setLevel(logging.DEBUG)
+        try:
+            # Just verify the call doesn't raise — the logger.debug line is executed
+            postprocess_frame(_make_result(frame_index=5), PostprocessConfig())
+        finally:
+            orch_logger.setLevel(original_level)

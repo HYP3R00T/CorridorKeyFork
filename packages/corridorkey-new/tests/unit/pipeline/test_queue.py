@@ -86,3 +86,9 @@ class TestBoundedQueue:
 
         item2 = q.get()
         assert item2 is STOP
+
+    def test_task_done_does_not_raise(self):
+        q: BoundedQueue[int] = BoundedQueue(4)
+        q.put(1)
+        q.get()
+        q.task_done()  # should not raise

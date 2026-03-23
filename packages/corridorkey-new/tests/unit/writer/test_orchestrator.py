@@ -123,3 +123,29 @@ class TestWriteFrame:
         cfg = WriteConfig(output_dir=bad_dir, fg_enabled=False, comp_enabled=False, processed_enabled=False)
         with pytest.raises((OSError, NotADirectoryError, Exception)):
             write_frame(frame, cfg)
+
+
+class TestWriteInternalPaths:
+    def test_sixteen_bit_png_written(self, tmp_path: Path):
+        """processed_format=png triggers the sixteen_bit branch in _write."""
+        from corridorkey_new.stages.writer.orchestrator import _write
+
+        img = np.full((8, 8, 4), 0.5, dtype=np.float32)
+        path = tmp_path / "out.png"
+        _write(img, path, "png", [], sixteen_bit=True)
+        assert path.exists()
+        loaded = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+        assert loaded is not None
+        assert loaded.dtype == np.uint16
+
+    def test_write_failure_raises(self, tmp_path: Path):
+        """cv2.imwrite returning False raises WriteFailureError."""
+        from unittest.mock import patch
+
+        from corridorkey_new.errors import WriteFailureError
+        from corridorkey_new.stages.writer.orchestrator import _write
+
+        img = np.zeros((4, 4, 3), dtype=np.uint8)
+        path = tmp_path / "out.png"
+        with patch("cv2.imwrite", return_value=False), pytest.raises(WriteFailureError):
+            _write(img, path, "png", [])

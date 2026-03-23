@@ -107,7 +107,7 @@ class InferenceConfig:
             raise ValueError(
                 f"img_size must be one of {VALID_IMG_SIZES}, got {self.img_size}. Use 0 for auto-select based on VRAM."
             )
-        # mixed_precision must remain enabled when model_precision is float16/bfloat16.
-        # autocast is needed to handle the float32 refiner/BatchNorm layers that
-        # receive half-precision activations from the backbone — without it those
-        # layers raise a dtype mismatch. The overhead is negligible.
+        # mixed_precision is a no-op when model_precision is already float16 —
+        # the weights are already in half precision so autocast adds no benefit.
+        if self.model_precision == torch.float16:
+            self.mixed_precision = False

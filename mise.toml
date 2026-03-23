@@ -37,7 +37,7 @@ run = "pytest packages/corridorkey-new/tests --run-gpu"
 description = "Run GPU tests (requires CUDA)"
 
 [tasks.test-cov]
-run = "pytest packages/corridorkey-new/tests --cov=corridorkey_new --cov-report=term-missing --cov-fail-under=75"
+run = "pytest packages/corridorkey-new/tests --cov=corridorkey_new --cov-report=term-missing --cov-fail-under=75 --cov-config=packages/corridorkey-new/pyproject.toml"
 description = "Run fast tests with coverage report for all packages (fails under 75%)"
 
 [tasks.check-ascii]

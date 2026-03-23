@@ -204,3 +204,33 @@ class TestToChannelsEdgeCases:
         arr = np.zeros((4, 4, 5), dtype=np.float32)
         with pytest.raises(FrameReadError, match="Cannot convert"):
             _to_channels(arr, channels=3, path=tmp_path / "fake.png")
+
+
+class TestToFloat32FloatInput:
+    def test_float64_input_normalised_to_float32(self, tmp_path: Path):
+        """float64 arrays (e.g. from non-EXR float sources) must be clipped and cast."""
+        from corridorkey_new.stages.preprocessor.reader import _to_float32
+
+        arr = np.array([[[0.0, 0.5, 1.5]]], dtype=np.float64)
+        result = _to_float32(arr, tmp_path / "fake.png")
+        assert result.dtype == np.float32
+        assert result[0, 0, 2] == pytest.approx(1.0)  # clipped from 1.5
+
+    def test_float32_input_clipped_and_returned(self, tmp_path: Path):
+        """float32 arrays must be clipped to [0, 1] and returned as float32."""
+        from corridorkey_new.stages.preprocessor.reader import _to_float32
+
+        arr = np.array([[[0.2, 0.5, 1.5]]], dtype=np.float32)
+        result = _to_float32(arr, tmp_path / "fake.png")
+        assert result.dtype == np.float32
+        assert result[0, 0, 2] == pytest.approx(1.0)  # clipped from 1.5
+
+
+class TestToChannelsUnsupportedCount:
+    def test_unsupported_channel_count_raises(self, tmp_path: Path):
+        """channels=2 is not supported — must raise FrameReadError."""
+        from corridorkey_new.stages.preprocessor.reader import _to_channels
+
+        arr = np.zeros((4, 4, 3), dtype=np.float32)
+        with pytest.raises(FrameReadError, match="Unsupported channel count"):
+            _to_channels(arr, channels=2, path=tmp_path / "fake.png")
