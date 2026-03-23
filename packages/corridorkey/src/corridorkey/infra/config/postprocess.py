@@ -136,3 +136,27 @@ class PostprocessSettings(BaseModel):
             ),
         ),
     ] = 7
+
+    hint_sharpen: Annotated[
+        bool,
+        Field(
+            default=True,
+            description=(
+                "Apply a hard binary mask derived from the alpha hint to eliminate soft edge "
+                "tails introduced by upscaling. Also zeros FG white bleed in the background zone. "
+                "Requires an alpha hint (clip must have an alpha source)."
+            ),
+        ),
+    ] = True
+
+    hint_sharpen_dilation: Annotated[
+        int,
+        Field(
+            default=3,
+            ge=0,
+            description=(
+                "Dilation radius in pixels applied to the binarised hint before masking. "
+                "Gives breathing room so fine model edge detail is not clipped."
+            ),
+        ),
+    ] = 3

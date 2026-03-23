@@ -20,12 +20,17 @@ class FrameMeta:
             at source resolution, used by postprocessor source_passthrough to
             replace model FG in opaque interior regions. None if source
             passthrough is disabled.
+        alpha_hint: Raw alpha hint [H, W, 1] float32 0-1 at source resolution,
+            used by postprocessor hint_sharpen to produce a hard binary mask
+            that eliminates soft edge tails introduced by upscaling. None if
+            no alpha hint was provided.
     """
 
     frame_index: int
     original_h: int
     original_w: int
     source_image: np.ndarray | None = None
+    alpha_hint: np.ndarray | None = None
 
 
 @dataclass(frozen=True)

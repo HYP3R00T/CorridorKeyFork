@@ -3,12 +3,13 @@
 Runs steps 1–6 in order. Owns no transformation logic itself — each step
 is delegated to its own module.
 
-    Step 1 — resize tensors back to source resolution  → resize.py
-    Step 2 — source passthrough (interior FG replace)  → composite.py
-    Step 3 — alpha matte cleanup (despeckle)           → despeckle.py
-    Step 4 — green spill removal                       → despill.py
-    Step 5 — build processed RGBA + checkerboard comp  → composite.py
-    Step 6 — return PostprocessedFrame                 (here)
+    Step 1   — resize tensors back to source resolution  → resize.py
+    Step 1.5 — hint-guided sharpening (alpha + FG mask)  → hint_sharpen.py
+    Step 2   — source passthrough (interior FG replace)  → composite.py
+    Step 3   — alpha matte cleanup (despeckle)           → despeckle.py
+    Step 4   — green spill removal                       → despill.py
+    Step 5   — build processed RGBA + checkerboard comp  → composite.py
+    Step 6   — return PostprocessedFrame                 (here)
 
 Public entry point: postprocess_frame(result, config, stem="")
 """
@@ -23,6 +24,7 @@ from corridorkey.stages.postprocessor.config import PostprocessConfig
 from corridorkey.stages.postprocessor.contracts import PostprocessedFrame
 from corridorkey.stages.postprocessor.despeckle import despeckle_alpha
 from corridorkey.stages.postprocessor.despill import remove_spill
+from corridorkey.stages.postprocessor.hint_sharpen import sharpen_with_hint
 from corridorkey.stages.postprocessor.resize import resize_to_source
 
 logger = logging.getLogger(__name__)
@@ -55,6 +57,19 @@ def postprocess_frame(
         fg_upsample_mode=config.fg_upsample_mode,
         alpha_upsample_mode=config.alpha_upsample_mode,
     )
+
+    # Step 1.5 — hint-guided sharpening: apply a hard binary mask derived from
+    # the alpha hint to eliminate soft edge tails introduced by upscaling, and
+    # zero FG white bleed in the background zone.
+    # Runs before source_passthrough so the passthrough only fills the interior
+    # region that the mask has already confirmed as foreground.
+    if config.hint_sharpen and meta.alpha_hint is not None:
+        alpha_np, fg_np = sharpen_with_hint(
+            alpha_np,
+            fg_np,
+            meta.alpha_hint,
+            dilation_px=config.hint_sharpen_dilation,
+        )
 
     # Step 2 — source passthrough: replace model FG in opaque interior regions
     # with original source pixels to eliminate dark fringing from background

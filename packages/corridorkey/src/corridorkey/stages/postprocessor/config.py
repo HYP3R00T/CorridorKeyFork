@@ -38,6 +38,12 @@ class PostprocessConfig:
             seam sits inside the subject rather than at the raw alpha edge.
         edge_blur_px: Gaussian blur radius for the source_passthrough blend seam.
             Higher values produce a softer transition between model FG and source.
+        hint_sharpen: Apply a hard binary mask derived from the alpha hint to
+            eliminate soft edge tails introduced by upscaling. Requires an alpha
+            hint in FrameMeta. Default True.
+        hint_sharpen_dilation: Dilation radius in pixels applied to the binarised
+            hint before masking. Gives breathing room so fine model edge detail
+            is not clipped. Default 3.
     """
 
     fg_upsample_mode: FgUpsampleMode = "lanczos4"
@@ -51,3 +57,5 @@ class PostprocessConfig:
     source_passthrough: bool = True
     edge_erode_px: int = 3
     edge_blur_px: int = 7
+    hint_sharpen: bool = True
+    hint_sharpen_dilation: int = 3

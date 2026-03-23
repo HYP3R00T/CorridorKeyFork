@@ -184,6 +184,8 @@ class CorridorKeyConfig(BaseModel):
             source_passthrough=self.postprocess.source_passthrough,
             edge_erode_px=self.postprocess.edge_erode_px,
             edge_blur_px=self.postprocess.edge_blur_px,
+            hint_sharpen=self.postprocess.hint_sharpen,
+            hint_sharpen_dilation=self.postprocess.hint_sharpen_dilation,
         )
 
     def to_writer_config(self, output_dir):  # -> WriteConfig

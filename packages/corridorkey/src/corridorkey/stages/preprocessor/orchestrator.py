@@ -111,12 +111,21 @@ def preprocess_frame(
     # Step 3 — capture original dimensions before any resizing
     original_h, original_w = image.shape[:2]
 
-    # Step 4 — capture source_image on CPU before it goes to the device.
+    # Step 4 — capture source_image and alpha_hint on CPU before going to device.
     # Avoids a GPU→CPU transfer on every frame.
     source_image: np.ndarray | None = None
     if config.source_passthrough:
         rgb = image[:, :, ::-1].copy() if bgr else image.copy()
         source_image = linear_to_srgb_numpy(rgb) if manifest.is_linear else rgb
+
+    # alpha_hint: raw alpha at source resolution [H, W, 1] float32 0-1.
+    # Stored before resize so the postprocessor can build a hard binary mask
+    # at native resolution, avoiding soft edges from upscaling.
+    alpha_hint: np.ndarray | None = None
+    if alpha is not None:
+        # alpha from _read_frame_pair is [H, W] or [H, W, 1] float32 0-1
+        arr = alpha if alpha.ndim == 3 else alpha[:, :, np.newaxis]
+        alpha_hint = arr.astype(np.float32, copy=False)
 
     # Step 5 — move to device; single PCIe transfer for image+alpha combined.
     img_t, alp_t = to_tensors(image, alpha, config.device, bgr=bgr)  # [1,3,H,W], [1,1,H,W]
@@ -161,6 +170,7 @@ def preprocess_frame(
             original_h=original_h,
             original_w=original_w,
             source_image=source_image,
+            alpha_hint=alpha_hint,
         ),
     )
 
