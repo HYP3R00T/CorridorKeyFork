@@ -186,6 +186,7 @@ class CorridorKeyConfig(BaseModel):
             edge_blur_px=self.postprocess.edge_blur_px,
             hint_sharpen=self.postprocess.hint_sharpen,
             hint_sharpen_dilation=self.postprocess.hint_sharpen_dilation,
+            debug_dump=self.postprocess.debug_dump,
         )
 
     def to_writer_config(self, output_dir):  # -> WriteConfig

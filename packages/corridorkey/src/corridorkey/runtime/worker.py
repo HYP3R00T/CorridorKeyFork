@@ -199,7 +199,7 @@ class PostWriteWorker:
                 break
             assert isinstance(item, InferenceResult)
             try:
-                processed = postprocess_frame(item, self.postprocess_config)
+                processed = postprocess_frame(item, self.postprocess_config, output_dir=self.output_dir)
                 write_frame(processed, write_cfg)
                 logger.debug("postwrite_worker: wrote frame %d", item.meta.frame_index)
                 if self.events:

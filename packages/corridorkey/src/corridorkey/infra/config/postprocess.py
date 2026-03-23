@@ -116,7 +116,7 @@ class PostprocessSettings(BaseModel):
     edge_erode_px: Annotated[
         int,
         Field(
-            default=0,
+            default=3,
             ge=0,
             description=(
                 "Erosion radius in pixels for the interior mask used by source_passthrough. "
@@ -129,13 +129,13 @@ class PostprocessSettings(BaseModel):
         int,
         Field(
             default=0,
-            ge=1,
+            ge=0,
             description=(
                 "Gaussian blur radius for the source_passthrough blend seam. "
-                "Higher values produce a softer transition between model FG and source."
+                "0 = disabled. Higher values produce a softer transition between model FG and source."
             ),
         ),
-    ] = 7
+    ] = 0
 
     hint_sharpen: Annotated[
         bool,
@@ -160,3 +160,16 @@ class PostprocessSettings(BaseModel):
             ),
         ),
     ] = 3
+
+    debug_dump: Annotated[
+        bool,
+        Field(
+            default=False,
+            description=(
+                "Save intermediate debug images after each postprocessing step to a debug/ "
+                "subfolder. Writes PNG snapshots of alpha and FG at: raw inference output, "
+                "after hint_sharpen, after source_passthrough, after despeckle, after despill. "
+                "Use this to diagnose whether quality issues come from the model or postprocessing."
+            ),
+        ),
+    ] = False
