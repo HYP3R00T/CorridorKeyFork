@@ -174,7 +174,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'cuda'", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "corridorkey", extra = "cuda" } },
     { name = "torchvision", specifier = "==0.25.0" },
     { name = "torchvision", marker = "extra == 'cuda'", specifier = "==0.25.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "corridorkey", extra = "cuda" } },
-    { name = "utilityhub-config", specifier = ">=0.2.5" },
+    { name = "utilityhub-config", specifier = ">=0.2.6" },
 ]
 provides-extras = ["cuda", "rocm", "mlx"]
 
@@ -1552,7 +1552,7 @@ wheels = [
 
 [[package]]
 name = "utilityhub-config"
-version = "0.2.5"
+version = "0.2.6"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
@@ -1560,9 +1560,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/73/f6/8b354ab3f25efef4ad83dfa57459f914c76b9f1c98cde076d70887c17dc6/utilityhub_config-0.2.5.tar.gz", hash = "sha256:90645fe5f9e13ac9efb437308fef7d078e85d6200bbe249cb52b483c469ac2ea", size = 14431, upload-time = "2026-03-21T22:43:09.108Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7f/91/cd18b3054e7730a9078ad951d252e5caf0b8045e51851910da90fea854f2/utilityhub_config-0.2.6.tar.gz", hash = "sha256:a0e7dffc8db87c69f9d173f041f7bc7035997c45b5d254e75945e175f8130f59", size = 14944, upload-time = "2026-03-23T05:19:41.882Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b6/b2/384a6278cf5b9019a24818a8fface5d9a0632aceac05e0d2357cc83ecccb/utilityhub_config-0.2.5-py3-none-any.whl", hash = "sha256:3fa69262adef1306ab61cbad6f2849bc2db947768c437bdc80cc8cb387366e33", size = 19873, upload-time = "2026-03-21T22:43:10.309Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/b5/0716f1016617e955b866251cf5f1614e696d95938452a83cfc0aeef8434b/utilityhub_config-0.2.6-py3-none-any.whl", hash = "sha256:24a4531b50496088b514d8042b9dcf977bda40152e2ab757dc3203b5f515ff3d", size = 20341, upload-time = "2026-03-23T05:19:40.574Z" },
 ]
 
 [[package]]
