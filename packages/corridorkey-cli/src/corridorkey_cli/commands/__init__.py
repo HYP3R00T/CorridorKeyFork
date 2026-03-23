@@ -1,1 +1,1 @@
-# commands sub-package
+# corridorkey_cli commands

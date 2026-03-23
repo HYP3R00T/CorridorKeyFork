@@ -1,49 +1,45 @@
 # Job Queue
 
-`GPUJobQueue` ensures only one GPU job runs at a time. It is designed for GUI and async consumers where inference, alpha generation, and video extraction are submitted from one thread and processed on a worker thread.
+The pipeline uses a bounded queue with sentinel-based shutdown to connect its three worker stages. This is implemented in `corridorkey.runtime.queue`.
 
-CLI and batch consumers do not need the job queue - `process_directory` handles sequencing internally.
+## BoundedQueue
 
-## Why One Job at a Time
+`BoundedQueue` is a thread-safe FIFO queue with a fixed capacity. When full, producers block. This is backpressure: the pipeline naturally throttles to the speed of the slowest stage without unbounded memory growth.
 
-CorridorKey's inference model requires approximately 22.7 GB of VRAM on a 24 GB card. Running two jobs concurrently would exhaust VRAM. The queue serialises all GPU work through a single lock.
+```python
+from corridorkey.runtime.queue import BoundedQueue
 
-## Job Types
+q: BoundedQueue[PreprocessedFrame] = BoundedQueue(capacity=2)
+q.put(frame)       # blocks if full
+item = q.get()     # blocks until available
+q.task_done()
+```
 
-| Type | Description |
-|---|---|
-| `INFERENCE` | Full inference pass on a clip |
-| `ALPHA_GEN` | Alpha hint generation via any `AlphaGenerator` |
-| `PREVIEW_REPROCESS` | Single-frame reprocess for live GUI preview |
-| `VIDEO_EXTRACT` | FFmpeg frame extraction from a source video |
-| `VIDEO_STITCH` | FFmpeg frame stitching back to a video |
+## Shutdown
 
-## Job Lifecycle
+Shutdown uses a sentinel object (`STOP`). When a producer is done it calls `put_stop()`. The consumer pulls `STOP`, re-puts it so any other consumer on the same queue also sees it, and exits. This propagates shutdown downstream automatically without shared flags or events.
 
-A job moves through these states in order:
+Always check `item is STOP` before using a value from `get()`.
 
-1. `QUEUED` - submitted and waiting for the worker thread.
-2. `RUNNING` - the worker thread has picked it up.
-3. `COMPLETED` - finished successfully.
-4. `CANCELLED` - cancelled before or during execution.
-5. `FAILED` - an exception was raised during execution.
+## Assembly Line
 
-## Deduplication vs Replacement
+The single-GPU pipeline wires three workers through two queues:
 
-Submitting the same clip and job type twice is rejected by default. The second `submit` call returns `False` and logs a warning. This prevents double-processing when the user clicks a button twice.
+```text
+PreprocessWorker
+  -> input_queue (BoundedQueue, depth 2)
+      -> InferenceWorker
+          -> output_queue (BoundedQueue, depth 2)
+              -> PostWriteWorker
+```
 
-`PREVIEW_REPROCESS` is the exception: it uses replacement semantics instead of rejection. A new preview job for any clip replaces all existing preview jobs in the queue. This keeps the preview responsive - only the latest request matters.
+For multi-GPU, multiple `InferenceWorker` instances share the same input and output queues. The last worker to finish sends `STOP` downstream using a shared atomic counter.
 
-## Cancellation Contract
+## Queue Depth
 
-When a running job is cancelled, the queue sets `job.is_cancelled = True` but does not interrupt the processing function. The processing function is responsible for checking this flag between frames and raising `JobCancelledError` to stop cleanly. This cooperative model avoids leaving GPU state in an inconsistent condition.
-
-## Using the Queue vs process_directory
-
-The job queue is an optional layer. `CorridorKeyService` exposes a lazy-initialised `job_queue` property for GUI consumers that want to manage jobs themselves. Batch and CLI consumers should call `process_directory` directly - it handles sequencing without the overhead of the queue.
+`PipelineConfig.input_queue_depth` and `output_queue_depth` control the capacity of each queue. The default of 2 keeps one frame in flight and one buffered per stage. Increasing depth uses more VRAM - each preprocessed frame is approximately 64 MB at 2048 resolution.
 
 ## Related
 
-- [job-queue reference](../../api/corridorkey/job-queue.md)
-- [service reference](../../api/corridorkey/service.md)
-- [errors reference](../../api/corridorkey/errors.md)
+- [Clip State Machine](clip-state.md) - How the processing lock interacts with the queue.
+- [API Reference - job-queue](../../api/corridorkey/job-queue.md) - Full symbol reference.

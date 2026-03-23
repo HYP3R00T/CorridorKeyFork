@@ -1,75 +1,51 @@
 # Clip State Machine
 
-Every clip in CorridorKey moves through a strict state machine. The state determines what the pipeline will do with a clip and which operations are valid at any given moment.
+The clip state machine tracks the processing lifecycle of a single clip from discovery through completed inference. It lives in `corridorkey.runtime.clip_state` and is consumed by any interface layer.
 
-## The Six States
+## States
 
-`EXTRACTING` - A source video has been registered but frames have not been extracted yet. The clip is waiting for FFmpeg to unpack it into the `Frames/` directory.
+A clip moves through five states:
 
-`RAW` - Frames exist in `Frames/` but no alpha hint has been generated. The clip needs an alpha generator before inference can run.
-
-`MASKED` - A VideoMaMa mask hint exists in `VideoMamaMaskHint/`. The clip is waiting for VideoMaMa to convert the mask into an alpha hint.
-
-`READY` - An alpha hint exists in `AlphaHint/` covering all input frames. The clip is ready for inference.
-
-`COMPLETE` - Inference has run and all output frames are written. The clip is done.
-
-`ERROR` - A processing step failed. The `error_message` field on `ClipEntry` describes what went wrong.
+| State | Meaning |
+|---|---|
+| `EXTRACTING` | Video source present, frame sequence not yet extracted. |
+| `RAW` | Frame sequence present, no alpha hint. |
+| `READY` | Alpha hint present - clip can be submitted for inference. |
+| `COMPLETE` | Inference has run and all output frames are written. |
+| `ERROR` | A stage failed. `ClipEntry.error_message` contains the detail. |
 
 ## Valid Transitions
 
-| From | To | Condition |
-|---|---|---|
-| `EXTRACTING` | `RAW` | extraction completes |
-| `EXTRACTING` | `ERROR` | extraction fails |
-| `RAW` | `MASKED` | user provides a VideoMaMa mask |
-| `RAW` | `READY` | alpha generator produces AlphaHint |
-| `RAW` | `ERROR` | alpha generation or scan fails |
-| `MASKED` | `READY` | VideoMaMa generates alpha from mask |
-| `MASKED` | `ERROR` | VideoMaMa fails |
-| `READY` | `COMPLETE` | inference succeeds |
-| `READY` | `ERROR` | inference fails |
-| `ERROR` | `RAW` | retry from scratch |
-| `ERROR` | `MASKED` | retry with mask |
-| `ERROR` | `READY` | retry inference only |
-| `ERROR` | `EXTRACTING` | retry extraction |
-| `COMPLETE` | `READY` | reprocess with different params |
+| From | To |
+|---|---|
+| `EXTRACTING` | `RAW`, `ERROR` |
+| `RAW` | `READY`, `ERROR` |
+| `READY` | `COMPLETE`, `ERROR` |
+| `COMPLETE` | `READY` |
+| `ERROR` | `RAW`, `READY`, `EXTRACTING` |
 
-Any transition not listed above raises `InvalidStateTransitionError`.
+Calling `transition_to()` with an invalid target raises `InvalidStateTransitionError`.
 
-## How the Pipeline Routes Clips
+## ClipEntry
 
-`process_directory` and `_process_clip` use the state to decide what to do:
+`ClipEntry` wraps a `Clip` (scanner output) and optionally a `ClipManifest` (loader output). It does not re-scan the filesystem - that is the scanner's job.
 
-| State | Has alpha generator | Action |
-|---|---|---|
-| `COMPLETE` | any | Skip |
-| `ERROR` | any | Skip (log warning) |
-| `EXTRACTING` | any | Skip (not ready yet) |
-| `RAW` or `MASKED` | no | Skip (log warning: no alpha generator) |
-| `RAW` or `MASKED` | yes | Run alpha generator, then inference |
-| `READY` | any | Run inference directly |
+State is resolved from disk at construction time via `from_clip()`. The resolution priority is:
 
-## State Recovery on Restart
+1. `COMPLETE` - output frames cover all input frames
+2. `READY` - alpha frames cover all input frames
+3. `EXTRACTING` - input is a video file
+4. `RAW` - frame sequence present, no alpha
 
-When `find_assets()` scans a clip directory, it sets the state based on what is present on disk. This means the pipeline always recovers to the furthest completed stage after a crash or restart - no work is lost.
+## Processing Lock
 
-Recovery priority (highest first):
+`_processing` is a soft lock set by the job queue while a GPU job is active. Filesystem watchers should skip reclassification while `is_processing` is `True`.
 
-1. `COMPLETE` - all input frames have matching output frames (checked via the run manifest)
-2. `READY` - `AlphaHint/` covers all input frames
-3. `MASKED` - `VideoMamaMaskHint/` exists
-4. `EXTRACTING` - a video source exists but no frame sequence yet
-5. `RAW` - frame sequence exists, no alpha or mask
+## InOutRange
 
-## Why a State Machine
-
-The state machine exists to make the pipeline restartable and idempotent. Because state is derived entirely from what is on disk, the pipeline never needs a database or external process registry. A crash at any point leaves the clip in a well-defined state that the next run can resume from.
-
-The strict transition table also makes it impossible for the pipeline to skip a required stage. A clip cannot reach `READY` without an alpha hint, and cannot reach `COMPLETE` without passing through `READY`.
+`InOutRange` represents an inclusive in/out frame range for sub-clip processing. Both indices are zero-based and inclusive. Use `to_frame_range()` to convert to a half-open `(start, end)` tuple for `ClipManifest.frame_range`.
 
 ## Related
 
-- [clip-state reference](../../api/corridorkey/clip-state.md)
-- [errors reference](../../api/corridorkey/errors.md)
-- [Project layout](project-layout.md)
+- [Job Queue](job-queue.md) - How the queue interacts with the processing lock.
+- [API Reference - clip-state](../../api/corridorkey/clip-state.md) - Full symbol reference.

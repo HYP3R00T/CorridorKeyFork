@@ -1,124 +1,178 @@
-"""CorridorKey - application layer for the CorridorKey AI chroma keying pipeline."""
+"""CorridorKey pipeline — public API.
 
-import os
+This is the single import surface for any interface (CLI, GUI, TUI, web).
+Import everything you need from here — do not import from submodules directly.
 
-# Must be set before cv2 is imported anywhere in the process.
-os.environ.setdefault("OPENCV_IO_ENABLE_OPENEXR", "1")
+Pipeline
+--------
+The pipeline runs in stages. Each stage takes the output of the previous
+stage as input. Interfaces orchestrate the stages; they do not implement them.
 
-from corridorkey.clip_state import (
-    ClipAsset,
-    ClipEntry,
-    ClipState,
-    scan_clips_dir,
-    scan_project_clips,
+Stage 0 — scan
+    scan(path) -> list[Clip]
+    Discover clips from a path. Accepts a clips directory, a single clip
+    folder, or a single video file. Returns a list of Clip objects.
+
+Stage 1 — load
+    load(clip) -> ClipManifest
+    Validate a Clip, extract video to frames if needed, and return a
+    ClipManifest with resolved paths and metadata.
+
+    Check ``manifest.needs_alpha`` after this call. If True, alpha frames are
+    absent and the interface is responsible for generating them externally
+    (e.g. via an alpha generator tool). Once done, call ``resolve_alpha()``
+    to update the manifest and proceed to preprocessing.
+
+resolve_alpha — bridge between external alpha generation and preprocessing
+    resolve_alpha(manifest, alpha_frames_dir) -> ClipManifest
+    Called by the interface after external alpha generation completes.
+    Validates the alpha sequence matches the input frame count and returns
+    an updated manifest with ``needs_alpha=False``, ready for preprocessing.
+
+    Alpha generation is not a pipeline stage — it is the responsibility of
+    the calling interface (CLI, GUI, etc.) and runs outside this pipeline.
+
+Stage 3 — preprocess_frame
+    preprocess_frame(manifest, i, config) -> PreprocessedFrame
+    Preprocess one frame for model inference. Reads image and alpha from
+    disk, converts color space if needed, resizes, applies ImageNet
+    normalisation, and returns a tensor on the configured device.
+
+    Build file lists once per clip and pass them on every call:
+        imgs = get_frame_files(manifest.frames_dir)
+        alps = get_frame_files(manifest.alpha_frames_dir)
+        for i in range(*manifest.frame_range):
+            result = preprocess_frame(manifest, i, config,
+                                      image_files=imgs, alpha_files=alps)
+
+Startup
+-------
+Before running the pipeline, initialise infrastructure:
+
+    config = load_config()          # load and validate configuration
+    setup_logging(config)           # configure file logging for this run
+    device = resolve_device(config.device)  # validate and resolve compute device
+
+Contracts
+---------
+Clip
+    Output of scan(). Input to load().
+
+ClipManifest
+    Output of load(). Input to preprocess_frame().
+    Contains: frames_dir, alpha_frames_dir, output_dir,
+              needs_alpha, frame_count, frame_range, is_linear.
+
+PreprocessedFrame
+    Output of preprocess_frame(). Input to inference.
+    Contains: tensor [1, 4, img_size, img_size] on device + FrameMeta.
+
+FrameMeta
+    Original frame dimensions (H, W) and index — carried through to
+    postprocessing so outputs can be resized back to source resolution.
+"""
+
+from corridorkey.errors import (
+    ClipScanError,
+    CorridorKeyError,
+    DeviceError,
+    ExtractionError,
+    FrameMismatchError,
+    FrameReadError,
+    InvalidStateTransitionError,
+    JobCancelledError,
+    ModelError,
+    VRAMInsufficientError,
+    WriteFailureError,
 )
-from corridorkey.config import CorridorKeyConfig, export_config, load_config
-from corridorkey.contracts import FrameResult, InferenceParams, OutputConfig, WriteConfig
-from corridorkey.errors import CorridorKeyError, FFmpegNotFoundError
-from corridorkey.ffmpeg_tools import check_ffmpeg
-from corridorkey.frame_io import FrameData, load_frame
-from corridorkey.job_queue import GPUJob, GPUJobQueue, JobStatus, JobType
-from corridorkey.logging_setup import reset_logging, setup_logging
-from corridorkey.model_manager import MODEL_DOWNLOAD_URL, MODEL_FILENAME, download_model, is_model_present
-from corridorkey.models import InOutRange
-from corridorkey.pipeline import ClipSummary, PipelineResult, process_directory
-from corridorkey.project import (
-    add_clips_to_project,
-    create_project,
-    detect_unstructured,
-    get_clip_dirs,
-    get_display_name,
-    is_image_file,
-    is_v2_project,
-    is_video_file,
-    load_in_out_range,
-    organize_clips,
-    read_clip_json,
-    read_project_json,
-    save_in_out_range,
-    set_display_name,
-    write_clip_json,
-    write_project_json,
+from corridorkey.infra import (
+    APP_NAME,
+    CorridorKeyConfig,
+    GPUInfo,
+    InferenceSettings,
+    PreprocessSettings,
+    detect_gpu,
+    ensure_config_file,
+    get_config_path,
+    load_config,
+    load_config_with_metadata,
+    resolve_device,
+    setup_logging,
+    write_config,
 )
-from corridorkey.protocols import AlphaGenerator
-from corridorkey.service import (
-    CorridorKeyService,
-    inference_params_to_postprocess,
-    output_config_to_write_config,
+from corridorkey.runtime.clip_state import ClipEntry, ClipState, InOutRange
+from corridorkey.stages.inference import (
+    InferenceConfig,
+    InferenceResult,
+    load_model,
+    run_inference,
 )
-from corridorkey.validators import ValidationResult, validate_job_inputs
-from corridorkey.writer import generate_masks, write_outputs
+from corridorkey.stages.loader import ClipManifest, VideoMetadata, load, load_video_metadata, resolve_alpha
+from corridorkey.stages.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
+from corridorkey.stages.preprocessor import (
+    FrameMeta,
+    PreprocessConfig,
+    PreprocessedFrame,
+    preprocess_frame,
+)
+from corridorkey.stages.scanner import Clip, scan
+from corridorkey.stages.writer import WriteConfig, write_frame
 
 __all__ = [
-    # Logging
-    "setup_logging",
-    "reset_logging",
-    # Validation
-    "validate_job_inputs",
-    "ValidationResult",
-    # Service - primary entry point for CLI, GUI, and server consumers
-    "CorridorKeyService",
-    "InferenceParams",
-    "OutputConfig",
-    "FrameResult",
-    # Bridge helpers - convert application types to core stage contracts
-    "inference_params_to_postprocess",
-    "output_config_to_write_config",
-    # Pipeline stages (I/O and orchestration)
-    "load_frame",
-    "generate_masks",
-    "write_outputs",
-    # Stage contracts
-    "FrameData",
-    "WriteConfig",
-    # Config
-    "CorridorKeyConfig",
-    "load_config",
-    "export_config",
-    # Protocols
-    "AlphaGenerator",
-    # Pipeline - high-level batch processing
-    "process_directory",
-    "PipelineResult",
-    "ClipSummary",
-    # Clip state
-    "ClipAsset",
-    "ClipEntry",
+    # Pipeline
+    "scan",
+    "load",
+    "resolve_alpha",
+    "load_video_metadata",
+    "preprocess_frame",
+    # Contracts
+    "Clip",
+    "ClipManifest",
+    "VideoMetadata",
+    "PreprocessConfig",
+    "PreprocessedFrame",
+    "FrameMeta",
+    # Clip state machine
     "ClipState",
-    "scan_clips_dir",
-    "scan_project_clips",
-    # Models
+    "ClipEntry",
     "InOutRange",
-    # Job queue - async GPU job management (GUI use)
-    "GPUJob",
-    "GPUJobQueue",
-    "JobType",
-    "JobStatus",
     # Errors
     "CorridorKeyError",
-    "FFmpegNotFoundError",
-    # FFmpeg diagnostics
-    "check_ffmpeg",
-    # Model management
-    "is_model_present",
-    "download_model",
-    "MODEL_DOWNLOAD_URL",
-    "MODEL_FILENAME",
-    # Project management
-    "create_project",
-    "add_clips_to_project",
-    "detect_unstructured",
-    "organize_clips",
-    "get_clip_dirs",
-    "is_v2_project",
-    "write_project_json",
-    "read_project_json",
-    "write_clip_json",
-    "read_clip_json",
-    "get_display_name",
-    "set_display_name",
-    "save_in_out_range",
-    "load_in_out_range",
-    "is_video_file",
-    "is_image_file",
+    "ClipScanError",
+    "ExtractionError",
+    "FrameMismatchError",
+    "FrameReadError",
+    "WriteFailureError",
+    "VRAMInsufficientError",
+    "DeviceError",
+    "ModelError",
+    "InvalidStateTransitionError",
+    "JobCancelledError",
+    # Startup
+    "APP_NAME",
+    "load_config",
+    "load_config_with_metadata",
+    "write_config",
+    "ensure_config_file",
+    "get_config_path",
+    "setup_logging",
+    "resolve_device",
+    "detect_gpu",
+    # Config / device types
+    "CorridorKeyConfig",
+    "PreprocessSettings",
+    "InferenceSettings",
+    "GPUInfo",
+    # Inference
+    "load_model",
+    "run_inference",
+    "InferenceConfig",
+    "InferenceResult",
+    # Postprocessor
+    "postprocess_frame",
+    "PostprocessConfig",
+    "PostprocessedFrame",
+    # Writer
+    "write_frame",
+    "WriteConfig",
 ]

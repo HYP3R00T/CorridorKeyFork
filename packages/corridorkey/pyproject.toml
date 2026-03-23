@@ -1,66 +1,90 @@
 [project]
 name = "corridorkey"
 version = "0.1.0"
-description = "Application layer for the CorridorKey AI chroma keying pipeline."
-requires-python = ">=3.13, <3.14"
+description = "Add your description here"
 readme = "README.md"
 authors = [{ name = "Corridor Digital" }]
-maintainers = [{ name = "Rajesh Das", email = "rajesh@hyperoot.dev" }]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "Intended Audience :: End Users/Desktop",
-    "Topic :: Multimedia :: Video",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "Topic :: Scientific/Engineering :: Image Processing",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.13",
-    "Operating System :: OS Independent",
-    "Typing :: Typed",
-]
-
+maintainers = [{ name = "Rajesh Das", email = "hyperoot.tech@proton.me" }]
+requires-python = ">=3.13"
 dependencies = [
-    "corridorkey-core>=0.1.0",
-    "opencv-python>=4.13.0.92",
-    "numpy>=2.0.0",
-    # Triton fix for Windows
-    "triton-windows==3.3.1.post21 ; sys_platform == 'win32'",
-    "utilityhub-config>=0.2.3",
+  "pydantic>=2.0",
+  "utilityhub_config>=0.2.6",
+  "opencv-python>=4.13.0.92",
+  "av>=14.0.0",
+  "torch==2.10.0",
+  "torchvision==0.25.0",
+  "timm>=1.0.25",
+  "nvidia-ml-py>=13.595.45",
 ]
 
 [dependency-groups]
 dev = ["pytest>=9.0.2", "pytest-cov>=7.0.0", "hypothesis>=6.151.9"]
 
 [project.optional-dependencies]
-cuda = ["corridorkey-core[cuda]"]
-mlx = ["corridorkey-core[mlx]"]
+cuda = ["torch==2.10.0", "torchvision==0.25.0"]
+rocm = []
+mlx = ["corridorkey-mlx"]
 
+[tool.uv]
+conflicts = [
+  [
+    { extra = "cuda" },
+    { extra = "mlx" },
+  ],
+  [
+    { extra = "cuda" },
+    { extra = "rocm" },
+  ],
+  [
+    { extra = "rocm" },
+    { extra = "mlx" },
+  ],
+]
+
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+extra = "cuda"
+
+[[tool.uv.index]]
+name = "pytorch-rocm"
+url = "https://download.pytorch.org/whl/rocm7.1"
+explicit = true
+extra = "rocm"
 
 [tool.uv.sources]
-corridorkey-core = { workspace = true }
-
-[build-system]
-requires = ["uv_build>=0.10.9,<0.11.0"]
-build-backend = "uv_build"
+torch = [{ index = "pytorch-cuda", extra = "cuda" }]
+torchvision = [{ index = "pytorch-cuda", extra = "cuda" }]
+timm = { git = "https://github.com/Raiden129/pytorch-image-models-fix", branch = "fix/hiera-flash-attention-global-4d" }
+corridorkey-mlx = { git = "https://github.com/nikopueringer/corridorkey-mlx.git", extra = "mlx" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "gpu: requires CUDA GPU (skipped in CI)",
-    "slow: long-running test",
-    "mlx: requires Apple Silicon with MLX installed",
+  "gpu: requires CUDA GPU (skipped in CI)",
+  "slow: long-running test",
+  "mlx: requires Apple Silicon with MLX installed",
 ]
-addopts = "-tb=short"
 
 [tool.coverage.run]
-source = ["corridorkey"]
 omit = [
-    # Hardware-dependent modules - require real GPU/FFmpeg/filesystem
-    "*/corridorkey/service.py",
-    "*/corridorkey/ffmpeg_tools.py",
-    "*/corridorkey/frame_io.py",
-    "*/corridorkey/device_utils.py",
+  "*/corridorkey/infra/device_utils.py",
+  "*/corridorkey/loader/extractor.py",
+  "*/corridorkey/main.py",
+  # GPU/model-weight-dependent — not unit-testable without hardware
+  "*/corridorkey/stages/inference/model.py",
+  "*/corridorkey/stages/inference/factory.py",
+  "*/corridorkey/stages/inference/loader.py",
+  "*/corridorkey/stages/inference/orchestrator.py",
+  "*/corridorkey/infra/model_hub.py",
+  "*/corridorkey/infra/logging.py",
+  "*/corridorkey/runtime/runner.py",
 ]
 
 [tool.coverage.report]
 fail_under = 75
+
+[build-system]
+requires = ["uv_build>=0.10.11,<0.11.0"]
+build-backend = "uv_build"

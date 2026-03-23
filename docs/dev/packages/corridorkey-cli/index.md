@@ -1,34 +1,46 @@
 # corridorkey-cli
 
-`corridorkey-cli` is the UI Layer of CorridorKey. It provides the `corridorkey` command-line tool that wraps the Application Layer (`corridorkey`) for interactive and scripted use. It has no inference or pipeline logic of its own.
+The `corridorkey-cli` package is the command-line interface for CorridorKey. It provides the `ck` entry point and all user-facing commands.
 
-## Installation
+## Purpose
 
-```shell
-uv add corridorkey-cli
+This package owns the terminal UI, command definitions, and user interaction flows. It depends on `corridorkey` for all pipeline logic and never implements pipeline stages itself.
+
+## Package Layout
+
+```text
+corridorkey_cli/
+  __init__.py          # app entry point, wizard command
+  _console.py          # shared Rich console instances
+  _printer.py          # RichPrinter - live assembly-line progress panel
+  _config_table.py     # print_config_table - resolved config display
+  commands/
+    __init__.py
+    config.py          # ck config
+    init.py            # ck init
+    reset.py           # ck reset
 ```
 
-For CUDA (Windows/Linux):
+## Commands
 
-```shell
-uv add "corridorkey-cli[cuda]"
-```
+| Command | Description |
+|---|---|
+| `ck` (no args) | Runs the wizard - scan, configure, and process clips interactively. |
+| `ck <clips_dir>` | Runs the wizard with a clips directory argument. |
+| `ck init` | One-time setup: health check, config file creation, model download. |
+| `ck config` | Show the resolved configuration with source attribution. |
+| `ck config --write` | Write the resolved configuration to disk. |
+| `ck reset` | Delete `~/.config/corridorkey` and all its contents. |
 
-For MLX (Apple Silicon):
+## Entry Point
 
-```shell
-uv add "corridorkey-cli[mlx]"
+The `ck` command is registered in `pyproject.toml` as:
+
+```toml
+[project.scripts]
+ck = "corridorkey_cli:main"
 ```
 
 ## Documents in This Section
 
-- [Setup commands](setup-commands.md) - `init` and `doctor`: first-run setup and environment health checks.
-- [Processing commands](processing-commands.md) - `wizard`, `process`, and `scan`: running the keying pipeline.
-- [Config commands](config-commands.md) - `config show` and `config init`: inspecting and writing configuration.
-
-## Related
-
-- [corridorkey-cli API overview](../../api/corridorkey-cli/index.md)
-- [corridorkey package](../corridorkey/index.md)
-- [Configuration](../corridorkey/configuration.md)
-- [Clip state machine](../corridorkey/clip-state.md)
+- [Commands](commands.md) - Detailed reference for each command.

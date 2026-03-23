@@ -10,39 +10,37 @@ maintainers = [{ name = "Rajesh Das", email = "rajesh@hyperoot.dev" }]
 dependencies = []
 
 [project.optional-dependencies]
-cuda = ["corridorkey-core[cuda]"]
-mlx = ["corridorkey-core[mlx]"]
+cuda = ["corridorkey[cuda]"]
+mlx = ["corridorkey[mlx]"]
+rocm = ["corridorkey[rocm] ; sys_platform == 'linux'"]
 
 [dependency-groups]
 dev = [
-  "corridorkey-cli>=0.1.0",
-  "git-cliff>=2.12.0",
-  "hypothesis>=6.151.9",
-  "prek>=0.3.5",
-  "pytest>=9.0.2",
-  "pytest-cov>=7.0.0",
-  "ruff>=0.15.5",
-  "shellcheck-py>=0.11.0.1",
-  "ty>=0.0.21",
+    "corridorkey-cli>=0.1.0",
+    "corridorkey>=0.1.0",
+    "git-cliff>=2.12.0",
+    "hypothesis>=6.151.9",
+    "prek>=0.3.5",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+    "ruff>=0.15.5",
+    "shellcheck-py>=0.11.0.1",
+    "ty>=0.0.21",
 ]
 docs = ["mkdocstrings[python]>=1.0.3", "zensical>=0.0.26"]
 
 [tool.pytest.ini_options]
 markers = [
-  "gpu: requires CUDA GPU (skipped in CI)",
-  "slow: long-running test",
-  "mlx: requires Apple Silicon with MLX installed",
+    "gpu: requires CUDA GPU (skipped in CI)",
+    "slow: long-running test",
+    "mlx: requires Apple Silicon with MLX installed",
 ]
-addopts = "--tb=short"
+addopts = "--tb=short --import-mode=importlib"
 
 [tool.coverage.run]
 omit = [
-  # Hardware-dependent modules - require real GPU/FFmpeg/filesystem
-  "*/corridorkey/service.py",
-  "*/corridorkey/ffmpeg_tools.py",
-  "*/corridorkey/frame_io.py",
-  "*/corridorkey/device_utils.py",
-  "*/corridorkey_core/inference_engine.py",
+    # Hardware-dependent modules - require real GPU/FFmpeg/filesystem
+    "*/corridorkey/stages/inference/backend.py",
 ]
 
 [tool.coverage.report]
@@ -51,7 +49,22 @@ fail_under = 75
 [tool.uv.workspace]
 members = ["packages/*"]
 
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cuda" },
+        { extra = "mlx" },
+    ],
+    [
+        { extra = "cuda" },
+        { extra = "rocm" },
+    ],
+    [
+        { extra = "rocm" },
+        { extra = "mlx" },
+    ],
+]
+
 [tool.uv.sources]
-corridorkey-core = { workspace = true }
 corridorkey = { workspace = true }
 corridorkey-cli = { workspace = true }

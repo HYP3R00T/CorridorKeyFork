@@ -1,40 +1,31 @@
-"""``corridorkey config`` subcommands."""
+"""``ck config`` — show and optionally write the resolved configuration."""
 
 from __future__ import annotations
 
+from typing import Annotated
+
 import typer
-from corridorkey import export_config, load_config
-from rich.table import Table
 
-from corridorkey_cli._helpers import console
-
-app = typer.Typer(help="Manage CorridorKey configuration.")
+from corridorkey_cli._config_table import print_config_table
+from corridorkey_cli._console import console
 
 
-@app.command("show")
-def config_show() -> None:
-    """Print the resolved configuration (all sources merged)."""
-    config = load_config()
+def config(
+    write: Annotated[bool, typer.Option("--write", "-w", help="Write config file (overwrites if exists).")] = False,
+) -> None:
+    """Show the resolved configuration. Pass --write to save it to disk."""
+    from corridorkey.infra import APP_NAME, get_config_path, load_config_with_metadata
 
-    table = Table(title="CorridorKey Config", show_header=True, header_style="bold")
-    table.add_column("Field")
-    table.add_column("Value")
+    cfg, metadata = load_config_with_metadata()
+    config_path = get_config_path(APP_NAME, format="yaml")
 
-    for field_name in config.model_fields:
-        value = getattr(config, field_name)
-        table.add_row(field_name, str(value))
-
-    console.print(table)
+    print_config_table(cfg, metadata)
     console.print(
-        "\n[dim]Sources (lowest to highest priority): defaults -> "
-        "~/.config/corridorkey/corridorkey.yaml -> ./corridorkey.yaml -> "
-        "CORRIDORKEY_* env vars[/dim]"
+        f"[dim]Sources (lowest → highest): defaults → {config_path} → ./corridorkey.yaml → CK_* env vars[/dim]"
     )
 
+    if write:
+        from corridorkey.infra import write_config
 
-@app.command("init")
-def config_init() -> None:
-    """Write a starter config file to ~/.config/corridorkey/corridorkey.yaml."""
-    config = load_config()
-    dest = export_config(config)
-    console.print(f"[green]Config written:[/green] {dest}")
+        written = write_config(cfg, APP_NAME, path=config_path, format="yaml")
+        console.print(f"\n[green]Config written:[/green] {written}")

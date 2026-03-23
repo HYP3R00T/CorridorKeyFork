@@ -1,165 +1,124 @@
-"""Unit tests for errors.py.
-
-Every error class carries structured attributes (clip name, frame index,
-path, etc.) that consumers use to build user-facing messages and decide
-how to recover. Tests verify the inheritance hierarchy, attribute values,
-and that error messages contain the information needed to diagnose problems.
-FFmpegNotFoundError is also tested for platform-specific install hints.
-"""
+"""Unit tests for corridorkey.errors."""
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
+import pytest
 from corridorkey.errors import (
     ClipScanError,
     CorridorKeyError,
+    DeviceError,
     ExtractionError,
-    FFmpegNotFoundError,
     FrameMismatchError,
     FrameReadError,
     InvalidStateTransitionError,
     JobCancelledError,
-    MaskChannelError,
+    ModelError,
     VRAMInsufficientError,
     WriteFailureError,
 )
 
 
 class TestErrorHierarchy:
-    """All custom errors must inherit from CorridorKeyError for uniform catch blocks."""
+    def test_all_errors_inherit_from_base(self):
+        for cls in (
+            ClipScanError,
+            ExtractionError,
+            FrameMismatchError,
+            FrameReadError,
+            WriteFailureError,
+            VRAMInsufficientError,
+            DeviceError,
+            ModelError,
+            InvalidStateTransitionError,
+            JobCancelledError,
+        ):
+            assert issubclass(cls, CorridorKeyError)
 
-    def test_all_inherit_from_base(self):
-        """Every error subclass must be catchable via `except CorridorKeyError`."""
-        errors = [
-            ClipScanError("x"),
-            FrameMismatchError("clip", 10, 5),
-            FrameReadError("clip", 0, "/path"),
-            WriteFailureError("clip", 0, "/path"),
-            MaskChannelError("clip", 0, 2),
-            VRAMInsufficientError(10.0, 4.0),
-            InvalidStateTransitionError("clip", "RAW", "COMPLETE"),
-            JobCancelledError("clip"),
-            ExtractionError("clip", "detail"),
-        ]
-        for err in errors:
-            assert isinstance(err, CorridorKeyError)
-            assert isinstance(err, Exception)
+    def test_base_is_exception(self):
+        assert issubclass(CorridorKeyError, Exception)
+
+
+class TestExtractionError:
+    def test_message_contains_clip_name_and_detail(self):
+        err = ExtractionError("MyClip", "ffmpeg failed")
+        assert "MyClip" in str(err)
+        assert "ffmpeg failed" in str(err)
+
+    def test_attributes(self):
+        err = ExtractionError("MyClip", "ffmpeg failed")
+        assert err.clip_name == "MyClip"
+        assert err.detail == "ffmpeg failed"
+
+    def test_is_catchable_as_base(self):
+        with pytest.raises(CorridorKeyError):
+            raise ExtractionError("clip", "detail")
 
 
 class TestFrameMismatchError:
-    """FrameMismatchError - structured attributes for mismatched input/alpha frame counts."""
-
-    def test_attributes(self):
-        """clip_name, input_count, and alpha_count must be stored for programmatic access."""
-        err = FrameMismatchError("shot1", 100, 90)
-        assert err.clip_name == "shot1"
-        assert err.input_count == 100
-        assert err.alpha_count == 90
-
     def test_message_contains_counts(self):
-        """The string representation must include both counts so the user knows what mismatched."""
-        err = FrameMismatchError("shot1", 100, 90)
+        err = FrameMismatchError("clip", 100, 99)
         assert "100" in str(err)
-        assert "90" in str(err)
-        assert "shot1" in str(err)
-
-
-class TestFrameReadError:
-    """FrameReadError - structured attributes for failed frame reads."""
+        assert "99" in str(err)
+        assert "clip" in str(err)
 
     def test_attributes(self):
-        """clip_name, frame_index, and path must be stored for log messages and recovery."""
-        err = FrameReadError("shot1", 42, "/frames/0042.exr")
-        assert err.clip_name == "shot1"
-        assert err.frame_index == 42
-        assert err.path == "/frames/0042.exr"
-
-    def test_message(self):
-        """The string representation must include the frame index and clip name."""
-        err = FrameReadError("shot1", 42, "/frames/0042.exr")
-        assert "42" in str(err)
-        assert "shot1" in str(err)
+        err = FrameMismatchError("clip", 100, 99)
+        assert err.clip_name == "clip"
+        assert err.input_count == 100
+        assert err.alpha_count == 99
 
 
-class TestJobCancelledError:
-    """JobCancelledError - optional frame_index for mid-clip cancellation context."""
+class TestWriteFailureError:
+    def test_message_contains_path(self):
+        err = WriteFailureError("/some/path/frame.png")
+        assert "/some/path/frame.png" in str(err)
 
-    def test_without_frame_index(self):
-        """frame_index must be None and must not appear in the message when not provided."""
-        err = JobCancelledError("shot1")
-        assert err.frame_index is None
-        assert "shot1" in str(err)
-        assert "frame" not in str(err)
-
-    def test_with_frame_index(self):
-        """When provided, frame_index must be stored and appear in the message."""
-        err = JobCancelledError("shot1", frame_index=15)
-        assert err.frame_index == 15
-        assert "15" in str(err)
-
-
-class TestInvalidStateTransitionError:
-    """InvalidStateTransitionError - current and target state for transition debugging."""
-
-    def test_attributes(self):
-        """clip_name, current_state, and target_state must be stored."""
-        err = InvalidStateTransitionError("shot1", "RAW", "COMPLETE")
-        assert err.clip_name == "shot1"
-        assert err.current_state == "RAW"
-        assert err.target_state == "COMPLETE"
-
-    def test_message(self):
-        """Both state names must appear in the message so the user knows what transition failed."""
-        err = InvalidStateTransitionError("shot1", "RAW", "COMPLETE")
-        assert "RAW" in str(err)
-        assert "COMPLETE" in str(err)
+    def test_path_attribute(self):
+        err = WriteFailureError("/some/path/frame.png")
+        assert err.path == "/some/path/frame.png"
 
 
 class TestVRAMInsufficientError:
-    """VRAMInsufficientError - required vs available GB for actionable error messages."""
+    def test_message_contains_values(self):
+        err = VRAMInsufficientError(12.0, 8.5)
+        assert "12.0" in str(err)
+        assert "8.5" in str(err)
 
     def test_attributes(self):
-        """required_gb and available_gb must be stored as floats."""
-        err = VRAMInsufficientError(22.7, 8.0)
-        assert err.required_gb == 22.7
-        assert err.available_gb == 8.0
-
-    def test_message_formatted(self):
-        """Both GB values must appear in the message so the user knows how much VRAM is needed."""
-        err = VRAMInsufficientError(22.7, 8.0)
-        assert "22.7" in str(err)
-        assert "8.0" in str(err)
+        err = VRAMInsufficientError(12.0, 8.5)
+        assert err.required_gb == pytest.approx(12.0)
+        assert err.available_gb == pytest.approx(8.5)
 
 
-class TestFFmpegNotFoundError:
-    """FFmpegNotFoundError - platform-specific install hints reduce support burden."""
+class TestInvalidStateTransitionError:
+    def test_message_contains_states(self):
+        err = InvalidStateTransitionError("clip", "RAW", "COMPLETE")
+        assert "RAW" in str(err)
+        assert "COMPLETE" in str(err)
+        assert "clip" in str(err)
 
-    def test_darwin_hint(self):
-        """macOS users must see a brew install hint."""
-        with patch("corridorkey.errors.sys") as mock_sys:
-            mock_sys.platform = "darwin"
-            err = FFmpegNotFoundError("ffmpeg")
-        assert "brew" in str(err)
+    def test_attributes(self):
+        err = InvalidStateTransitionError("clip", "RAW", "COMPLETE")
+        assert err.clip_name == "clip"
+        assert err.current_state == "RAW"
+        assert err.target_state == "COMPLETE"
 
-    def test_linux_hint(self):
-        """Linux users must see an apt install hint and the binary name."""
-        with patch("corridorkey.errors.sys") as mock_sys:
-            mock_sys.platform = "linux"
-            err = FFmpegNotFoundError("ffprobe")
-        assert "apt" in str(err)
-        assert "ffprobe" in str(err)
 
-    def test_windows_hint(self):
-        """Windows users must see a choco install hint."""
-        with patch("corridorkey.errors.sys") as mock_sys:
-            mock_sys.platform = "win32"
-            err = FFmpegNotFoundError("ffmpeg")
-        assert "choco" in str(err)
+class TestJobCancelledError:
+    def test_message_without_frame_index(self):
+        err = JobCancelledError("clip")
+        assert "clip" in str(err)
 
-    def test_default_binary_is_ffmpeg(self):
-        """Constructing without arguments must default to the ffmpeg binary name."""
-        with patch("corridorkey.errors.sys") as mock_sys:
-            mock_sys.platform = "linux"
-            err = FFmpegNotFoundError("ffmpeg")
-        assert "ffmpeg" in str(err)
+    def test_message_with_frame_index(self):
+        err = JobCancelledError("clip", frame_index=42)
+        assert "42" in str(err)
+        assert "clip" in str(err)
+
+    def test_attributes(self):
+        err = JobCancelledError("clip", frame_index=5)
+        assert err.clip_name == "clip"
+        assert err.frame_index == 5
+
+    def test_frame_index_none_by_default(self):
+        err = JobCancelledError("clip")
+        assert err.frame_index is None

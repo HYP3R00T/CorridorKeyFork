@@ -1,4 +1,4 @@
-"""Profile corridorkey-core inference engine performance.
+"""Profile corridorkey inference engine performance.
 
 Requires a real checkpoint and CUDA GPU. Set the checkpoint path via:
 
@@ -62,8 +62,8 @@ def _require_cuda() -> None:
 
 def _make_frame(width: int, height: int) -> tuple[np.ndarray, np.ndarray]:
     image = np.random.rand(height, width, 3).astype(np.float32)
-    mask = np.random.rand(height, width).astype(np.float32)
-    return image, mask
+    alpha = np.random.rand(height, width).astype(np.float32)
+    return image, alpha
 
 
 def _print_header(resolution: str, width: int, height: int, frames: int, ckpt: Path) -> None:
@@ -105,20 +105,29 @@ def main() -> None:
         torch.compile = lambda model, **kwargs: model  # type: ignore[assignment]
         print("torch.compile disabled")
 
-    from corridorkey_core.engine import CorridorKeyEngine
+    from corridorkey import InferenceConfig, load_model, run_inference
+    from corridorkey.stages.preprocessor import FrameMeta, PreprocessedFrame
 
     print("Loading engine...")
     t0 = time.monotonic()
-    engine = CorridorKeyEngine(checkpoint_path=ckpt, device="cuda", img_size=2048)
+    config = InferenceConfig(checkpoint_path=ckpt, device="cuda", img_size=2048)
+    model = load_model(config)
     print(f"Engine loaded in {time.monotonic() - t0:.1f}s")
     print()
 
-    image, mask = _make_frame(width, height)
+    image, alpha = _make_frame(width, height)
+
+    # Build a synthetic PreprocessedFrame (tensor on CUDA)
+    import torch as _torch
+
+    def _make_preprocessed(w: int, h: int) -> PreprocessedFrame:
+        tensor = _torch.rand(1, 4, config.img_size, config.img_size, device="cuda")
+        return PreprocessedFrame(tensor=tensor, meta=FrameMeta(frame_index=0, original_h=h, original_w=w))
 
     # Warm-up: let torch.compile finish JIT and CUDA streams stabilize
     print(f"Warming up ({WARM_UP_FRAMES} frames)...")
     for _ in range(WARM_UP_FRAMES):
-        engine.process_frame(image, mask)
+        run_inference(_make_preprocessed(width, height), model, config)
     torch.cuda.synchronize()
     print("Warm-up done")
     print()
@@ -126,9 +135,10 @@ def main() -> None:
     print(f"Timing {args.frames} frames...")
     times_ms: list[float] = []
     for _ in range(args.frames):
+        frame = _make_preprocessed(width, height)
         torch.cuda.synchronize()
         t_start = time.perf_counter()
-        engine.process_frame(image, mask)
+        run_inference(frame, model, config)
         torch.cuda.synchronize()
         times_ms.append((time.perf_counter() - t_start) * 1000)
 
@@ -139,8 +149,8 @@ def main() -> None:
 
     with profile(activities=activities, record_shapes=True, with_stack=False) as prof:
         for _ in range(5):
-            with record_function("process_frame"):
-                engine.process_frame(image, mask)
+            with record_function("run_inference"):
+                run_inference(_make_preprocessed(width, height), model, config)
 
     print()
     print("Top 20 ops by CUDA time:")
