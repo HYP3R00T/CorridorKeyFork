@@ -15,16 +15,17 @@ def config(
 ) -> None:
     """Show the resolved configuration. Pass --write to save it to disk."""
     from corridorkey.infra import APP_NAME, get_config_path, load_config_with_metadata
-    from utilityhub_config import write_config
 
     cfg, metadata = load_config_with_metadata()
-    config_path = get_config_path(APP_NAME)
+    config_path = get_config_path(APP_NAME, format="yaml")
 
     print_config_table(cfg, metadata)
     console.print(
-        f"[dim]Sources (lowest → highest): defaults → {config_path} → ./corridorkey.toml → CK_* env vars[/dim]"
+        f"[dim]Sources (lowest → highest): defaults → {config_path} → ./corridorkey.yaml → CK_* env vars[/dim]"
     )
 
     if write:
-        written = write_config(cfg, APP_NAME, path=config_path)
+        from corridorkey.infra import write_config
+
+        written = write_config(cfg, APP_NAME, path=config_path, format="yaml")
         console.print(f"\n[green]Config written:[/green] {written}")

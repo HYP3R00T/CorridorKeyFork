@@ -32,7 +32,7 @@ def init() -> None:
     console.print()
 
     # 2. Config file
-    config_path = ensure_config_file(CorridorKeyConfig(), APP_NAME)
+    config_path = ensure_config_file(CorridorKeyConfig(), APP_NAME, format="yaml")
     console.print(f"[green]Config:[/green] {config_path}\n")
 
     config_obj, metadata = load_config_with_metadata()
@@ -81,7 +81,7 @@ def _run_health_check() -> None:
         rows.append(("compute device", _WARN, str(e)))
 
     # Config file
-    config_file = get_config_path(APP_NAME)
+    config_file = get_config_path(APP_NAME, format="yaml")
     rows.append((
         "config file",
         _PASS if config_file.exists() else _WARN,

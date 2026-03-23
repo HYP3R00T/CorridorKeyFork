@@ -77,7 +77,7 @@ def wizard(
 
     console.print(Panel("[bold cyan]CorridorKey[/bold cyan]", expand=False))
 
-    ensure_config_file(CorridorKeyConfig(), APP_NAME)
+    ensure_config_file(CorridorKeyConfig(), APP_NAME, format="yaml")
     config_obj, metadata = load_config_with_metadata()
     setup_logging(config_obj)
     print_config_table(config_obj, metadata)

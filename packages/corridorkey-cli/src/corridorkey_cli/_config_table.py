@@ -21,7 +21,7 @@ _SOURCE_STYLE: dict[str, str] = {
 
 
 def _source_text(source: str, source_path: str | None) -> Text:
-    style = _SOURCE_STYLE.get(source, "")
+    style = _SOURCE_STYLE.get(source, "dim")
     label = source
     if source_path and source != "defaults":
         label = f"{source} ({Path(source_path).name})"
@@ -30,6 +30,10 @@ def _source_text(source: str, source_path: str | None) -> Text:
 
 def print_config_table(config, metadata) -> None:
     """Print a Rich table of all config fields with their resolved source.
+
+    Iterates the config model dynamically — every field in every section is
+    shown automatically, including any new fields added in future. No manual
+    registration needed.
 
     Args:
         config: A ``CorridorKeyConfig`` instance.
@@ -52,38 +56,19 @@ def print_config_table(config, metadata) -> None:
         src_text = _source_text(fs.source, fs.source_path) if fs else Text("?", style="dim")
         table.add_row(section, field, str(value), src_text)
 
-    # Top-level
-    _add("", "device", config.device, "device")
+    # Top-level fields (not nested under a section)
+    for field_name, field_value in config.model_dump().items():
+        if not isinstance(field_value, dict):
+            display = "auto" if field_name == "img_size" and field_value == 0 else field_value
+            _add("", field_name, display, field_name)
 
-    # [logging]
-    _add("logging", "level", config.logging.level, "logging.level")
-    _add("logging", "dir", config.logging.dir, "logging.dir")
-
-    # [preprocess]
-    _add("preprocess", "img_size", config.preprocess.img_size or "auto", "preprocess.img_size")
-    _add("preprocess", "image_upsample_mode", config.preprocess.image_upsample_mode, "preprocess.image_upsample_mode")
-    _add("preprocess", "sharpen_strength", config.preprocess.sharpen_strength, "preprocess.sharpen_strength")
-
-    # [inference]
-    _add("inference", "checkpoint_path", config.inference.checkpoint_path, "inference.checkpoint_path")
-    _add("inference", "use_refiner", config.inference.use_refiner, "inference.use_refiner")
-    _add("inference", "mixed_precision", config.inference.mixed_precision, "inference.mixed_precision")
-    _add("inference", "model_precision", config.inference.model_precision, "inference.model_precision")
-    _add("inference", "refiner_mode", config.inference.refiner_mode, "inference.refiner_mode")
-    _add("inference", "refiner_scale", config.inference.refiner_scale, "inference.refiner_scale")
-
-    # [postprocess]
-    _add("postprocess", "fg_upsample_mode", config.postprocess.fg_upsample_mode, "postprocess.fg_upsample_mode")
-    _add(
-        "postprocess", "alpha_upsample_mode", config.postprocess.alpha_upsample_mode, "postprocess.alpha_upsample_mode"
-    )
-    _add("postprocess", "despill_strength", config.postprocess.despill_strength, "postprocess.despill_strength")
-    _add("postprocess", "auto_despeckle", config.postprocess.auto_despeckle, "postprocess.auto_despeckle")
-
-    # [writer]
-    _add("writer", "alpha_format", config.writer.alpha_format, "writer.alpha_format")
-    _add("writer", "fg_format", config.writer.fg_format, "writer.fg_format")
-    _add("writer", "processed_format", config.writer.processed_format, "writer.processed_format")
-    _add("writer", "exr_compression", config.writer.exr_compression, "writer.exr_compression")
+    # Nested section fields — iterate each sub-model dynamically
+    for section_name, section_value in config.model_dump().items():
+        if not isinstance(section_value, dict):
+            continue
+        for field_name, raw_value in section_value.items():
+            # Special display: img_size=0 means auto
+            display = raw_value or "auto" if section_name == "preprocess" and field_name == "img_size" else raw_value
+            _add(section_name, field_name, display, f"{section_name}.{field_name}")
 
     console.print(table)
