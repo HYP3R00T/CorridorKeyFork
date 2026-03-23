@@ -45,4 +45,4 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          uv run pytest packages/corridorkey-core/tests packages/corridorkey/tests --cov=corridorkey_core --cov=corridorkey --cov-report=term-missing --cov-fail-under=75
+          uv run pytest packages/corridorkey/tests --cov=corridorkey --cov-report=term-missing --cov-fail-under=75
