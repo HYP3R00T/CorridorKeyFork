@@ -85,6 +85,12 @@ def run_inference(
 
             hook_handle = refiner.register_forward_hook(_scale_hook)
 
+    # Cast input to model precision so weights and activations always match.
+    # autocast handles mixed-precision ops inside the model (e.g. float32
+    # BatchNorm/GroupNorm layers), but the input itself must match the backbone
+    # weight dtype to avoid "Input type (float) and bias type (Half)" errors.
+    inp = frame.tensor.to(dtype=config.model_precision) if config.model_precision != torch.float32 else frame.tensor
+
     try:
         with (
             torch.inference_mode(),
@@ -94,7 +100,7 @@ def run_inference(
                 enabled=autocast_enabled,
             ),
         ):
-            output = model(frame.tensor)
+            output = model(inp)
     finally:
         # Always remove the hook — even if inference raises — so it can never
         # fire on a subsequent call or trigger recursion.
