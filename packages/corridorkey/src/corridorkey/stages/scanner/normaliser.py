@@ -164,8 +164,7 @@ def _find_videos_in(directory: Path) -> list[Path]:
     """Return all video files found in a directory, sorted by name."""
     try:
         return sorted(
-            (child for child in directory.iterdir()
-             if child.is_file() and child.suffix.lower() in VIDEO_EXTENSIONS),
+            (child for child in directory.iterdir() if child.is_file() and child.suffix.lower() in VIDEO_EXTENSIONS),
             key=lambda p: p.name.lower(),
         )
     except PermissionError:
@@ -207,8 +206,7 @@ def _safe_move(src: Path, dst: Path) -> None:
     if dst_size != src_size:
         dst.unlink(missing_ok=True)
         raise OSError(
-            f"Copy verification failed for '{src}' -> '{dst}': "
-            f"source size {src_size} != destination size {dst_size}"
+            f"Copy verification failed for '{src}' -> '{dst}': source size {src_size} != destination size {dst_size}"
         )
 
     try:

@@ -149,9 +149,7 @@ class TestLoadVideoInput:
                 "corridorkey.stages.loader.orchestrator.extract_video",
                 side_effect=_patch_extract(extracted, frame_count=5),
             ),
-            patch(
-                "corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=5)
-            ),
+            patch("corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=5)),
         ):
             manifest = load(clip)
 
@@ -173,9 +171,7 @@ class TestLoadVideoInput:
                 "corridorkey.stages.loader.orchestrator.extract_video",
                 side_effect=_patch_extract([], frame_count=3),
             ),
-            patch(
-                "corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=3)
-            ),
+            patch("corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=3)),
         ):
             load(clip)
 
@@ -202,9 +198,7 @@ class TestLoadVideoInput:
 
         with (
             patch("corridorkey.stages.loader.orchestrator.extract_video") as mock_extract,
-            patch(
-                "corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=4)
-            ),
+            patch("corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=4)),
         ):
             manifest = load(clip)
             mock_extract.assert_not_called()
@@ -231,9 +225,7 @@ class TestLoadVideoInput:
                 "corridorkey.stages.loader.orchestrator.extract_video",
                 side_effect=_patch_extract(extracted, frame_count=5),
             ),
-            patch(
-                "corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=5)
-            ),
+            patch("corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=5)),
         ):
             manifest = load(clip)
 
@@ -305,9 +297,7 @@ class TestLoadEvents:
                 "corridorkey.stages.loader.orchestrator.extract_video",
                 side_effect=_patch_extract([], frame_count=3),
             ),
-            patch(
-                "corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=3)
-            ),
+            patch("corridorkey.stages.loader.orchestrator.read_video_metadata", return_value=_fake_meta(frame_count=3)),
         ):
             load(clip, events=events)
 

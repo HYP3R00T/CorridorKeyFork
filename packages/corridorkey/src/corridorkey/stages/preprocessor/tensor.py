@@ -49,19 +49,20 @@ def to_tensors(
         Tuple of (image [1, 3, H, W] RGB, alpha [1, 1, H, W]) on the device.
     """
     # HWC → CHW for both, then stack into [4, H, W] for a single transfer.
-    img_chw = np.ascontiguousarray(image.transpose(2, 0, 1))   # [3, H, W]
-    alp_chw = np.ascontiguousarray(alpha.transpose(2, 0, 1))   # [1, H, W]
-    combined = np.concatenate([img_chw, alp_chw], axis=0)      # [4, H, W]
+    img_chw = np.ascontiguousarray(image.transpose(2, 0, 1))  # [3, H, W]
+    alp_chw = np.ascontiguousarray(alpha.transpose(2, 0, 1))  # [1, H, W]
+    combined = np.concatenate([img_chw, alp_chw], axis=0)  # [4, H, W]
 
     t = (
-        torch.from_numpy(combined)
-        .unsqueeze(0)   # [1, 4, H, W]
+        torch
+        .from_numpy(combined)
+        .unsqueeze(0)  # [1, 4, H, W]
         .float()
         .to(device)
     )
 
-    img_t = t[:, :3]   # [1, 3, H, W]
-    alp_t = t[:, 3:]   # [1, 1, H, W]
+    img_t = t[:, :3]  # [1, 3, H, W]
+    alp_t = t[:, 3:]  # [1, 1, H, W]
 
     if bgr:
         # Reorder BGR→RGB on-device. On CUDA this is a strided view — no copy.

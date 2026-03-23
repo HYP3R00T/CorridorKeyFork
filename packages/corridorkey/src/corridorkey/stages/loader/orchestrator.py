@@ -55,15 +55,22 @@ def load(
         ExtractionError: If video extraction fails.
     """
     frames_dir = _resolve_frames(
-        clip.input_path, clip.root, "Frames",
-        events=events, png_compression=png_compression,
+        clip.input_path,
+        clip.root,
+        "Frames",
+        events=events,
+        png_compression=png_compression,
     )
     alpha_frames_dir = (
         _resolve_frames(
-            clip.alpha_path, clip.root, "AlphaFrames",
-            events=events, png_compression=png_compression,
+            clip.alpha_path,
+            clip.root,
+            "AlphaFrames",
+            events=events,
+            png_compression=png_compression,
         )
-        if clip.alpha_path else None
+        if clip.alpha_path
+        else None
     )
 
     # Single scan pass per directory — validate() returns FrameScan results
@@ -131,14 +138,16 @@ def _resolve_frames(
             if expected == 0 or existing.count == expected:
                 logger.info(
                     "Frames already extracted (%d frames), skipping: %s",
-                    existing.count, output_dir,
+                    existing.count,
+                    output_dir,
                 )
                 return output_dir
             else:
                 logger.warning(
-                    "Incomplete extraction detected for '%s': %d frames on disk, "
-                    "%d expected — re-extracting.",
-                    output_dir, existing.count, expected,
+                    "Incomplete extraction detected for '%s': %d frames on disk, %d expected — re-extracting.",
+                    output_dir,
+                    existing.count,
+                    expected,
                 )
 
     # Pre-open the container to get an accurate frame count for the progress
@@ -197,14 +206,10 @@ def resolve_alpha(manifest: ClipManifest, alpha_frames_dir: Path) -> ClipManifes
         FrameMismatchError: If the alpha frame count doesn't match manifest.frame_count.
     """
     if not manifest.needs_alpha:
-        raise ValueError(
-            f"Clip '{manifest.clip_name}' already has alpha — resolve_alpha should not be called."
-        )
+        raise ValueError(f"Clip '{manifest.clip_name}' already has alpha — resolve_alpha should not be called.")
 
     if not alpha_frames_dir.exists():
-        raise ValueError(
-            f"Clip '{manifest.clip_name}': alpha_frames_dir does not exist: {alpha_frames_dir}"
-        )
+        raise ValueError(f"Clip '{manifest.clip_name}': alpha_frames_dir does not exist: {alpha_frames_dir}")
 
     # Pass expected_frame_count so validate() skips re-scanning the input
     # directory — the count is already known from the manifest.

@@ -7,7 +7,13 @@ import re
 # Single source of truth for recognised video extensions.
 # Imported by both the scanner (normaliser.py) and the loader (extractor.py).
 VIDEO_EXTENSIONS: frozenset[str] = frozenset({
-    ".mp4", ".mov", ".avi", ".mkv", ".mxf", ".webm", ".m4v",
+    ".mp4",
+    ".mov",
+    ".avi",
+    ".mkv",
+    ".mxf",
+    ".webm",
+    ".m4v",
 })
 
 
