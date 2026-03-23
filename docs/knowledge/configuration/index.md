@@ -1,82 +1,55 @@
 # Configuration
 
-CorridorKey is configured through a single configuration model that loads settings from multiple sources in priority order.
+CorridorKey is configured through a single `corridorkey.toml` file. Each pipeline stage has its own section. Settings that are not specified use sensible defaults.
 
-## Resolution Order
+Run `ck config --write` to write the current configuration with all defaults to disk.
 
-Settings are resolved from lowest to highest priority:
+## Device
 
-1. Model field defaults.
-2. Global user config at `~/.config/corridorkey/corridorkey.yaml`.
-3. Project config at `./corridorkey.yaml` in the current working directory.
-4. Environment variables prefixed with `CORRIDORKEY_`.
-5. Runtime overrides passed to `load_config(overrides={...})`.
+The `device` setting controls which hardware runs the neural network. The default is `auto`, which selects the best available device at startup: AMD GPU (ROCm) if present, then NVIDIA GPU (CUDA), then Apple Silicon (MPS), then CPU.
 
-A higher-priority source always wins. CLI flags are passed as runtime overrides and take precedence over everything.
+GPU inference is significantly faster than CPU. On a modern GPU, a single frame at 2048 resolution takes roughly 100-300ms. On CPU, the same frame takes several seconds.
 
-## Config File Format
+## Model Resolution
 
-```yaml
-checkpoint_dir: ~/studio/shared/corridorkey/models
-device: cuda
-despill_strength: 0.85
-fg_format: exr
-```
+The model runs at a fixed square resolution. The native training resolution is 2048x2048, which produces the best output quality. Smaller resolutions (1536, 1024) reduce VRAM usage at the cost of some quality, particularly in fine edge detail.
 
-Run `corridorkey config init` to generate a config file at the default location.
+Setting `img_size = 0` (the default) selects the resolution automatically based on available VRAM: below 6 GB selects 1024, 6-12 GB selects 1536, 12 GB or more selects 2048.
 
-## All Parameters
+## The Refiner
 
-### Paths
+The CNN refiner corrects edge detail after the main transformer forward pass. It is enabled by default. Disabling it is faster but produces visibly coarser alpha matte edges.
 
-| Parameter | Default | Description |
-|---|---|---|
-| `app_dir` | `~/.config/corridorkey` | Root directory for all tool-managed files. Created on first use. |
-| `checkpoint_dir` | `~/.config/corridorkey/models` | Directory where model checkpoints are stored. Override to a shared network path in studio environments. |
-| `model_download_url` | null | URL to download the inference model checkpoint. Defaults to the official release URL. |
-| `model_filename` | null | Expected filename of the downloaded checkpoint. |
+The refiner can run in two modes. In `full_frame` mode it processes the entire image at once, which is fastest on GPUs with enough VRAM. In `tiled` mode it processes the image in overlapping 512x512 tiles, which keeps peak VRAM usage flat and is required on low-VRAM GPUs. The output quality is identical for both modes.
 
-### Device and Engine
+Setting `refiner_mode = "auto"` (the default) selects the mode based on available VRAM: below 12 GB uses tiled, 12 GB or more uses full frame.
 
-| Parameter | Default | Options | Description |
-|---|---|---|---|
-| `device` | `auto` | `auto`, `cuda`, `mps`, `cpu` | Compute device. `auto` selects the best available. |
-| `optimization_mode` | `auto` | `auto`, `speed`, `lowvram` | CNN refiner tiling strategy. See [optimization modes](../improvements/optimization-modes.md). |
-| `precision` | `auto` | `auto`, `fp16`, `bf16`, `fp32` | Inference float format. See [precision modes](../improvements/precision-modes.md). |
+## Floating Point Precision
 
-### Inference Parameters
+The model can run in float32, float16, or bfloat16. Lower precision uses less VRAM and runs faster, at the cost of numerical accuracy.
 
-These are the defaults applied during the inference and postprocessing stages.
+Setting `model_precision = "auto"` (the default) selects the best format for the hardware: bfloat16 on Ampere+ GPUs and Apple Silicon, float16 on older GPUs, float32 on CPU. See [The Neural Network](../pipeline/neural-network.md) for why bfloat16 is preferred over float16 on modern hardware.
 
-| Parameter | Default | Description |
-|---|---|---|
-| `input_is_linear` | false | Treat input frames as linear light (for example, EXR from a VFX pipeline). |
-| `despill_strength` | 1.0 | Green spill suppression strength. 0.0 means no despill. 1.0 means full correction. |
-| `auto_despeckle` | true | Remove small disconnected alpha islands from the matte. |
-| `despeckle_size` | 400 | Minimum connected region area in pixels to keep. |
-| `refiner_scale` | 1.0 | Scale factor for the CNN refiner's delta corrections. 1.0 is full correction. 0.0 skips the refiner output. |
-| `source_passthrough` | false | Use original source pixels in fully opaque interior regions. See [source passthrough](../improvements/source-passthrough.md). |
-| `edge_erode_px` | 3 | Interior mask erosion radius for source passthrough. |
-| `edge_blur_px` | 7 | Transition seam blur radius for source passthrough. |
+## Green Spill Removal
 
-### Output Formats
+The `despill_strength` setting controls how aggressively green spill is removed from the foreground. A value of 0.0 disables despill entirely. A value of 1.0 applies full suppression. The default is 0.5.
 
-These are the defaults applied when writing output files.
+For subjects with naturally green elements, reducing this value avoids over-correcting. See [Green Spill](../pipeline/green-spill.md) for the underlying concept.
 
-| Parameter | Default | Options | Description |
-|---|---|---|---|
-| `fg_format` | `exr` | `exr`, `png` | Foreground output format. |
-| `matte_format` | `exr` | `exr`, `png` | Alpha matte output format. |
-| `comp_format` | `png` | `exr`, `png` | Composite preview output format. |
-| `processed_format` | `png` | `exr` | Processed RGBA output format. EXR only. |
-| `exr_compression` | `dwaa` | `dwaa`, `piz`, `zip`, `none` | EXR compression codec applied to all EXR outputs. |
+## Source Passthrough
 
-## CLI Flags and Environment Variables
+The model predicts foreground colour for every pixel. In the solid interior of the subject, the original source pixels are a better estimate than the model's prediction. Source passthrough replaces the model's foreground in opaque interior regions with the original source pixels.
 
-All parameters are exposed as CLI flags on the `corridorkey process` command and as environment variables prefixed with `CORRIDORKEY_`. CLI flags are the highest-priority override. See the [User Guide](../../guide/processing.md) for usage.
+Both `preprocess.source_passthrough` and `postprocess.source_passthrough` must be enabled for this to work. Both default to `true`.
 
-## Related Documents
+## Output Formats
 
-- [Optimization modes](../improvements/optimization-modes.md)
-- [Precision modes](../improvements/precision-modes.md)
-- [Source passthrough](../improvements/source-passthrough.md)
+Each output type (alpha, foreground, processed RGBA, composite preview) can be independently enabled or disabled and written as PNG or EXR.
+
+PNG is 8-bit and suitable for previews. EXR is 32-bit floating point and is the correct format for production compositing outputs. See [Colour Space](../pipeline/colour-space.md) for why full precision matters for compositing.
+
+The default format for all outputs is PNG. Switch to EXR for production work where full precision matters.
+
+## Full Parameter Reference
+
+The complete list of parameters with their defaults and valid values is in the [Developer Configuration reference](../../dev/packages/corridorkey/configuration.md).

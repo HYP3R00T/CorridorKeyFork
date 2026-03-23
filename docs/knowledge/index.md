@@ -1,14 +1,12 @@
 # Knowledge
 
-Theory, design decisions, and internals for the CorridorKey pipeline.
+Concepts and theory behind the CorridorKey pipeline.
 
-This section is for anyone who wants to understand how CorridorKey works, not just how to use it. It covers the six pipeline stages, the data contracts between them, the configuration system, and the reasoning behind key implementation decisions.
+This section explains the underlying ideas: what alpha matting is, why colour space matters for compositing, how the neural network works, and what green spill is and how it is removed. It is written for compositors, technical directors, and anyone who wants to understand the tool beyond how to operate it.
 
-No prior knowledge of the codebase is required.
+For implementation details and code references, see the [Developer](../dev/index.md) section.
 
 ## Documents in This Section
 
-- [Pipeline](pipeline/index.md) - The six stages that transform a raw frame into compositing-ready outputs.
-- [Contracts](contracts/index.md) - The data structures that flow between stages.
-- [Configuration](configuration/index.md) - Every parameter, its default, and when to change it.
-- [Improvements](improvements/index.md) - Trade-offs, future work, and design decisions.
+- [Pipeline](pipeline/index.md) - How the six stages connect and what each one does.
+- [Configuration](configuration/index.md) - What each setting controls and when to change it.

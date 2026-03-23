@@ -1,41 +1,33 @@
 # Pipeline
 
-CorridorKey processes footage through six sequential stages. Each stage has a defined input contract and a defined output contract. What happens inside a stage is an implementation detail. The contracts are the stable interface.
+CorridorKey processes footage through six sequential stages. Each stage transforms data from one form into another and passes it to the next.
 
 ## The Six Stages
 
-| Stage | Name | What it does |
+| Stage | Name | What it produces |
 |---|---|---|
-| 1 | [Load frame](load-frame.md) | Reads one image frame and its alpha hint mask from disk. Normalises both to float32 sRGB. |
-| 2 | [Generate masks](generate-masks.md) | Generates alpha hint masks for a frame sequence using an external generator. Not yet implemented. |
-| 3 | [Preprocess](preprocess.md) | Resizes, normalises, and stacks image and mask into a model-ready tensor. |
-| 4 | [Infer](infer.md) | Runs the model forward pass. Produces raw alpha and foreground predictions. |
-| 5 | [Postprocess](postprocess.md) | Despeckles, despills, composites, and applies source passthrough. |
-| 6 | [Write outputs](write-outputs.md) | Writes all enabled output images for one processed frame to disk. |
+| 0 | Scan | A list of clips discovered from a path. |
+| 1 | Load | A manifest describing a clip's frames, alpha hints, and output location. |
+| 2 | Preprocess | A normalised tensor ready for the neural network. |
+| 3 | Infer | Raw alpha and foreground predictions from the model. |
+| 4 | Postprocess | Refined, compositing-ready output arrays at source resolution. |
+| 5 | Write Outputs | Image files on disk. |
 
-## Separation of Concerns
+## Two Kinds of Stages
 
-Stages split into two groups based on one rule: does the stage touch the filesystem?
+Stages 0, 1, and 5 interact with the filesystem. They discover clips, extract frames from video, and write output images.
 
-Stages 1, 2, and 6 touch the filesystem - reading frames, reading masks, writing outputs.
+Stages 2, 3, and 4 are pure computation. They receive data in memory and return data in memory. No files are read or written. This separation means the compute stages can be understood and tested independently of any I/O concerns.
 
-Stages 3, 4, and 5 are pure compute. They take arrays and tensors in and return arrays and tensors out, with no filesystem dependency. This boundary means the compute stages can be reasoned about and tested in isolation from I/O concerns.
+## Assembly Line
 
-## Data Flow
+The three compute stages run concurrently. While the GPU is running inference on one frame, the CPU is reading the next frame and writing the previous one. This keeps the GPU busy continuously rather than waiting for I/O between frames.
 
-A single frame moves through the pipeline in this order:
+## Concepts Behind the Stages
 
-1. Stage 1 reads the frame and mask from disk. Returns a `FrameData`.
-2. Stage 2 is skipped if masks already exist on disk.
-3. Stage 3 takes the image and mask arrays from `FrameData` and returns a `PreprocessedTensor`.
-4. Stage 4 takes the `PreprocessedTensor` and returns a `RawPrediction`.
-5. Stage 5 takes the `RawPrediction` and the original source image and returns a `ProcessedFrame`.
-6. Stage 6 takes the `ProcessedFrame` and writes files to disk.
+Each stage is built on a set of underlying ideas. Understanding those ideas helps you interpret the outputs and tune the settings.
 
-See [Contracts](../contracts/index.md) for the full definition of each data structure.
-
-## Related Documents
-
-- [Contracts](../contracts/index.md) - Data structures between stages.
-- [Configuration](../configuration/index.md) - Parameters for each stage.
-- [Improvements](../improvements/index.md) - Known gaps and future work per stage.
+- [Alpha Matting](alpha-matting.md) - What the model is actually solving and why it is hard.
+- [Colour Space](colour-space.md) - Why sRGB, linear light, and premultiplied alpha each exist and when each is correct.
+- [Green Spill](green-spill.md) - Why green light contaminates the subject and how it is removed.
+- [The Neural Network](neural-network.md) - How GreenFormer works: encoder, decoders, and the CNN refiner.
