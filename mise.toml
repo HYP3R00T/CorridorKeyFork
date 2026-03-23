@@ -25,19 +25,19 @@ run = "uv sync --extra cuda --all-groups --verbose"
 description = "Run uv sync for devs"
 
 [tasks.test]
-run = "pytest packages/corridorkey-new/tests"
+run = "pytest packages/corridorkey/tests"
 description = "Run fast tests for all packages (slow, GPU, and MLX skipped by default)"
 
 [tasks.test-slow]
-run = "pytest packages/corridorkey-new/tests --run-slow"
+run = "pytest packages/corridorkey/tests --run-slow"
 description = "Run all CPU tests including slow model forward pass tests"
 
 [tasks.test-gpu]
-run = "pytest packages/corridorkey-new/tests --run-gpu"
+run = "pytest packages/corridorkey/tests --run-gpu"
 description = "Run GPU tests (requires CUDA)"
 
 [tasks.test-cov]
-run = "pytest packages/corridorkey-new/tests --cov=corridorkey_new --cov-report=term-missing --cov-fail-under=75 --cov-config=packages/corridorkey-new/pyproject.toml"
+run = "pytest packages/corridorkey/tests --cov=corridorkey --cov-report=term-missing --cov-fail-under=75 --cov-config=packages/corridorkey/pyproject.toml"
 description = "Run fast tests with coverage report for all packages (fails under 75%)"
 
 [tasks.check-ascii]
