@@ -1,75 +1,77 @@
 """CorridorKey pipeline — public API.
 
-This is the single import surface for any interface (CLI, GUI, TUI, web).
+This is the single import surface for any interface (CLI, GUI, TUI, plugin).
 Import everything you need from here — do not import from submodules directly.
-
-Pipeline
---------
-The pipeline runs in stages. Each stage takes the output of the previous
-stage as input. Interfaces orchestrate the stages; they do not implement them.
-
-Stage 0 — scan
-    scan(path) -> list[Clip]
-    Discover clips from a path. Accepts a clips directory, a single clip
-    folder, or a single video file. Returns a list of Clip objects.
-
-Stage 1 — load
-    load(clip) -> ClipManifest
-    Validate a Clip, extract video to frames if needed, and return a
-    ClipManifest with resolved paths and metadata.
-
-    Check ``manifest.needs_alpha`` after this call. If True, alpha frames are
-    absent and the interface is responsible for generating them externally
-    (e.g. via an alpha generator tool). Once done, call ``resolve_alpha()``
-    to update the manifest and proceed to preprocessing.
-
-resolve_alpha — bridge between external alpha generation and preprocessing
-    resolve_alpha(manifest, alpha_frames_dir) -> ClipManifest
-    Called by the interface after external alpha generation completes.
-    Validates the alpha sequence matches the input frame count and returns
-    an updated manifest with ``needs_alpha=False``, ready for preprocessing.
-
-    Alpha generation is not a pipeline stage — it is the responsibility of
-    the calling interface (CLI, GUI, etc.) and runs outside this pipeline.
-
-Stage 3 — preprocess_frame
-    preprocess_frame(manifest, i, config) -> PreprocessedFrame
-    Preprocess one frame for model inference. Reads image and alpha from
-    disk, converts color space if needed, resizes, applies ImageNet
-    normalisation, and returns a tensor on the configured device.
-
-    Build file lists once per clip and pass them on every call:
-        imgs = get_frame_files(manifest.frames_dir)
-        alps = get_frame_files(manifest.alpha_frames_dir)
-        for i in range(*manifest.frame_range):
-            result = preprocess_frame(manifest, i, config,
-                                      image_files=imgs, alpha_files=alps)
 
 Startup
 -------
-Before running the pipeline, initialise infrastructure:
+Call these once before running the pipeline::
 
-    config = load_config()          # load and validate configuration
-    setup_logging(config)           # configure file logging for this run
-    device = resolve_device(config.device)  # validate and resolve compute device
+    config = load_config()  # load + validate from file / env vars
+    setup_logging(config)  # configure file logging for this run
+    device = resolve_device(config.device)  # validate compute device
 
-Contracts
----------
-Clip
-    Output of scan(). Input to load().
+Model
+-----
+Download the model on first run, then load a backend::
 
-ClipManifest
-    Output of load(). Input to preprocess_frame().
-    Contains: frames_dir, alpha_frames_dir, output_dir,
-              needs_alpha, frame_count, frame_range, is_linear.
+    ensure_model()  # downloads if absent, verifies checksum
+    backend = load_backend(config.to_inference_config(device=device))
+    print(backend.resolved_config)  # {"backend": "torch", "device": "cuda", ...}
 
-PreprocessedFrame
-    Output of preprocess_frame(). Input to inference.
-    Contains: tensor [1, 4, img_size, img_size] on device + FrameMeta.
+Pipeline — high-level (recommended)
+------------------------------------
+Use PipelineRunner for a single GPU or MultiGPURunner for parallel GPUs::
 
-FrameMeta
-    Original frame dimensions (H, W) and index — carried through to
-    postprocessing so outputs can be resized back to source resolution.
+    result = scan("/path/to/clips")
+    for clip in result.clips:
+        manifest = load(clip)
+        if manifest.needs_alpha:
+            manifest = resolve_alpha(manifest, "/path/to/alpha_frames")
+        pipeline_config = config.to_pipeline_config(device=device)
+        PipelineRunner(manifest, pipeline_config).run()
+
+Pipeline — low-level (frame loop)
+-----------------------------------
+For custom integrations (DaVinci node, Premiere plugin) that need per-frame
+control::
+
+    preprocess_config = config.to_preprocess_config(device=device)
+    postprocess_config = config.to_postprocess_config()
+    write_config = config.to_writer_config(manifest.output_dir)
+
+    for i in range(*manifest.frame_range):
+        preprocessed = preprocess_frame(manifest, i, preprocess_config)
+        result = backend.run(preprocessed)
+        postprocessed = postprocess_frame(result, postprocess_config)
+        write_frame(postprocessed, write_config)
+
+Events
+------
+Attach callbacks to any runner for progress reporting::
+
+    events = PipelineEvents(
+        on_frame_written=lambda idx, total: print(f"{idx + 1}/{total}"),
+        on_frame_error=lambda stage, idx, err: print(f"Error at {stage}:{idx}: {err}"),
+    )
+    PipelineRunner(manifest, pipeline_config, events=events).run()
+
+Clip state machine
+------------------
+Track clip lifecycle across multiple runs::
+
+    entry = ClipEntry.from_clip(clip)  # resolves state from disk
+    entry.state  # ClipState.READY / RAW / COMPLETE / ...
+    entry.transition_to(ClipState.COMPLETE)
+
+Stages
+------
+    Stage 0  scan()             Clip, ScanResult, SkippedPath
+    Stage 1  load()             ClipManifest, VideoMetadata, FrameScan
+    Stage 2  preprocess_frame() PreprocessedFrame, FrameMeta
+    Stage 3  backend.run()      InferenceResult
+    Stage 4  postprocess_frame() PostprocessedFrame
+    Stage 5  write_frame()      files on disk
 """
 
 from corridorkey.errors import (
@@ -85,29 +87,55 @@ from corridorkey.errors import (
     VRAMInsufficientError,
     WriteFailureError,
 )
+from corridorkey.events import PipelineEvents
 from corridorkey.infra import (
     APP_NAME,
+    MODEL_FILENAME,
+    MODEL_URL,
     CorridorKeyConfig,
     GPUInfo,
     InferenceSettings,
+    LoggingSettings,
+    PostprocessSettings,
     PreprocessSettings,
+    WriterSettings,
+    clear_device_cache,
+    default_checkpoint_path,
     detect_gpu,
     ensure_config_file,
+    ensure_model,
     get_config_path,
     load_config,
     load_config_with_metadata,
     resolve_device,
+    resolve_devices,
     setup_logging,
     write_config,
 )
 from corridorkey.runtime.clip_state import ClipEntry, ClipState, InOutRange
+from corridorkey.runtime.runner import MultiGPUConfig, MultiGPURunner, PipelineConfig, PipelineRunner
 from corridorkey.stages.inference import (
+    BackendChoice,
     InferenceConfig,
     InferenceResult,
+    ModelBackend,
+    RefinerMode,
+    TorchBackend,
+    discover_checkpoint,
+    load_backend,
     load_model,
     run_inference,
 )
-from corridorkey.stages.loader import ClipManifest, VideoMetadata, load, load_video_metadata, resolve_alpha
+from corridorkey.stages.inference.config import VALID_IMG_SIZES, adaptive_img_size
+from corridorkey.stages.loader import (
+    ClipManifest,
+    FrameScan,
+    VideoMetadata,
+    load,
+    load_video_metadata,
+    resolve_alpha,
+    scan_frames,
+)
 from corridorkey.stages.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
 from corridorkey.stages.preprocessor import (
     FrameMeta,
@@ -115,28 +143,106 @@ from corridorkey.stages.preprocessor import (
     PreprocessedFrame,
     preprocess_frame,
 )
-from corridorkey.stages.scanner import Clip, scan
+from corridorkey.stages.scanner import Clip, ScanResult, SkippedPath, scan
 from corridorkey.stages.writer import WriteConfig, write_frame
 
 __all__ = [
-    # Pipeline
+    # ------------------------------------------------------------------ #
+    # Startup                                                              #
+    # ------------------------------------------------------------------ #
+    "APP_NAME",
+    "load_config",
+    "load_config_with_metadata",
+    "write_config",
+    "ensure_config_file",
+    "get_config_path",
+    "setup_logging",
+    # ------------------------------------------------------------------ #
+    # Device                                                               #
+    # ------------------------------------------------------------------ #
+    "resolve_device",
+    "resolve_devices",
+    "clear_device_cache",
+    "detect_gpu",
+    "GPUInfo",
+    # ------------------------------------------------------------------ #
+    # Model hub                                                            #
+    # ------------------------------------------------------------------ #
+    "ensure_model",
+    "default_checkpoint_path",
+    "MODEL_URL",
+    "MODEL_FILENAME",
+    # ------------------------------------------------------------------ #
+    # Configuration models                                                 #
+    # ------------------------------------------------------------------ #
+    "CorridorKeyConfig",
+    "LoggingSettings",
+    "PreprocessSettings",
+    "InferenceSettings",
+    "PostprocessSettings",
+    "WriterSettings",
+    # ------------------------------------------------------------------ #
+    # Pipeline runners                                                     #
+    # ------------------------------------------------------------------ #
+    "PipelineRunner",
+    "PipelineConfig",
+    "MultiGPURunner",
+    "MultiGPUConfig",
+    "PipelineEvents",
+    # ------------------------------------------------------------------ #
+    # Pipeline stages — entry points                                       #
+    # ------------------------------------------------------------------ #
     "scan",
     "load",
     "resolve_alpha",
     "load_video_metadata",
     "preprocess_frame",
-    # Contracts
+    "load_backend",
+    "load_model",
+    "run_inference",
+    "postprocess_frame",
+    "write_frame",
+    # ------------------------------------------------------------------ #
+    # Stage contracts                                                      #
+    # ------------------------------------------------------------------ #
+    # Scanner
     "Clip",
+    "ScanResult",
+    "SkippedPath",
+    # Loader
     "ClipManifest",
     "VideoMetadata",
+    "FrameScan",
+    "scan_frames",
+    # Preprocessor
     "PreprocessConfig",
     "PreprocessedFrame",
     "FrameMeta",
-    # Clip state machine
+    # Inference
+    "InferenceConfig",
+    "InferenceResult",
+    "BackendChoice",
+    "RefinerMode",
+    "VALID_IMG_SIZES",
+    "adaptive_img_size",
+    # Inference backends
+    "ModelBackend",
+    "TorchBackend",
+    "discover_checkpoint",
+    # Postprocessor
+    "PostprocessConfig",
+    "PostprocessedFrame",
+    # Writer
+    "WriteConfig",
+    # ------------------------------------------------------------------ #
+    # Clip state machine                                                   #
+    # ------------------------------------------------------------------ #
     "ClipState",
     "ClipEntry",
     "InOutRange",
-    # Errors
+    # ------------------------------------------------------------------ #
+    # Errors                                                               #
+    # ------------------------------------------------------------------ #
     "CorridorKeyError",
     "ClipScanError",
     "ExtractionError",
@@ -148,31 +254,4 @@ __all__ = [
     "ModelError",
     "InvalidStateTransitionError",
     "JobCancelledError",
-    # Startup
-    "APP_NAME",
-    "load_config",
-    "load_config_with_metadata",
-    "write_config",
-    "ensure_config_file",
-    "get_config_path",
-    "setup_logging",
-    "resolve_device",
-    "detect_gpu",
-    # Config / device types
-    "CorridorKeyConfig",
-    "PreprocessSettings",
-    "InferenceSettings",
-    "GPUInfo",
-    # Inference
-    "load_model",
-    "run_inference",
-    "InferenceConfig",
-    "InferenceResult",
-    # Postprocessor
-    "postprocess_frame",
-    "PostprocessConfig",
-    "PostprocessedFrame",
-    # Writer
-    "write_frame",
-    "WriteConfig",
 ]

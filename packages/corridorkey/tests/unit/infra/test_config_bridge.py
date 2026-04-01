@@ -110,6 +110,7 @@ class TestToPipelineConfig:
         )
         result = cfg.to_pipeline_config(device="cpu")
         assert result.preprocess.device == "cpu"
+        assert result.inference is not None
         assert result.inference.device == "cpu"
 
     def test_pipeline_config_model_passed_through(self, tmp_path: Path):

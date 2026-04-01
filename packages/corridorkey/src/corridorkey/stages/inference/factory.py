@@ -27,8 +27,12 @@ import os
 import platform
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from corridorkey.stages.inference.config import InferenceConfig
+
+if TYPE_CHECKING:
+    from corridorkey.stages.inference.backend import ModelBackend
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +48,7 @@ _DEFAULT_MLX_TILE_OVERLAP = 64
 # ---------------------------------------------------------------------------
 
 
-def load_backend(config: InferenceConfig):  # -> ModelBackend
+def load_backend(config: InferenceConfig) -> ModelBackend:
     """Construct and return the appropriate inference backend.
 
     Resolves the backend (torch or mlx), resolves "auto" refiner_mode to a
@@ -180,7 +184,7 @@ def _assert_mlx_available() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _load_mlx_backend(config: InferenceConfig):  # pragma: no cover
+def _load_mlx_backend(config: InferenceConfig) -> ModelBackend:  # pragma: no cover
     """Load the MLX engine and wrap it in MLXBackend."""
     from corridorkey.stages.inference.backend import MLXBackend
 

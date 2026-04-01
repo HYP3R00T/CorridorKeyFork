@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rich import box
 from rich.table import Table
 from rich.text import Text
 
 from corridorkey_cli._console import console
+
+if TYPE_CHECKING:
+    from corridorkey import CorridorKeyConfig
+    from utilityhub_config.metadata import SettingsMetadata
 
 # Source → colour mapping
 _SOURCE_STYLE: dict[str, str] = {
@@ -28,7 +33,7 @@ def _source_text(source: str, source_path: str | None) -> Text:
     return Text(label, style=style)
 
 
-def print_config_table(config, metadata) -> None:
+def print_config_table(config: CorridorKeyConfig, metadata: SettingsMetadata) -> None:
     """Print a Rich table of all config fields with their resolved source.
 
     Iterates the config model dynamically — every field in every section is

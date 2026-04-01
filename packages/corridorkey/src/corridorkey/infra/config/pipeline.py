@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import Annotated
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Literal, overload
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -13,6 +14,15 @@ from corridorkey.infra.config.logging import LoggingSettings
 from corridorkey.infra.config.postprocess import PostprocessSettings
 from corridorkey.infra.config.preprocess import PreprocessSettings
 from corridorkey.infra.config.writer import WriterSettings
+
+if TYPE_CHECKING:
+    import torch.nn as nn
+
+    from corridorkey.runtime.runner import PipelineConfig
+    from corridorkey.stages.inference import InferenceConfig
+    from corridorkey.stages.postprocessor.config import PostprocessConfig
+    from corridorkey.stages.preprocessor import PreprocessConfig
+    from corridorkey.stages.writer.contracts import WriteConfig
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +120,8 @@ class CorridorKeyConfig(BaseModel):
     def to_pipeline_config(
         self,
         device: str | None = None,
-        model=None,
-    ):  # -> PipelineConfig
+        model: nn.Module | None = None,
+    ) -> PipelineConfig:
         """Build a :class:`~corridorkey.runtime.runner.PipelineConfig` from this config.
 
         Resolves device and img_size once, then builds all stage configs
@@ -148,7 +158,7 @@ class CorridorKeyConfig(BaseModel):
         self,
         device: str | None = None,
         resolved_img_size: int | None = None,
-    ):  # -> PreprocessConfig
+    ) -> PreprocessConfig:
         """Build a :class:`~corridorkey.stages.preprocessor.PreprocessConfig`.
 
         Args:
@@ -169,7 +179,7 @@ class CorridorKeyConfig(BaseModel):
             sharpen_strength=self.preprocess.sharpen_strength,
         )
 
-    def to_postprocess_config(self):  # -> PostprocessConfig
+    def to_postprocess_config(self) -> PostprocessConfig:
         """Build a :class:`~corridorkey.stages.postprocessor.PostprocessConfig`."""
         from corridorkey.stages.postprocessor.config import PostprocessConfig
 
@@ -189,13 +199,12 @@ class CorridorKeyConfig(BaseModel):
             debug_dump=self.postprocess.debug_dump,
         )
 
-    def to_writer_config(self, output_dir):  # -> WriteConfig
+    def to_writer_config(self, output_dir: str | Path) -> WriteConfig:
         """Build a :class:`~corridorkey.stages.writer.WriteConfig`.
 
         Args:
             output_dir: Root directory for all outputs (clip-specific).
         """
-        from pathlib import Path
 
         from corridorkey.stages.writer.contracts import WriteConfig
 
@@ -211,9 +220,19 @@ class CorridorKeyConfig(BaseModel):
             exr_compression=self.writer.exr_compression,
         )
 
+    @overload
+    def to_inference_config(
+        self, device: str | None = None, _return_resolved_refiner_mode: Literal[False] = ...
+    ) -> InferenceConfig: ...
+
+    @overload
+    def to_inference_config(
+        self, device: str | None = None, _return_resolved_refiner_mode: Literal[True] = ...
+    ) -> tuple[InferenceConfig, str]: ...
+
     def to_inference_config(
         self, device: str | None = None, _return_resolved_refiner_mode: bool = False
-    ):  # -> InferenceConfig | tuple[InferenceConfig, str]
+    ) -> InferenceConfig | tuple[InferenceConfig, str]:
         """Build an :class:`~corridorkey.stages.inference.InferenceConfig`.
 
         Probes VRAM at most once — the same measurement resolves both
