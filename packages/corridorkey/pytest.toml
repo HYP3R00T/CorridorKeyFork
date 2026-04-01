@@ -1,0 +1,22 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "gpu: requires CUDA GPU (skipped in CI)",
+  "slow: long-running test",
+  "mlx: requires Apple Silicon with MLX installed",
+]
+
+[tool.coverage.run]
+omit = [
+  "*/corridorkey/infra/device_utils.py",
+  "*/corridorkey/stages/loader/extractor.py",
+  # GPU/model-weight-dependent — not unit-testable without hardware
+  "*/corridorkey/stages/inference/model.py",
+  "*/corridorkey/stages/inference/factory.py",
+  "*/corridorkey/stages/inference/loader.py",
+  "*/corridorkey/infra/model_hub.py",
+  "*/corridorkey/infra/logging.py",
+]
+
+[tool.coverage.report]
+fail_under = 75

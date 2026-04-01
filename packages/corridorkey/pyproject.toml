@@ -59,32 +59,6 @@ torchvision = [{ index = "pytorch-cuda", extra = "cuda" }]
 timm = { git = "https://github.com/Raiden129/pytorch-image-models-fix", branch = "fix/hiera-flash-attention-global-4d" }
 corridorkey-mlx = { git = "https://github.com/nikopueringer/corridorkey-mlx.git", extra = "mlx" }
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-markers = [
-  "gpu: requires CUDA GPU (skipped in CI)",
-  "slow: long-running test",
-  "mlx: requires Apple Silicon with MLX installed",
-]
-
-[tool.coverage.run]
-omit = [
-  "*/corridorkey/infra/device_utils.py",
-  "*/corridorkey/loader/extractor.py",
-  "*/corridorkey/main.py",
-  # GPU/model-weight-dependent — not unit-testable without hardware
-  "*/corridorkey/stages/inference/model.py",
-  "*/corridorkey/stages/inference/factory.py",
-  "*/corridorkey/stages/inference/loader.py",
-  "*/corridorkey/stages/inference/orchestrator.py",
-  "*/corridorkey/infra/model_hub.py",
-  "*/corridorkey/infra/logging.py",
-  "*/corridorkey/runtime/runner.py",
-]
-
-[tool.coverage.report]
-fail_under = 75
-
 [build-system]
 requires = ["uv_build>=0.10.11,<0.11.0"]
 build-backend = "uv_build"
