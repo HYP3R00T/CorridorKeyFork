@@ -18,9 +18,12 @@ class PostprocessedFrame:
         fg: Foreground RGB [H, W, 3], sRGB straight, range 0-1.
             In transparent regions the values are undefined — use ``processed``
             for compositing work.
-        processed: Premultiplied linear RGBA [H, W, 4], range 0-1.
+        processed: Premultiplied RGBA [H, W, 4], range 0-1.
             This is the primary output for compositing. Transparent regions are
             correctly zeroed out (fg * alpha), so no black-blob artefacts.
+            The RGB channels are in linear light. When written as PNG the writer
+            converts RGB to sRGB so the file displays correctly in viewers.
+            When written as EXR the channels remain linear (correct for compositors).
         comp: Preview composite over checkerboard [H, W, 3], sRGB, range 0-1.
         frame_index: Frame index carried through from FrameMeta.
         source_h: Original frame height in pixels.

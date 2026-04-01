@@ -149,3 +149,86 @@ class TestWriteInternalPaths:
         path = tmp_path / "out.png"
         with patch("cv2.imwrite", return_value=False), pytest.raises(WriteFailureError):
             _write(img, path, "png", [])
+
+
+class TestProcessedPngColourSpace:
+    """The processed PNG must have sRGB-encoded colour channels, not linear.
+
+    A linear mid-grey (0.5) written as-is to PNG would display as ~0.214 sRGB
+    (dark). After correct linear-to-sRGB conversion it should be ~0.735.
+    """
+
+    def _make_frame(self, rgb_linear: float, alpha: float = 1.0) -> PostprocessedFrame:
+        h, w = 8, 8
+        # processed is premultiplied linear RGBA
+        processed = np.full((h, w, 4), 0.0, dtype=np.float32)
+        processed[:, :, :3] = rgb_linear * alpha  # premultiplied
+        processed[:, :, 3] = alpha
+        return PostprocessedFrame(
+            alpha=np.full((h, w, 1), alpha, dtype=np.float32),
+            fg=np.full((h, w, 3), rgb_linear, dtype=np.float32),
+            processed=processed,
+            comp=np.zeros((h, w, 3), dtype=np.float32),
+            frame_index=0,
+            source_h=h,
+            source_w=w,
+            stem="frame_000000",
+        )
+
+    def test_processed_png_rgb_is_srgb_encoded(self, tmp_path: Path):
+        """Mid-grey linear (0.5) must be written as ~0.735 sRGB, not 0.5."""
+        frame = self._make_frame(rgb_linear=0.5, alpha=1.0)
+        cfg = WriteConfig(
+            output_dir=tmp_path,
+            alpha_enabled=False,
+            fg_enabled=False,
+            comp_enabled=False,
+            processed_format="png",
+        )
+        write_frame(frame, cfg)
+
+        path = tmp_path / "processed" / "frame_000000.png"
+        assert path.exists()
+        img = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+        assert img is not None
+        assert img.dtype == np.uint16
+
+        # Channel 0 is B in BGRA. For a fully opaque mid-grey premultiplied frame
+        # the RGB channels equal the linear value (0.5). After sRGB encoding
+        # 0.5 linear → ~0.735 sRGB → ~48168 out of 65535.
+        # A raw linear write would give ~32767. We check it's clearly above that.
+        b_value = img[0, 0, 0]
+        assert b_value > 40000, (
+            f"processed PNG B channel is {b_value} — looks like linear data was "
+            f"written without sRGB conversion (expected ~48168 for 0.5 linear)"
+        )
+
+    def test_processed_exr_rgb_stays_linear(self, tmp_path: Path):
+        """EXR must NOT apply sRGB conversion — compositors expect linear data."""
+        import pytest
+
+        pytest.importorskip("cv2")
+        import os
+
+        if not os.environ.get("OPENCV_IO_ENABLE_OPENEXR"):
+            pytest.skip("OpenEXR not enabled in this OpenCV build (set OPENCV_IO_ENABLE_OPENEXR=1)")
+        frame = self._make_frame(rgb_linear=0.5, alpha=1.0)
+        cfg = WriteConfig(
+            output_dir=tmp_path,
+            alpha_enabled=False,
+            fg_enabled=False,
+            comp_enabled=False,
+            processed_format="exr",
+        )
+        write_frame(frame, cfg)
+
+        path = tmp_path / "processed" / "frame_000000.exr"
+        assert path.exists()
+        img = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
+        assert img is not None
+
+        # EXR is float32. The premultiplied linear value for fully opaque 0.5 is 0.5.
+        b_value = float(img[0, 0, 0])
+        assert abs(b_value - 0.5) < 0.01, (
+            f"processed EXR B channel is {b_value:.4f} — expected ~0.5 (linear, no sRGB conversion)"
+        )

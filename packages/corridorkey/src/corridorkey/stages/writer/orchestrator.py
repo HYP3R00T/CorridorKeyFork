@@ -69,7 +69,16 @@ def write_frame(frame: PostprocessedFrame, config: WriteConfig) -> None:
     if config.processed_enabled:
         # Premultiplied linear RGBA — convert to BGRA for cv2.
         # Written as 16-bit PNG or float32 EXR to preserve sub-pixel alpha precision.
-        bgra = cv2.cvtColor(frame.processed, cv2.COLOR_RGBA2BGRA)
+        processed = frame.processed
+        if config.processed_format == "png":
+            # PNG viewers and compositors expect sRGB-encoded colour channels.
+            # Convert the RGB channels from linear to sRGB before writing.
+            # Alpha stays linear — alpha values are never gamma-encoded.
+            from corridorkey.infra.colorspace import linear_to_srgb_lut, lut_apply
+
+            rgb_srgb = lut_apply(np.clip(processed[:, :, :3], 0.0, 1.0), linear_to_srgb_lut)
+            processed = np.concatenate([rgb_srgb, processed[:, :, 3:4]], axis=-1).astype(np.float32)
+        bgra = cv2.cvtColor(processed, cv2.COLOR_RGBA2BGRA)
         _write(
             bgra,
             config.output_dir / "processed" / f"{frame.stem}.{config.processed_format}",
