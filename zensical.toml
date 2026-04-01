@@ -4,121 +4,131 @@ site_description = "AI Green Screen Keyer by Corridor Digital"
 repo_name = "nikopueringer/CorridorKey"
 repo_url = "https://github.com/nikopueringer/CorridorKey"
 extra_javascript = [
-    "javascripts/mathjax.js",
-    "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js",
+  "javascripts/mathjax.js",
+  "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js",
 ]
 
 nav = [
-    { Home = "index.md" },
-    { Guide = [
-        { "Overview" = "guide/index.md" },
-        { "Installation" = "guide/installation.md" },
-        { "First Run" = "guide/first-run.md" },
-        { "Preparing Clips" = "guide/preparing-clips.md" },
-        { "Processing Clips (Wizard)" = "guide/processing.md" },
-        { "Outputs" = "guide/outputs.md" },
-        { "Troubleshooting" = "guide/troubleshooting.md" },
+  { Home = "index.md" },
+  { Guide = [
+    { "Overview" = "guide/index.md" },
+    { "Installation" = "guide/installation.md" },
+    { "First Run" = "guide/first-run.md" },
+    { "Preparing Clips" = "guide/preparing-clips.md" },
+    { "Processing Clips (Wizard)" = "guide/processing.md" },
+    { "Outputs" = "guide/outputs.md" },
+    { "Troubleshooting" = "guide/troubleshooting.md" },
+  ] },
+  { Knowledge = [
+    { "Overview" = "knowledge/index.md" },
+    { "Pipeline" = [
+      { "Overview" = "knowledge/pipeline/index.md" },
+      { "Alpha Matting" = "knowledge/pipeline/alpha-matting.md" },
+      { "Colour Space" = "knowledge/pipeline/colour-space.md" },
+      { "Green Spill" = "knowledge/pipeline/green-spill.md" },
+      { "The Neural Network" = "knowledge/pipeline/neural-network.md" },
     ] },
-    { Knowledge = [
-        { "Overview" = "knowledge/index.md" },
-        { "Pipeline" = [
-            { "Overview" = "knowledge/pipeline/index.md" },
-            { "Alpha Matting" = "knowledge/pipeline/alpha-matting.md" },
-            { "Colour Space" = "knowledge/pipeline/colour-space.md" },
-            { "Green Spill" = "knowledge/pipeline/green-spill.md" },
-            { "The Neural Network" = "knowledge/pipeline/neural-network.md" },
+    { "Configuration" = "knowledge/configuration/index.md" },
+  ] },
+  { Developer = [
+    { "Overview" = "dev/index.md" },
+    { "Setup" = "dev/setup/index.md" },
+    { "Packages" = [
+      { "corridorkey" = [
+        { "Overview" = "dev/packages/corridorkey/index.md" },
+        { "Clip State Machine" = "dev/packages/corridorkey/clip-state.md" },
+        { "Job Queue" = "dev/packages/corridorkey/job-queue.md" },
+        { "Configuration" = "dev/packages/corridorkey/configuration.md" },
+        { "Interface" = [
+          { "Overview" = "dev/packages/corridorkey/interface/index.md" },
+          { "Startup" = "dev/packages/corridorkey/interface/startup.md" },
+          { "PipelineRunner" = "dev/packages/corridorkey/interface/pipeline-runner.md" },
+          { "MultiGPURunner" = "dev/packages/corridorkey/interface/multi-gpu-runner.md" },
+          { "Frame Loop" = "dev/packages/corridorkey/interface/frame-loop.md" },
+          { "Events" = "dev/packages/corridorkey/interface/events.md" },
+          { "Error Handling" = "dev/packages/corridorkey/interface/error-handling.md" },
         ] },
-        { "Configuration" = "knowledge/configuration/index.md" },
+        { "Stages" = [
+          { "Overview" = "dev/packages/corridorkey/stages/index.md" },
+          { "Scanner" = "dev/packages/corridorkey/stages/scanner.md" },
+          { "Loader" = "dev/packages/corridorkey/stages/loader.md" },
+          { "Preprocessor" = "dev/packages/corridorkey/stages/preprocessor.md" },
+          { "Inference" = "dev/packages/corridorkey/stages/inference.md" },
+          { "Postprocessor" = "dev/packages/corridorkey/stages/postprocessor.md" },
+          { "Writer" = "dev/packages/corridorkey/stages/writer.md" },
+        ] },
+      ] },
+      { "corridorkey-cli" = [
+        { "Overview" = "dev/packages/corridorkey-cli/index.md" },
+        { "Commands" = "dev/packages/corridorkey-cli/commands.md" },
+      ] },
     ] },
-    { Developer = [
-        { "Overview" = "dev/index.md" },
-        { "Setup" = "dev/setup/index.md" },
-        { "Packages" = [
-            { "corridorkey" = [
-                { "Overview" = "dev/packages/corridorkey/index.md" },
-                { "Clip State Machine" = "dev/packages/corridorkey/clip-state.md" },
-                { "Job Queue" = "dev/packages/corridorkey/job-queue.md" },
-                { "Configuration" = "dev/packages/corridorkey/configuration.md" },
-                { "Stages" = [
-                    { "Overview" = "dev/packages/corridorkey/stages/index.md" },
-                    { "Scanner" = "dev/packages/corridorkey/stages/scanner.md" },
-                    { "Loader" = "dev/packages/corridorkey/stages/loader.md" },
-                    { "Preprocessor" = "dev/packages/corridorkey/stages/preprocessor.md" },
-                    { "Inference" = "dev/packages/corridorkey/stages/inference.md" },
-                    { "Postprocessor" = "dev/packages/corridorkey/stages/postprocessor.md" },
-                    { "Writer" = "dev/packages/corridorkey/stages/writer.md" },
-                ] },
-            ] },
-            { "corridorkey-cli" = [
-                { "Overview" = "dev/packages/corridorkey-cli/index.md" },
-                { "Commands" = "dev/packages/corridorkey-cli/commands.md" },
-            ] },
-        ] },
-        { "API Reference" = [
-            { "corridorkey" = [
-                { "Overview" = "dev/api/corridorkey/index.md" },
-                { "pipeline" = "dev/api/corridorkey/pipeline.md" },
-                { "clip-state" = "dev/api/corridorkey/clip-state.md" },
-                { "job-queue" = "dev/api/corridorkey/job-queue.md" },
-                { "errors" = "dev/api/corridorkey/errors.md" },
-                { "events" = "dev/api/corridorkey/events.md" },
-                { "device-utils" = "dev/api/corridorkey/device-utils.md" },
-                { "configuration" = "dev/api/corridorkey/configuration.md" },
-            ] },
-            { "corridorkey-cli" = [
-                { "Overview" = "dev/api/corridorkey-cli/index.md" },
-                { "wizard" = "dev/api/corridorkey-cli/wizard.md" },
-                { "init" = "dev/api/corridorkey-cli/init.md" },
-                { "config" = "dev/api/corridorkey-cli/config.md" },
-                { "reset" = "dev/api/corridorkey-cli/reset.md" },
-            ] },
-        ] },
-        { "Testing" = [
-            { "Overview" = "dev/testing/index.md" },
-            { "Unit Tests" = "dev/testing/unit-tests.md" },
-            { "Integration Tests" = "dev/testing/integration-tests.md" },
-            { "Property-Based Tests" = "dev/testing/property-tests.md" },
-            { "Hardware-Gated Tests" = "dev/testing/hardware-gated.md" },
-        ] },
-        { "Contributing" = [
-            { "Overview" = "dev/contributing/index.md" },
-            { "Naming Conventions" = "dev/contributing/naming-conventions.md" },
-            { "Authoring Documentation" = "dev/contributing/authoring-documentation.md" },
-            { "Documentation Principles" = [
-                { "Overview" = "dev/contributing/documentation-principles/index.md" },
-                { "Principle 1" = "dev/contributing/documentation-principles/principle-1-no-fiction.md" },
-                { "Principle 2" = "dev/contributing/documentation-principles/principle-2-single-responsibility.md" },
-                { "Principle 3" = "dev/contributing/documentation-principles/principle-3-scale-by-folders.md" },
-                { "Principle 4" = "dev/contributing/documentation-principles/principle-4-link-to-code.md" },
-                { "Principle 5" = "dev/contributing/documentation-principles/principle-5-format-style.md" },
-                { "Principle 6" = "dev/contributing/documentation-principles/principle-6-structure-uniformity.md" },
-            ] },
-        ] },
+    { "API Reference" = [
+      { "corridorkey" = [
+        { "Overview" = "dev/api/corridorkey/index.md" },
+        { "pipeline" = "dev/api/corridorkey/pipeline.md" },
+        { "clip-state" = "dev/api/corridorkey/clip-state.md" },
+        { "job-queue" = "dev/api/corridorkey/job-queue.md" },
+        { "errors" = "dev/api/corridorkey/errors.md" },
+        { "events" = "dev/api/corridorkey/events.md" },
+        { "device-utils" = "dev/api/corridorkey/device-utils.md" },
+        { "model-hub" = "dev/api/corridorkey/model-hub.md" },
+        { "configuration" = "dev/api/corridorkey/configuration.md" },
+      ] },
+      { "corridorkey-cli" = [
+        { "Overview" = "dev/api/corridorkey-cli/index.md" },
+        { "wizard" = "dev/api/corridorkey-cli/wizard.md" },
+        { "init" = "dev/api/corridorkey-cli/init.md" },
+        { "config" = "dev/api/corridorkey-cli/config.md" },
+        { "reset" = "dev/api/corridorkey-cli/reset.md" },
+      ] },
     ] },
+    { "Testing" = [
+      { "Overview" = "dev/testing/index.md" },
+      { "Unit Tests" = "dev/testing/unit-tests.md" },
+      { "Integration Tests" = "dev/testing/integration-tests.md" },
+      { "Property-Based Tests" = "dev/testing/property-tests.md" },
+      { "Hardware-Gated Tests" = "dev/testing/hardware-gated.md" },
+    ] },
+    { "Contributing" = [
+      { "Overview" = "dev/contributing/index.md" },
+      { "Naming Conventions" = "dev/contributing/naming-conventions.md" },
+      { "Authoring Documentation" = "dev/contributing/authoring-documentation.md" },
+      { "Documentation Principles" = [
+        { "Overview" = "dev/contributing/documentation-principles/index.md" },
+        { "Principle 1" = "dev/contributing/documentation-principles/principle-1-no-fiction.md" },
+        { "Principle 2" = "dev/contributing/documentation-principles/principle-2-single-responsibility.md" },
+        { "Principle 3" = "dev/contributing/documentation-principles/principle-3-scale-by-folders.md" },
+        { "Principle 4" = "dev/contributing/documentation-principles/principle-4-link-to-code.md" },
+        { "Principle 5" = "dev/contributing/documentation-principles/principle-5-format-style.md" },
+        { "Principle 6" = "dev/contributing/documentation-principles/principle-6-structure-uniformity.md" },
+      ] },
+    ] },
+  ] },
 ]
 
 [project.theme]
 language = "en"
 features = [
-    "announce.dismiss",
-    "content.action.edit",
-    "content.action.view",
-    "content.code.annotate",
-    "content.code.copy",
-    "content.code.select",
-    "content.footnote.tooltips",
-    "content.tabs.link",
-    "content.tooltips",
-    "navigation.footer",
-    "navigation.indexes",
-    "navigation.instant",
-    "navigation.instant.prefetch",
-    "navigation.instant.progress",
-    "navigation.path",
-    "navigation.tabs",
-    "navigation.top",
-    "navigation.tracking",
-    "search.highlight",
+  "announce.dismiss",
+  "content.action.edit",
+  "content.action.view",
+  "content.code.annotate",
+  "content.code.copy",
+  "content.code.select",
+  "content.footnote.tooltips",
+  "content.tabs.link",
+  "content.tooltips",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.instant.progress",
+  "navigation.path",
+  "navigation.tabs",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
 ]
 
 [[project.theme.palette]]
@@ -149,7 +159,7 @@ view = "lucide/file-braces-corner"
 [project.markdown_extensions.pymdownx.details]
 [project.markdown_extensions.pymdownx.superfences]
 custom_fences = [
-    { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
 ]
 
 [project.markdown_extensions.pymdownx.tabbed]

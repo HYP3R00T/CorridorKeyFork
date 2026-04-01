@@ -38,10 +38,19 @@ All public symbols are exported from `corridorkey.__init__`. Do not import from 
 
 ```python
 from corridorkey import (
-    scan, load, resolve_alpha, preprocess_frame,
-    load_model, run_inference, postprocess_frame, write_frame,
+    # Startup
     load_config, setup_logging, resolve_device, detect_gpu,
-    ClipState, ClipEntry, PipelineRunner,
+    ensure_model,
+    # Pipeline - high level
+    PipelineRunner, PipelineConfig, MultiGPURunner, MultiGPUConfig,
+    PipelineEvents,
+    # Pipeline - stages
+    scan, load, resolve_alpha, preprocess_frame,
+    load_backend, run_inference, postprocess_frame, write_frame,
+    # Clip state
+    ClipState, ClipEntry,
+    # Errors
+    CorridorKeyError, DeviceError, ModelError,
 )
 ```
 
@@ -49,6 +58,7 @@ See the [API Reference](../../api/corridorkey/index.md) for the full symbol list
 
 ## Documents in This Section
 
+- [Interface Guide](interface/index.md) - How to build a CLI, GUI, or plugin on top of this package. Covers all three integration patterns and when to use each.
 - [Clip State Machine](clip-state.md) - How clip lifecycle states are tracked and transitioned.
 - [Job Queue](job-queue.md) - Bounded queue and sentinel-based shutdown used between pipeline workers.
 - [Configuration](configuration.md) - All configuration fields, defaults, and sources.

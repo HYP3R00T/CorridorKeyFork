@@ -8,11 +8,11 @@ Configuration models for the pipeline and each stage.
 
 ::: corridorkey.InferenceSettings
 
-::: corridorkey.infra.config.PostprocessSettings
+::: corridorkey.PostprocessSettings
 
-::: corridorkey.infra.config.WriterSettings
+::: corridorkey.WriterSettings
 
-::: corridorkey.infra.config.LoggingSettings
+::: corridorkey.LoggingSettings
 
 ## Loader Functions
 

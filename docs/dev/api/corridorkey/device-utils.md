@@ -6,8 +6,8 @@ GPU detection and device resolution utilities.
 
 ::: corridorkey.resolve_device
 
+::: corridorkey.resolve_devices
+
+::: corridorkey.clear_device_cache
+
 ::: corridorkey.GPUInfo
-
-::: corridorkey.infra.device_utils.resolve_devices
-
-::: corridorkey.infra.device_utils.clear_device_cache

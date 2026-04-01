@@ -1,6 +1,6 @@
 # pipeline
 
-Pipeline stage functions, runner classes, and supporting contracts exported from `corridorkey`.
+Pipeline stage functions, runner classes, backend protocol, and all stage contracts exported from `corridorkey`.
 
 ## Stage Functions
 
@@ -13,6 +13,8 @@ Pipeline stage functions, runner classes, and supporting contracts exported from
 ::: corridorkey.load_video_metadata
 
 ::: corridorkey.preprocess_frame
+
+::: corridorkey.load_backend
 
 ::: corridorkey.load_model
 
@@ -32,26 +34,62 @@ Pipeline stage functions, runner classes, and supporting contracts exported from
 
 ::: corridorkey.runtime.runner.MultiGPUConfig
 
-## Contracts
+## Backend Protocol
+
+::: corridorkey.stages.inference.backend.ModelBackend
+
+::: corridorkey.stages.inference.backend.TorchBackend
+
+::: corridorkey.stages.inference.factory.discover_checkpoint
+
+## Stage Contracts
+
+### Scanner
 
 ::: corridorkey.Clip
+
+::: corridorkey.ScanResult
+
+::: corridorkey.SkippedPath
+
+### Loader
 
 ::: corridorkey.ClipManifest
 
 ::: corridorkey.VideoMetadata
 
+::: corridorkey.stages.loader.validator.FrameScan
+
+::: corridorkey.stages.loader.validator.scan_frames
+
+### Preprocessor
+
+::: corridorkey.PreprocessConfig
+
 ::: corridorkey.PreprocessedFrame
 
 ::: corridorkey.FrameMeta
 
-::: corridorkey.PreprocessConfig
+### Inference
 
 ::: corridorkey.InferenceConfig
 
 ::: corridorkey.InferenceResult
 
+`BackendChoice` - Type alias for the backend field: `Literal["auto", "torch", "mlx"]`.
+
+`RefinerMode` - Type alias for the refiner_mode field: `Literal["auto", "full_frame", "tiled"]`.
+
+`VALID_IMG_SIZES` - Tuple of accepted img_size values: `(0, 512, 1024, 1536, 2048)`. `0` means auto-select based on VRAM.
+
+::: corridorkey.stages.inference.config.adaptive_img_size
+
+### Postprocessor
+
 ::: corridorkey.PostprocessConfig
 
 ::: corridorkey.PostprocessedFrame
+
+### Writer
 
 ::: corridorkey.WriteConfig
