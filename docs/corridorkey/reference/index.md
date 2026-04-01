@@ -1,10 +1,10 @@
-# corridorkey API Reference
+# corridorkey Reference
 
-Auto-generated reference for all public symbols in the `corridorkey` package.
+Auto-generated symbol reference for all public exports of the `corridorkey` package.
 
 ## Modules
 
-- [pipeline](pipeline.md) - Pipeline stage functions, runner classes, and all stage contracts.
+- [pipeline](pipeline.md) - Pipeline stage functions, runner classes, backend protocol, and all stage contracts.
 - [clip-state](clip-state.md) - `ClipState`, `ClipEntry`, `InOutRange`.
 - [job-queue](job-queue.md) - `BoundedQueue` and the `STOP` sentinel.
 - [errors](errors.md) - Typed exception hierarchy.

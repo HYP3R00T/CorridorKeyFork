@@ -48,4 +48,4 @@ State is resolved from disk at construction time via `from_clip()`. The resoluti
 ## Related
 
 - [Job Queue](job-queue.md) - How the queue interacts with the processing lock.
-- [API Reference - clip-state](../../api/corridorkey/clip-state.md) - Full symbol reference.
+- [Reference - clip-state](reference/clip-state.md) - Full symbol reference.

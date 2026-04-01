@@ -1,4 +1,4 @@
-# Pipeline Stages
+# Pipeline Internals
 
 The `corridorkey` package processes footage through six sequential stages. Each stage has a single orchestrator that owns the step sequence, and delegates all transformation logic to focused sub-modules.
 
@@ -20,7 +20,7 @@ Every stage follows the same internal layout:
 ```text
 stages/<name>/
   __init__.py       # re-exports the public entry point
-  orchestrator.py   # step sequence — no transformation logic
+  orchestrator.py   # step sequence - no transformation logic
   contracts.py      # input/output data types for this stage
   <step>.py         # one module per transformation step
 ```

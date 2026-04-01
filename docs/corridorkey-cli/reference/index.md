@@ -1,6 +1,6 @@
-# corridorkey-cli API Reference
+# corridorkey-cli Reference
 
-Auto-generated reference for all public symbols in the `corridorkey-cli` package.
+Auto-generated symbol reference for the `corridorkey-cli` package.
 
 ## Modules
 

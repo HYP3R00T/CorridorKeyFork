@@ -22,8 +22,8 @@ Use full GitHub permalinks. Static documentation sites cannot resolve relative p
 
 **DO:**
 
-- `https://github.com/edenaion/CorridorKey/blob/main/pyproject.toml`
-- `https://github.com/edenaion/CorridorKey/blob/main/zensical.toml`
+- `https://github.com/hyp3r00t/CorridorKey/blob/main/pyproject.toml`
+- `https://github.com/hyp3r00t/CorridorKey/blob/main/zensical.toml`
 
 **DON'T:**
 

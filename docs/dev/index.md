@@ -1,12 +1,16 @@
 # Developer Docs
 
-Everything needed to build on, contribute to, or integrate with CorridorKey.
+Everything needed to contribute to the CorridorKey codebase: setting up the environment, running tests, and following project standards.
+
+## Package Documentation
+
+If you are looking for documentation on the packages themselves rather than how to contribute to them:
+
+- [corridorkey](../corridorkey/index.md) - The pipeline library. Integration guide, internals, and reference.
+- [corridorkey-cli](../corridorkey-cli/index.md) - The CLI. Commands, architecture, and reference.
 
 ## Documents in This Section
 
 - [Setup](setup/index.md) - Clone the repo, install dependencies, run tests.
-- [Packages](packages/corridorkey/index.md) - Architecture and internals for each package.
-- [API Reference](api/corridorkey/index.md) - Auto-generated API docs for every public symbol.
 - [Testing](testing/index.md) - Unit, integration, property-based, and hardware-gated tests.
 - [Contributing](contributing/index.md) - Naming conventions, documentation standards, and authoring guides.
-- [Knowledge](../knowledge/index.md) - Pipeline theory, contracts, configuration, and design decisions.

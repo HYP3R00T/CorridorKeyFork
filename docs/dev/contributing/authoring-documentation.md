@@ -4,13 +4,13 @@ Write effective documentation using Markdown and Zensical features. Follow [Docu
 
 ## Current Docs Layout
 
-The repository maintains docs under `docs/`, `docs/dev/`, and `docs/knowledge/`.
+The repository maintains docs under five root sections.
 
-- `docs/index.md` - Documentation home
-- `docs/dev/contributing/authoring-documentation.md` - Authoring guidance
-- `docs/dev/setup/index.md` - Developer setup
-- `docs/dev/contributing/naming-conventions.md` - Naming conventions for code identifiers
-- `docs/dev/contributing/documentation-principles/` - Standards and rules
+- `docs/guide/` - End user documentation
+- `docs/knowledge/` - Concepts for any audience
+- `docs/corridorkey/` - The pipeline library: integration guide, internals, reference
+- `docs/corridorkey-cli/` - The CLI: commands, architecture, reference
+- `docs/dev/` - Contributor documentation: setup, testing, contributing standards
 
 ## Markdown Essentials
 

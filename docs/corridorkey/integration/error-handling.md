@@ -2,7 +2,7 @@
 
 All errors raised by the `corridorkey` package are typed exceptions that inherit from `CorridorKeyError`. The interface catches them and presents them to the user.
 
-Source: [`corridorkey/errors.py`](https://github.com/edenaion/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/errors.py)
+Source: [`corridorkey/errors.py`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/errors.py)
 
 ## Purpose
 
@@ -76,4 +76,4 @@ The recommended approach is to catch specific subclasses first, in order of how 
 
 - [Startup](startup.md) - Where `DeviceError` and `ModelError` are most likely to surface.
 - [PipelineRunner](pipeline-runner.md) - How frame-level errors are reported through events.
-- [API Reference - errors](../../../api/corridorkey/errors.md) - Full exception hierarchy reference.
+- [Reference - errors](../reference/errors.md) - Full exception hierarchy reference.

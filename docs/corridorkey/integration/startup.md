@@ -2,7 +2,7 @@
 
 Every interface runs a fixed startup sequence before any clip can be processed. This sequence initialises the four infrastructure concerns the package exposes: configuration, logging, device, and model.
 
-Source: [`corridorkey/infra/`](https://github.com/edenaion/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/infra/)
+Source: [`corridorkey/infra/`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/infra/)
 
 ## Purpose
 
@@ -50,5 +50,5 @@ The config object is immutable after loading. If the user changes settings mid-s
 
 - [PipelineRunner](pipeline-runner.md) - How the startup outputs feed into the pipeline.
 - [Configuration](../configuration.md) - All configuration fields and their defaults.
-- [API Reference - device-utils](../../../api/corridorkey/device-utils.md) - `detect_gpu`, `resolve_device`, `GPUInfo`.
-- [API Reference - model-hub](../../../api/corridorkey/model-hub.md) - `ensure_model`, `default_checkpoint_path`.
+- [Reference - device-utils](../reference/device-utils.md) - `detect_gpu`, `resolve_device`, `GPUInfo`.
+- [Reference - model-hub](../reference/model-hub.md) - `ensure_model`, `default_checkpoint_path`.

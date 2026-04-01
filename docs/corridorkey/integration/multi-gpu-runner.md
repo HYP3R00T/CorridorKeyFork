@@ -2,7 +2,7 @@
 
 `MultiGPURunner` processes a clip across multiple CUDA GPUs simultaneously. Each GPU runs its own inference worker, and all workers share a single frame queue. The preprocessor and postwriter remain single-threaded.
 
-Source: [`corridorkey/runtime/runner.py`](https://github.com/edenaion/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/runtime/runner.py)
+Source: [`corridorkey/runtime/runner.py`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/runtime/runner.py)
 
 ## Purpose
 
@@ -46,4 +46,4 @@ It is not useful for ROCm or MPS devices. Multi-GPU dispatch is CUDA-only.
 
 - [PipelineRunner](pipeline-runner.md) - Single-GPU pipeline runner.
 - [Events](events.md) - Progress callbacks, which work identically for both runners.
-- [API Reference - device-utils](../../../api/corridorkey/device-utils.md) - `resolve_devices`.
+- [Reference - device-utils](../reference/device-utils.md) - `resolve_devices`.

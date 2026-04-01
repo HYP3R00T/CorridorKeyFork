@@ -1,4 +1,4 @@
-# Interface Guide
+# Integration Guide
 
 The `corridorkey` package is a library. It has no user interface of its own. Every interface - a CLI, a desktop GUI, a DaVinci Resolve Fusion node, an Adobe Premiere Pro extension - is a separate layer that calls into the package.
 
@@ -49,4 +49,4 @@ Two concerns apply regardless of which pattern is used.
 
 - [Clip State Machine](../clip-state.md) - Tracking clip lifecycle across sessions.
 - [Configuration](../configuration.md) - All configuration fields and their defaults.
-- [API Reference](../../../api/corridorkey/index.md) - Full symbol reference.
+- [Reference](../reference/index.md) - Full symbol reference.

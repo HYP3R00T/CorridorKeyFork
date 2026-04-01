@@ -2,7 +2,7 @@
 
 The frame loop is a direct integration pattern where the interface calls each pipeline stage function individually, one frame at a time. The interface controls the loop, the threading model, and the order of operations.
 
-Source: [`corridorkey/__init__.py`](https://github.com/edenaion/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/__init__.py)
+Source: [`corridorkey/__init__.py`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/__init__.py)
 
 ## Purpose
 
@@ -58,4 +58,4 @@ It is not the right choice for a CLI or GUI that processes whole clips. For thos
 
 - [PipelineRunner](pipeline-runner.md) - Whole-clip processing with internal threading.
 - [Startup](startup.md) - How to load the backend and build stage configs before the loop begins.
-- [API Reference - pipeline](../../../api/corridorkey/pipeline.md) - Full signatures for all stage functions.
+- [Reference - pipeline](../reference/pipeline.md) - Full signatures for all stage functions.

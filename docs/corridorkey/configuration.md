@@ -75,5 +75,5 @@ Source priority (lowest to highest): defaults, global file, project file, enviro
 
 ## Related
 
-- [API Reference - configuration](../../api/corridorkey/configuration.md) - Full symbol reference.
-- [Knowledge - Configuration](../../../knowledge/configuration/index.md) - User-facing configuration guide.
+- [Reference - configuration](reference/configuration.md) - Full symbol reference.
+- [Knowledge - Configuration](../knowledge/configuration/index.md) - User-facing configuration guide.

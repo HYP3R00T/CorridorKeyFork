@@ -2,7 +2,7 @@
 
 `PipelineRunner` is the standard way to process a clip. It wires the three pipeline workers together, manages the queues between them, and blocks until every frame has been written to disk.
 
-Source: [`corridorkey/runtime/runner.py`](https://github.com/edenaion/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/runtime/runner.py)
+Source: [`corridorkey/runtime/runner.py`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/runtime/runner.py)
 
 ## Purpose
 

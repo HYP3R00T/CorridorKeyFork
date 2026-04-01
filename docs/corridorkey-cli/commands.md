@@ -60,4 +60,4 @@ Implemented in `corridorkey_cli.commands.reset`.
 
 ## Related
 
-- [API Reference - corridorkey-cli](../../api/corridorkey-cli/index.md) - Full symbol reference.
+- [Reference](reference/index.md) - Auto-generated symbol reference.

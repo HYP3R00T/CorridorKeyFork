@@ -2,7 +2,7 @@
 
 `PipelineEvents` is the package's progress reporting mechanism. It is a dataclass of optional callbacks that the pipeline fires as work progresses. The interface assigns only the callbacks it needs; unassigned callbacks are silently ignored.
 
-Source: [`corridorkey/events.py`](https://github.com/edenaion/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/events.py)
+Source: [`corridorkey/events.py`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/events.py)
 
 ## Purpose
 
@@ -56,4 +56,4 @@ If a callback needs to do something slow (write to a database, send a network re
 
 - [PipelineRunner](pipeline-runner.md) - How events are attached to the runner.
 - [MultiGPURunner](multi-gpu-runner.md) - Events work identically for multi-GPU runs.
-- [API Reference - events](../../../api/corridorkey/events.md) - Full symbol reference.
+- [Reference - events](../reference/events.md) - Full symbol reference.

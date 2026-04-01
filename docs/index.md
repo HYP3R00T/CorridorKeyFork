@@ -8,8 +8,16 @@ Start with the [Guide](guide/index.md). It covers installation, first run, proce
 
 ## I want to build with CorridorKey
 
-Start with the [Developer Docs](dev/index.md). It covers the three-layer architecture, package internals, API reference, and contribution standards.
+Start with the [corridorkey](corridorkey/index.md) package docs. It covers the integration guide, pipeline internals, and the full symbol reference.
+
+## I want to understand the CLI
+
+See the [corridorkey-cli](corridorkey-cli/index.md) docs. It covers all commands, the architecture, and the symbol reference.
 
 ## I want to understand how it works
 
-Start with the [Knowledge](knowledge/index.md) section. It covers the six pipeline stages, the data contracts between them, the configuration system, and the reasoning behind key design decisions.
+Start with the [Knowledge](knowledge/index.md) section. It covers alpha matting, colour space, green spill, the neural network, and the configuration system.
+
+## I want to contribute
+
+See the [Developer Docs](dev/index.md) for setup, testing, and contribution standards.
