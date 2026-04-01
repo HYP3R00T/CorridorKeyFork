@@ -250,3 +250,29 @@ class TestFromClip:
         with patch("corridorkey.stages.loader.extractor.is_video", return_value=True):
             entry = ClipEntry.from_clip(clip)
         assert entry.state == ClipState.EXTRACTING
+
+
+class TestClipEntryWarningsAndManifest:
+    def test_warnings_empty_by_default(self, tmp_path):
+        entry = _make_entry(tmp_path)
+        assert entry.warnings == []
+
+    def test_warnings_can_be_appended(self, tmp_path):
+        entry = _make_entry(tmp_path)
+        entry.warnings.append("partial alpha detected")
+        assert len(entry.warnings) == 1
+        assert "partial alpha" in entry.warnings[0]
+
+    def test_manifest_none_by_default(self, tmp_path):
+        entry = _make_entry(tmp_path)
+        assert entry.manifest is None
+
+    def test_manifest_can_be_set(self, tmp_path):
+        entry = _make_entry(tmp_path)
+        fake_manifest = object()
+        entry.manifest = fake_manifest
+        assert entry.manifest is fake_manifest
+
+    def test_error_message_none_by_default(self, tmp_path):
+        entry = _make_entry(tmp_path)
+        assert entry.error_message is None

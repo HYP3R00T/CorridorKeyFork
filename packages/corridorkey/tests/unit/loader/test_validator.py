@@ -28,6 +28,15 @@ class TestScanFrames:
         result = scan_frames(tmp_path)
         assert isinstance(result, FrameScan)
 
+    def test_frame_scan_count_property(self, tmp_path: Path):
+        _touch_frames(tmp_path, ["frame_1.png", "frame_2.png", "frame_3.png"])
+        result = scan_frames(tmp_path)
+        assert result.count == 3
+
+    def test_frame_scan_count_zero_when_empty(self, tmp_path: Path):
+        result = scan_frames(tmp_path)
+        assert result.count == 0
+
     def test_single_pass_returns_count_and_linearity(self, tmp_path: Path):
         _touch_frames(tmp_path, ["frame_1.exr", "frame_2.exr"])
         result = scan_frames(tmp_path)

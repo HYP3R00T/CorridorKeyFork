@@ -122,3 +122,40 @@ class TestJobCancelledError:
     def test_frame_index_none_by_default(self):
         err = JobCancelledError("clip")
         assert err.frame_index is None
+
+
+class TestSimpleErrors:
+    """ClipScanError, FrameReadError, DeviceError, ModelError carry no extra fields
+    but must be instantiable, have a message, and be catchable as CorridorKeyError."""
+
+    def test_clip_scan_error_message(self):
+        err = ClipScanError("path does not exist: /foo")
+        assert "/foo" in str(err)
+
+    def test_clip_scan_error_catchable_as_base(self):
+        with pytest.raises(CorridorKeyError):
+            raise ClipScanError("bad path")
+
+    def test_frame_read_error_message(self):
+        err = FrameReadError("cannot decode frame_000001.png")
+        assert "frame_000001" in str(err)
+
+    def test_frame_read_error_catchable_as_base(self):
+        with pytest.raises(CorridorKeyError):
+            raise FrameReadError("bad frame")
+
+    def test_device_error_message(self):
+        err = DeviceError("cuda requested but not available")
+        assert "cuda" in str(err)
+
+    def test_device_error_catchable_as_base(self):
+        with pytest.raises(CorridorKeyError):
+            raise DeviceError("no device")
+
+    def test_model_error_message(self):
+        err = ModelError("checksum mismatch for model.pth")
+        assert "checksum" in str(err)
+
+    def test_model_error_catchable_as_base(self):
+        with pytest.raises(CorridorKeyError):
+            raise ModelError("bad model")

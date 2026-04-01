@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import cv2
 import numpy as np
 import torch
+from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import STOP, BoundedQueue
 from corridorkey.runtime.worker import InferenceWorker, PostWriteWorker, PreprocessWorker
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
@@ -417,3 +418,288 @@ class TestPostWriteWorker:
             t.join(timeout=5)
 
         assert not t.is_alive()
+
+
+# ---------------------------------------------------------------------------
+# Worker event callbacks
+# ---------------------------------------------------------------------------
+
+
+class TestPreprocessWorkerEvents:
+    def test_stage_start_fires(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path, frame_count=2)
+        config = PreprocessConfig(img_size=32, device="cpu")
+        q: BoundedQueue = BoundedQueue(10)
+
+        starts: list[tuple[str, int]] = []
+        events = PipelineEvents(on_stage_start=lambda s, t: starts.append((s, t)))
+        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, events=events)
+        t = worker.start()
+        t.join(timeout=10)
+        # drain
+        while q.get() is not STOP:
+            pass
+
+        assert any(s == "preprocess" for s, _ in starts)
+
+    def test_stage_done_fires(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path, frame_count=1)
+        config = PreprocessConfig(img_size=32, device="cpu")
+        q: BoundedQueue = BoundedQueue(10)
+
+        dones: list[str] = []
+        events = PipelineEvents(on_stage_done=lambda s: dones.append(s))
+        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, events=events)
+        t = worker.start()
+        t.join(timeout=10)
+        while q.get() is not STOP:
+            pass
+
+        assert "preprocess" in dones
+
+    def test_preprocess_queued_fires_per_frame(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path, frame_count=3)
+        config = PreprocessConfig(img_size=32, device="cpu")
+        q: BoundedQueue = BoundedQueue(10)
+
+        queued: list[int] = []
+        events = PipelineEvents(on_preprocess_queued=lambda i: queued.append(i))
+        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, events=events)
+        t = worker.start()
+        t.join(timeout=10)
+        while q.get() is not STOP:
+            pass
+
+        assert queued == [0, 1, 2]
+
+    def test_frame_error_fires_on_read_error(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path, frame_count=2)
+        config = PreprocessConfig(img_size=32, device="cpu")
+        q: BoundedQueue = BoundedQueue(10)
+
+        errors: list[tuple[str, int]] = []
+        events = PipelineEvents(on_frame_error=lambda s, i, e: errors.append((s, i)))
+
+        with patch(
+            "corridorkey.runtime.worker.preprocess_frame",
+            side_effect=FrameReadError("bad"),
+        ):
+            worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, events=events)
+            t = worker.start()
+            t.join(timeout=10)
+
+        assert len(errors) == 2
+        assert all(s == "preprocess" for s, _ in errors)
+
+    def test_queue_depth_fires_with_postwrite_queue(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path, frame_count=2)
+        config = PreprocessConfig(img_size=32, device="cpu")
+        q: BoundedQueue = BoundedQueue(10)
+        pw_q: BoundedQueue = BoundedQueue(10)
+
+        depths: list[tuple[int, int]] = []
+        events = PipelineEvents(on_queue_depth=lambda p, w: depths.append((p, w)))
+        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, postwrite_queue=pw_q, events=events)
+        t = worker.start()
+        t.join(timeout=10)
+        while q.get() is not STOP:
+            pass
+
+        assert len(depths) == 2  # one per frame
+
+
+class TestInferenceWorkerEvents:
+    def _make_config(self, tmp_path: Path) -> InferenceConfig:
+        return InferenceConfig(checkpoint_path=tmp_path / "model.pth", device="cpu")
+
+    def _make_fake_frame(self, idx: int = 0) -> PreprocessedFrame:
+        import torch
+        from corridorkey.stages.preprocessor import FrameMeta
+
+        meta = FrameMeta(frame_index=idx, original_h=32, original_w=32)
+        return PreprocessedFrame(tensor=torch.zeros(1, 4, 32, 32), meta=meta)
+
+    def _make_fake_result(self, frame: PreprocessedFrame) -> InferenceResult:
+        import torch
+
+        return InferenceResult(
+            alpha=torch.zeros(1, 1, 32, 32),
+            fg=torch.zeros(1, 3, 32, 32),
+            meta=frame.meta,
+        )
+
+    def test_stage_start_fires(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        out_q: BoundedQueue = BoundedQueue(10)
+        in_q.put_stop()
+
+        starts: list[str] = []
+        events = PipelineEvents(on_stage_start=lambda s, t: starts.append(s))
+        worker = InferenceWorker(
+            input_queue=in_q,
+            output_queue=out_q,
+            model=MagicMock(),
+            config=self._make_config(tmp_path),
+            events=events,
+        )
+        t = worker.start()
+        t.join(timeout=5)
+
+        assert "inference" in starts
+
+    def test_stage_done_fires(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        out_q: BoundedQueue = BoundedQueue(10)
+        in_q.put_stop()
+
+        dones: list[str] = []
+        events = PipelineEvents(on_stage_done=lambda s: dones.append(s))
+        worker = InferenceWorker(
+            input_queue=in_q,
+            output_queue=out_q,
+            model=MagicMock(),
+            config=self._make_config(tmp_path),
+            events=events,
+        )
+        t = worker.start()
+        t.join(timeout=5)
+
+        assert "inference" in dones
+
+    def test_inference_start_fires_per_frame(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        out_q: BoundedQueue = BoundedQueue(10)
+        frame = self._make_fake_frame(3)
+        result = self._make_fake_result(frame)
+        in_q.put(frame)
+        in_q.put_stop()
+
+        started: list[int] = []
+        events = PipelineEvents(on_inference_start=lambda i: started.append(i))
+        with patch("corridorkey.runtime.worker.run_inference", return_value=result):
+            worker = InferenceWorker(
+                input_queue=in_q,
+                output_queue=out_q,
+                model=MagicMock(),
+                config=self._make_config(tmp_path),
+                events=events,
+            )
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert started == [3]
+
+    def test_inference_queued_fires_per_frame(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        out_q: BoundedQueue = BoundedQueue(10)
+        frame = self._make_fake_frame(7)
+        result = self._make_fake_result(frame)
+        in_q.put(frame)
+        in_q.put_stop()
+
+        queued: list[int] = []
+        events = PipelineEvents(on_inference_queued=lambda i: queued.append(i))
+        with patch("corridorkey.runtime.worker.run_inference", return_value=result):
+            worker = InferenceWorker(
+                input_queue=in_q,
+                output_queue=out_q,
+                model=MagicMock(),
+                config=self._make_config(tmp_path),
+                events=events,
+            )
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert queued == [7]
+
+    def test_frame_error_fires_on_inference_exception(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        out_q: BoundedQueue = BoundedQueue(10)
+        frame = self._make_fake_frame(2)
+        in_q.put(frame)
+        in_q.put_stop()
+
+        errors: list[tuple[str, int]] = []
+        events = PipelineEvents(on_frame_error=lambda s, i, e: errors.append((s, i)))
+        with patch("corridorkey.runtime.worker.run_inference", side_effect=RuntimeError("boom")):
+            worker = InferenceWorker(
+                input_queue=in_q,
+                output_queue=out_q,
+                model=MagicMock(),
+                config=self._make_config(tmp_path),
+                events=events,
+            )
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert errors == [("inference", 2)]
+
+
+class TestPostWriteWorkerEvents:
+    def _make_fake_result(self, idx: int = 0) -> InferenceResult:
+        import torch
+        from corridorkey.stages.preprocessor import FrameMeta
+
+        meta = FrameMeta(frame_index=idx, original_h=32, original_w=32)
+        return InferenceResult(
+            alpha=torch.zeros(1, 1, 32, 32),
+            fg=torch.zeros(1, 3, 32, 32),
+            meta=meta,
+        )
+
+    def test_stage_start_fires(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        in_q.put_stop()
+
+        starts: list[tuple[str, int]] = []
+        events = PipelineEvents(on_stage_start=lambda s, t: starts.append((s, t)))
+        worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path, total_frames=5, events=events)
+        t = worker.start()
+        t.join(timeout=5)
+
+        assert any(s == "postwrite" for s, _ in starts)
+        assert any(total == 5 for _, total in starts)
+
+    def test_stage_done_fires(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        in_q.put_stop()
+
+        dones: list[str] = []
+        events = PipelineEvents(on_stage_done=lambda s: dones.append(s))
+        worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path, events=events)
+        t = worker.start()
+        t.join(timeout=5)
+
+        assert "postwrite" in dones
+
+    def test_frame_written_fires_per_frame(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        for i in range(3):
+            in_q.put(self._make_fake_result(i))
+        in_q.put_stop()
+
+        written: list[int] = []
+        events = PipelineEvents(on_frame_written=lambda i, t: written.append(i))
+        with (
+            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey.runtime.worker.write_frame"),
+        ):
+            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path, total_frames=3, events=events)
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert sorted(written) == [0, 1, 2]
+
+    def test_frame_error_fires_on_postprocess_exception(self, tmp_path: Path):
+        in_q: BoundedQueue = BoundedQueue(10)
+        in_q.put(self._make_fake_result(4))
+        in_q.put_stop()
+
+        errors: list[tuple[str, int]] = []
+        events = PipelineEvents(on_frame_error=lambda s, i, e: errors.append((s, i)))
+        with patch("corridorkey.runtime.worker.postprocess_frame", side_effect=RuntimeError("boom")):
+            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path, events=events)
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert errors == [("postwrite", 4)]

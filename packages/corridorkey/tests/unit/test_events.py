@@ -88,3 +88,39 @@ class TestPipelineEventsFireHelpers:
         e.frame_error("stage", 0, Exception())
         e.clip_found("x", Path("."))
         e.clip_skipped("reason", Path("."))
+
+
+class TestPipelineEventsConstruction:
+    def test_all_fields_default_to_none(self):
+        e = PipelineEvents()
+        assert e.on_stage_start is None
+        assert e.on_stage_done is None
+        assert e.on_extract_frame is None
+        assert e.on_preprocess_queued is None
+        assert e.on_inference_start is None
+        assert e.on_inference_queued is None
+        assert e.on_frame_written is None
+        assert e.on_queue_depth is None
+        assert e.on_frame_error is None
+        assert e.on_clip_found is None
+        assert e.on_clip_skipped is None
+
+    def test_callback_stored_when_provided(self):
+        cb = lambda idx, total: None
+        e = PipelineEvents(on_frame_written=cb)
+        assert e.on_frame_written is cb
+
+    def test_multiple_callbacks_stored(self):
+        cb1 = lambda s, t: None
+        cb2 = lambda s: None
+        e = PipelineEvents(on_stage_start=cb1, on_stage_done=cb2)
+        assert e.on_stage_start is cb1
+        assert e.on_stage_done is cb2
+
+    def test_callback_called_multiple_times(self):
+        calls: list[int] = []
+        e = PipelineEvents(on_preprocess_queued=lambda i: calls.append(i))
+        e.preprocess_queued(0)
+        e.preprocess_queued(1)
+        e.preprocess_queued(2)
+        assert calls == [0, 1, 2]

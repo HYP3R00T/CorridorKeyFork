@@ -125,3 +125,37 @@ class TestToPipelineConfig:
         dummy_model = nn.Linear(1, 1)
         result = cfg.to_pipeline_config(device="cpu", model=dummy_model)
         assert result.model is dummy_model
+
+    def test_pipeline_config_devices_empty_by_default(self, tmp_path: Path):
+        p = tmp_path / "model.pth"
+        cfg = CorridorKeyConfig(
+            device="cpu",
+            preprocess=PreprocessSettings(img_size=512),
+            inference=InferenceSettings(checkpoint_path=p, refiner_mode="full_frame", model_precision="float32"),
+        )
+        result = cfg.to_pipeline_config(device="cpu")
+        assert result.devices == []
+
+    def test_pipeline_config_devices_passed_through(self, tmp_path: Path):
+        p = tmp_path / "model.pth"
+        cfg = CorridorKeyConfig(
+            device="cpu",
+            preprocess=PreprocessSettings(img_size=512),
+            inference=InferenceSettings(checkpoint_path=p, refiner_mode="full_frame", model_precision="float32"),
+        )
+        result = cfg.to_pipeline_config(device="cpu", devices=["cuda:0", "cuda:1"])
+        assert result.devices == ["cuda:0", "cuda:1"]
+
+    def test_pipeline_config_model_and_devices_together(self, tmp_path: Path):
+        import torch.nn as nn
+
+        p = tmp_path / "model.pth"
+        cfg = CorridorKeyConfig(
+            device="cpu",
+            preprocess=PreprocessSettings(img_size=512),
+            inference=InferenceSettings(checkpoint_path=p, refiner_mode="full_frame", model_precision="float32"),
+        )
+        dummy_model = nn.Linear(1, 1)
+        result = cfg.to_pipeline_config(device="cpu", model=dummy_model, devices=["cpu", "cpu"])
+        assert result.model is dummy_model
+        assert result.devices == ["cpu", "cpu"]
