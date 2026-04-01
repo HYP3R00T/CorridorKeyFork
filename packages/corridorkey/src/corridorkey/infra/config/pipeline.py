@@ -121,20 +121,27 @@ class CorridorKeyConfig(BaseModel):
         self,
         device: str | None = None,
         model: nn.Module | None = None,
+        devices: list[str] | None = None,
     ) -> PipelineConfig:
         """Build a :class:`~corridorkey.runtime.runner.PipelineConfig` from this config.
 
         Resolves device and img_size once, then builds all stage configs
-        consistently. Pass the result directly to ``PipelineRunner``.
+        consistently. Pass the result directly to :class:`~corridorkey.runtime.runner.Runner`.
 
         Args:
             device: Resolved device string (from ``resolve_device(config.device)``).
                 If None, uses ``self.device`` as-is.
-            model: Pre-loaded model (``nn.Module``). If None, ``PipelineRunner``
-                will load it from the checkpoint path at run time.
+            model: Pre-loaded model (``nn.Module``). If None, the runner loads
+                it from the checkpoint path at run time.
+            devices: Explicit list of device strings for multi-GPU dispatch.
+                When provided, the returned config's ``devices`` field is set
+                and :class:`~corridorkey.runtime.runner.Runner` will use
+                :class:`~corridorkey.runtime.runner.MultiGPURunner` automatically.
+                Use ``resolve_devices("all")`` to populate this from all
+                available CUDA GPUs.
 
         Returns:
-            PipelineConfig ready to pass to ``PipelineRunner``.
+            PipelineConfig ready to pass to ``Runner``.
         """
         from corridorkey.runtime.runner import PipelineConfig
 
@@ -151,6 +158,7 @@ class CorridorKeyConfig(BaseModel):
             inference=inference_config,
             model=model,
             postprocess=self.to_postprocess_config(),
+            devices=devices or [],
             resolved_refiner_mode=resolved_refiner_mode,
         )
 

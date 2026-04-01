@@ -1,27 +1,34 @@
 """Pipeline — runner.
 
 PipelineRunner wires the queues and workers together and runs the full
-pipeline for a single clip. This is what main.py (and eventually the CLI/GUI)
-calls instead of a manual frame loop.
+pipeline for a single clip. This is what the CLI/GUI calls instead of a
+manual frame loop.
 
 Single-GPU assembly line:
 
     PreprocessWorker
-        → input_queue (bounded)
-            → InferenceWorker
-                → output_queue (bounded)
-                    → PostWriteWorker
+        -> input_queue (bounded)
+            -> InferenceWorker
+                -> output_queue (bounded)
+                    -> PostWriteWorker
 
 Multi-GPU assembly line (MultiGPURunner):
 
     PreprocessWorker
-        → input_queue (bounded, shared)
-            → InferenceWorker[cuda:0]  ─┐
-            → InferenceWorker[cuda:1]  ─┤→ output_queue (bounded, shared)
-            → InferenceWorker[cuda:N]  ─┘       → PostWriteWorker
+        -> input_queue (bounded, shared)
+            -> InferenceWorker[cuda:0]  -+
+            -> InferenceWorker[cuda:1]  -+-> output_queue (bounded, shared)
+            -> InferenceWorker[cuda:N]  -+       -> PostWriteWorker
 
 All workers run concurrently in daemon threads. The runner blocks until all
 workers have finished and all queues are drained.
+
+Public entry point
+------------------
+Use ``Runner`` for all new code. It accepts a ``PipelineConfig`` and
+dispatches to single-GPU or multi-GPU execution automatically based on the
+``devices`` field. ``PipelineRunner`` and ``MultiGPURunner`` remain available
+for callers that need direct control.
 """
 
 from __future__ import annotations
@@ -48,6 +55,9 @@ logger = logging.getLogger(__name__)
 class PipelineConfig:
     """Configuration for the full pipeline runner.
 
+    Pass to :class:`Runner` (recommended) or directly to
+    :class:`PipelineRunner` / :class:`MultiGPURunner`.
+
     Attributes:
         preprocess: Preprocessing stage config (img_size, device, strategy).
         inference: Inference stage config (checkpoint, device, precision).
@@ -55,13 +65,18 @@ class PipelineConfig:
         postprocess: Postprocessing stage config (despill, despeckle, checkerboard).
         write: Writer stage config (formats, enabled outputs).
             None means a default WriteConfig is derived from the manifest output_dir.
+        devices: Device strings for multi-GPU dispatch. When set to more than
+            one entry, ``Runner`` uses ``MultiGPURunner`` automatically.
+            Leave empty (default) for single-GPU or CPU execution.
+        events: Optional event callbacks for progress reporting. Assign only
+            the callbacks you need — all others are silently ignored.
         input_queue_depth: Max preprocessed frames waiting for inference.
-            Keep small — each frame is ~64MB on GPU at 2048 resolution.
+            Keep small — each frame is ~64 MB on GPU at 2048 resolution.
         output_queue_depth: Max inference outputs waiting for postprocessing.
         resolved_refiner_mode: Pre-resolved refiner mode ("full_frame" or "tiled").
-            When set, PipelineRunner skips the VRAM probe entirely and uses this
-            value directly. Populated by ``to_pipeline_config()`` so the VRAM
-            probe that already ran for img_size resolution is not repeated.
+            Populated by ``to_pipeline_config()`` — do not set manually.
+        model: Pre-loaded model (``nn.Module``). If None, the runner loads it
+            from the checkpoint path at run time.
     """
 
     preprocess: PreprocessConfig = field(default_factory=PreprocessConfig)
@@ -69,12 +84,11 @@ class PipelineConfig:
     model: nn.Module | None = None
     postprocess: PostprocessConfig = field(default_factory=PostprocessConfig)
     write: WriteConfig | None = None
+    devices: list[str] = field(default_factory=list)
+    events: PipelineEvents | None = None
     input_queue_depth: int = 2
     output_queue_depth: int = 2
-    events: PipelineEvents | None = None
     resolved_refiner_mode: str | None = None
-    """Optional event callbacks for all pipeline stages. Pass a PipelineEvents
-    instance to receive per-frame and per-stage progress notifications."""
 
 
 class PipelineRunner:
@@ -170,6 +184,67 @@ class PipelineRunner:
             t.join()
 
         logger.info("pipeline_runner: clip='%s' complete", manifest.clip_name)
+
+
+class Runner:
+    """Unified pipeline runner. Dispatches to single-GPU or multi-GPU execution
+    automatically based on ``config.devices``.
+
+    This is the recommended entry point for all interfaces. Use
+    :class:`PipelineRunner` or :class:`MultiGPURunner` directly only when you
+    need explicit control over the dispatch strategy.
+
+    Rules:
+        - ``config.devices`` empty or one entry  -> :class:`PipelineRunner`
+        - ``config.devices`` two or more entries -> :class:`MultiGPURunner`
+
+    Args:
+        manifest: ClipManifest from the loader stage. Must have needs_alpha=False.
+        config: Pipeline configuration. Build via
+            ``CorridorKeyConfig.to_pipeline_config()``.
+        events: Optional event callbacks. Overrides ``config.events`` when
+            provided, so the same config can be reused with different handlers.
+    """
+
+    def __init__(
+        self,
+        manifest: ClipManifest,
+        config: PipelineConfig,
+        events: PipelineEvents | None = None,
+    ) -> None:
+        self._manifest = manifest
+        self._config = config
+        # events kwarg takes precedence over config.events so a config object
+        # can be reused across clips with different progress handlers.
+        self._events = events if events is not None else config.events
+
+    def run(self) -> None:
+        """Run the pipeline for the clip. Blocks until all frames are written."""
+        cfg = self._config
+
+        if len(cfg.devices) > 1:
+            # Multi-GPU path
+            if cfg.inference is None:
+                raise ValueError("PipelineConfig.inference must be set for multi-GPU execution.")
+            multi_cfg = MultiGPUConfig(
+                devices=cfg.devices,
+                inference=cfg.inference,
+                preprocess=cfg.preprocess,
+                postprocess=cfg.postprocess,
+                write=cfg.write,
+                input_queue_depth=cfg.input_queue_depth,
+                output_queue_depth=cfg.output_queue_depth,
+                events=self._events,
+            )
+            MultiGPURunner(self._manifest, multi_cfg).run()
+        else:
+            # Single-GPU path — inject resolved events
+            single_cfg = cfg
+            if self._events is not cfg.events:
+                from dataclasses import replace
+
+                single_cfg = replace(cfg, events=self._events)
+            PipelineRunner(self._manifest, single_cfg).run()
 
 
 @dataclass

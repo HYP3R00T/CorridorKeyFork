@@ -21,15 +21,25 @@ Download the model on first run, then load a backend::
 
 Pipeline — high-level (recommended)
 ------------------------------------
-Use PipelineRunner for a single GPU or MultiGPURunner for parallel GPUs::
+Use ``Runner`` for all new code. Pass ``devices`` to ``to_pipeline_config``
+for multi-GPU — no need to choose a different class::
 
     result = scan("/path/to/clips")
     for clip in result.clips:
         manifest = load(clip)
         if manifest.needs_alpha:
             manifest = resolve_alpha(manifest, "/path/to/alpha_frames")
+
+        # Single GPU
         pipeline_config = config.to_pipeline_config(device=device)
-        PipelineRunner(manifest, pipeline_config).run()
+
+        # Multiple GPUs — same API, Runner dispatches automatically
+        # pipeline_config = config.to_pipeline_config(devices=resolve_devices("all"))
+
+        Runner(manifest, pipeline_config).run()
+
+        # Pass events at run time — same config, different handlers per clip
+        Runner(manifest, pipeline_config, events=my_events).run()
 
 Pipeline — low-level (frame loop)
 -----------------------------------
@@ -40,8 +50,12 @@ control::
     postprocess_config = config.to_postprocess_config()
     write_config = config.to_writer_config(manifest.output_dir)
 
+    # Build file lists once per clip — avoids a directory scan per frame
+    imgs = get_frame_files(manifest.frames_dir)
+    alps = get_frame_files(manifest.alpha_frames_dir)
+
     for i in range(*manifest.frame_range):
-        preprocessed = preprocess_frame(manifest, i, preprocess_config)
+        preprocessed = preprocess_frame(manifest, i, preprocess_config, image_files=imgs, alpha_files=alps)
         result = backend.run(preprocessed)
         postprocessed = postprocess_frame(result, postprocess_config)
         write_frame(postprocessed, write_config)
@@ -113,7 +127,7 @@ from corridorkey.infra import (
     write_config,
 )
 from corridorkey.runtime.clip_state import ClipEntry, ClipState, InOutRange
-from corridorkey.runtime.runner import MultiGPUConfig, MultiGPURunner, PipelineConfig, PipelineRunner
+from corridorkey.runtime.runner import MultiGPUConfig, MultiGPURunner, PipelineConfig, PipelineRunner, Runner
 from corridorkey.stages.inference import (
     BackendChoice,
     InferenceConfig,
@@ -136,6 +150,7 @@ from corridorkey.stages.loader import (
     resolve_alpha,
     scan_frames,
 )
+from corridorkey.stages.loader.validator import get_frame_files
 from corridorkey.stages.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
 from corridorkey.stages.preprocessor import (
     FrameMeta,
@@ -184,9 +199,10 @@ __all__ = [
     # ------------------------------------------------------------------ #
     # Pipeline runners                                                     #
     # ------------------------------------------------------------------ #
-    "PipelineRunner",
+    "Runner",  # unified entry point — use this for all new code
+    "PipelineRunner",  # single-GPU, direct control
     "PipelineConfig",
-    "MultiGPURunner",
+    "MultiGPURunner",  # multi-GPU, direct control
     "MultiGPUConfig",
     "PipelineEvents",
     # ------------------------------------------------------------------ #
@@ -214,6 +230,7 @@ __all__ = [
     "VideoMetadata",
     "FrameScan",
     "scan_frames",
+    "get_frame_files",
     # Preprocessor
     "PreprocessConfig",
     "PreprocessedFrame",
