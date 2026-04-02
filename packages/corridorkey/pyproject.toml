@@ -7,7 +7,6 @@ license = { file = "LICENSE" }
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
-  "License :: Other/Proprietary License",
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3 :: Only",
@@ -39,7 +38,7 @@ dev = ["pytest>=9.0.2", "pytest-cov>=7.0.0", "hypothesis>=6.151.9"]
 
 [project.optional-dependencies]
 cuda = ["torch==2.10.0", "torchvision==0.25.0"]
-rocm = ["torch==2.10.0", "torchvision==0.25.0"]
+rocm = []
 mlx = ["corridorkey-mlx"]
 
 [tool.uv]
@@ -71,14 +70,8 @@ explicit = true
 extra = "rocm"
 
 [tool.uv.sources]
-torch = [
-  { index = "pytorch-cuda", extra = "cuda" },
-  { index = "pytorch-rocm", extra = "rocm" },
-]
-torchvision = [
-  { index = "pytorch-cuda", extra = "cuda" },
-  { index = "pytorch-rocm", extra = "rocm" },
-]
+torch = [{ index = "pytorch-cuda", extra = "cuda" }]
+torchvision = [{ index = "pytorch-cuda", extra = "cuda" }]
 timm = { git = "https://github.com/Raiden129/pytorch-image-models-fix", branch = "fix/hiera-flash-attention-global-4d" }
 corridorkey-mlx = { git = "https://github.com/nikopueringer/corridorkey-mlx.git", extra = "mlx" }
 
