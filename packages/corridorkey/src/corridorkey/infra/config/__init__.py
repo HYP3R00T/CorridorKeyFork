@@ -14,6 +14,20 @@ Public API::
         APP_NAME,
     )
 
+Bridge methods on ``CorridorKeyConfig``
+---------------------------------------
+Build stage runtime configs from a loaded ``CorridorKeyConfig``::
+
+    config = load_config()
+
+    inference_config = config.to_inference_config(device=device)
+    preprocess_config = config.to_preprocess_config(device=device)
+    postprocess_config = config.to_postprocess_config()
+    write_config = config.to_writer_config(output_dir)
+
+    # Or build everything at once for the high-level Runner:
+    pipeline_config = config.to_pipeline_config(device=device)
+
 Config file structure (``corridorkey.toml``)::
 
     [logging]

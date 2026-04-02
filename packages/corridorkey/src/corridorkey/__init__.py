@@ -16,7 +16,8 @@ Model
 Download the model on first run, then load a backend::
 
     ensure_model()  # downloads if absent, verifies checksum
-    backend = load_backend(config.to_inference_config(device=device))
+    inference_config = config.to_inference_config(device=device)
+    backend = load_backend(inference_config)
     print(backend.resolved_config)  # {"backend": "torch", "device": "cuda", ...}
 
 Pipeline — high-level (recommended)
@@ -87,6 +88,14 @@ Stages
     Stage 4  postprocess_frame() PostprocessedFrame
     Stage 5  write_frame()      files on disk
 """
+
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _version
+
+try:
+    __version__: str = _version("corridorkey")
+except PackageNotFoundError:  # editable install or not installed
+    __version__ = "0.0.0.dev0"
 
 from corridorkey.errors import (
     ClipScanError,
@@ -162,6 +171,10 @@ from corridorkey.stages.scanner import Clip, ScanResult, SkippedPath, scan
 from corridorkey.stages.writer import WriteConfig, write_frame
 
 __all__ = [
+    # ------------------------------------------------------------------ #
+    # Package version                                                      #
+    # ------------------------------------------------------------------ #
+    "__version__",
     # ------------------------------------------------------------------ #
     # Startup                                                              #
     # ------------------------------------------------------------------ #

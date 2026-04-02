@@ -15,6 +15,17 @@ class TestAllSymbolsResolve:
         assert missing == [], f"Symbols in __all__ that do not resolve: {missing}"
 
 
+class TestVersionExposed:
+    def test_version_in_all(self):
+        assert "__version__" in corridorkey.__all__
+
+    def test_version_is_string(self):
+        assert isinstance(corridorkey.__version__, str)
+
+    def test_version_not_empty(self):
+        assert corridorkey.__version__ != ""
+
+
 class TestRunnerExported:
     def test_runner_in_all(self):
         assert "Runner" in corridorkey.__all__
