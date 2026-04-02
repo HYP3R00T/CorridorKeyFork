@@ -3,12 +3,29 @@ name = "corridorkey-cli"
 version = "0.1.0"
 description = "Command-line interface for the CorridorKey AI keying pipeline."
 readme = "README.md"
-authors = [{ name = "Rajesh Das", email = "hyperoot.tech@proton.me" }]
+license = { file = "LICENSE" }
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3 :: Only",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Utilities",
+]
+authors = [{ name = "Corridor Digital" }]
+maintainers = [{ name = "Rajesh Das", email = "hyperoot.tech@proton.me" }]
 requires-python = ">=3.13"
 dependencies = ["corridorkey>=0.1.0", "typer>=0.12", "rich>=13"]
 
 [project.scripts]
 ck = "corridorkey_cli:main"
+
+[project.urls]
+Homepage = "https://github.com/nikopueringer/CorridorKey"
+Repository = "https://github.com/nikopueringer/CorridorKey"
+Documentation = "https://nikopueringer.github.io/CorridorKey"
 
 [tool.uv.sources]
 corridorkey = { workspace = true }
