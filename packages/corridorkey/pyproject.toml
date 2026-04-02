@@ -3,6 +3,18 @@ name = "corridorkey"
 version = "0.1.0"
 description = "Core inference pipeline library for AI-powered green screen keying"
 readme = "README.md"
+license = { file = "LICENSE" }
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: Other/Proprietary License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3 :: Only",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Libraries",
+  "Topic :: Multimedia :: Video",
+]
 authors = [{ name = "Corridor Digital" }]
 maintainers = [{ name = "Rajesh Das", email = "hyperoot.tech@proton.me" }]
 requires-python = ">=3.13"
