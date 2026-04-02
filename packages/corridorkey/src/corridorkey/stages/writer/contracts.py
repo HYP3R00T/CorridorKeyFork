@@ -41,4 +41,6 @@ class WriteConfig:
     processed_format: ImageFormat = "png"
     comp_enabled: bool = True
     comp_format: Literal["png"] = "png"
+    """comp_format is always "png" — compositors expect sRGB preview images, not HDR.
+    This field is not exposed in WriterSettings because it cannot be changed."""
     exr_compression: str = "dwaa"

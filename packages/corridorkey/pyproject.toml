@@ -17,12 +17,17 @@ dependencies = [
   "nvidia-ml-py>=13.595.45",
 ]
 
+[project.urls]
+Homepage = "https://github.com/nikopueringer/CorridorKey"
+Repository = "https://github.com/nikopueringer/CorridorKey"
+Documentation = "https://nikopueringer.github.io/CorridorKey"
+
 [dependency-groups]
 dev = ["pytest>=9.0.2", "pytest-cov>=7.0.0", "hypothesis>=6.151.9"]
 
 [project.optional-dependencies]
 cuda = ["torch==2.10.0", "torchvision==0.25.0"]
-rocm = []
+rocm = ["torch==2.10.0", "torchvision==0.25.0"]
 mlx = ["corridorkey-mlx"]
 
 [tool.uv]
@@ -54,8 +59,14 @@ explicit = true
 extra = "rocm"
 
 [tool.uv.sources]
-torch = [{ index = "pytorch-cuda", extra = "cuda" }]
-torchvision = [{ index = "pytorch-cuda", extra = "cuda" }]
+torch = [
+  { index = "pytorch-cuda", extra = "cuda" },
+  { index = "pytorch-rocm", extra = "rocm" },
+]
+torchvision = [
+  { index = "pytorch-cuda", extra = "cuda" },
+  { index = "pytorch-rocm", extra = "rocm" },
+]
 timm = { git = "https://github.com/Raiden129/pytorch-image-models-fix", branch = "fix/hiera-flash-attention-global-4d" }
 corridorkey-mlx = { git = "https://github.com/nikopueringer/corridorkey-mlx.git", extra = "mlx" }
 
@@ -77,7 +88,6 @@ omit = [
   "*/corridorkey/stages/loader/extractor.py",
   # GPU/model-weight-dependent — not unit-testable without hardware
   "*/corridorkey/stages/inference/model.py",
-  "*/corridorkey/stages/inference/factory.py",
   "*/corridorkey/stages/inference/loader.py",
   "*/corridorkey/infra/model_hub.py",
   "*/corridorkey/infra/logging.py",

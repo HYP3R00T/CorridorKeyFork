@@ -128,14 +128,14 @@ class PostprocessSettings(BaseModel):
     edge_blur_px: Annotated[
         int,
         Field(
-            default=0,
+            default=7,
             ge=0,
             description=(
                 "Gaussian blur radius for the source_passthrough blend seam. "
                 "0 = disabled. Higher values produce a softer transition between model FG and source."
             ),
         ),
-    ] = 0
+    ] = 7
 
     hint_sharpen: Annotated[
         bool,

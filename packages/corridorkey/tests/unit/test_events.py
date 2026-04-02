@@ -106,13 +106,19 @@ class TestPipelineEventsConstruction:
         assert e.on_clip_skipped is None
 
     def test_callback_stored_when_provided(self):
-        cb = lambda idx, total: None
+        def cb(idx, total):
+            pass
+
         e = PipelineEvents(on_frame_written=cb)
         assert e.on_frame_written is cb
 
     def test_multiple_callbacks_stored(self):
-        cb1 = lambda s, t: None
-        cb2 = lambda s: None
+        def cb1(s, t):
+            pass
+
+        def cb2(s):
+            pass
+
         e = PipelineEvents(on_stage_start=cb1, on_stage_done=cb2)
         assert e.on_stage_start is cb1
         assert e.on_stage_done is cb2

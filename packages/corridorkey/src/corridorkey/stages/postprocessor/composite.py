@@ -91,10 +91,7 @@ def apply_source_passthrough(
 
     # Soft blend seam.
     if edge_blur_px > 0:
-        blur_k = max(1, edge_blur_px * 2 + 1)
-        # Ensure odd kernel size
-        if blur_k % 2 == 0:
-            blur_k += 1
+        blur_k = edge_blur_px * 2 + 1  # always odd by construction
         interior = cv2.GaussianBlur(interior, (blur_k, blur_k), 0)
 
     interior = np.clip(interior, 0.0, 1.0)[:, :, np.newaxis]  # [H, W, 1]

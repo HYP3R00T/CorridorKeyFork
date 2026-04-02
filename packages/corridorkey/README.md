@@ -62,7 +62,7 @@ for clip in clips.clips:
 
     model = load_model(inference_config, resolved_refiner_mode=resolved_refiner_mode)
 
-    from corridorkey.stages.preprocessor import get_frame_files
+    from corridorkey import get_frame_files
     imgs = get_frame_files(manifest.frames_dir)
     alps = get_frame_files(manifest.alpha_frames_dir)
 
@@ -70,8 +70,8 @@ for clip in clips.clips:
         preprocessed = preprocess_frame(manifest, i, preprocess_config,
                                         image_files=imgs, alpha_files=alps)
         result = run_inference(preprocessed, model, inference_config)
-        postprocessed = postprocess_frame(result, preprocessed.meta, postprocess_config)
-        write_frame(postprocessed, i, write_config)
+        postprocessed = postprocess_frame(result, postprocess_config)
+        write_frame(postprocessed, write_config)
 ```
 
 For a higher-level interface, use `PipelineRunner`:
@@ -134,15 +134,15 @@ result = run_inference(preprocessed, model, config)
 ### postprocess_frame
 
 ```python
-postprocessed = postprocess_frame(result, meta, config)
-# postprocessed.alpha: np.ndarray [H, W] float32
+postprocessed = postprocess_frame(result, config)
+# postprocessed.alpha: np.ndarray [H, W, 1] float32
 # postprocessed.fg: np.ndarray [H, W, 3] float32
 ```
 
 ### write_frame
 
 ```python
-write_frame(postprocessed, frame_index, config)
+write_frame(postprocessed, config)
 ```
 
 Writes alpha, foreground, and/or composite frames to `config.output_dir`.

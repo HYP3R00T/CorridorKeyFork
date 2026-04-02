@@ -7,17 +7,18 @@ from corridorkey.stages.loader.extractor import VideoMetadata
 
 
 def _make_meta(**kwargs) -> VideoMetadata:
-    defaults = {
-        "filename": "clip.mp4",
-        "width": 1920,
-        "height": 1080,
-        "fps_num": 24,
-        "fps_den": 1,
-        "pix_fmt": "yuv420p",
-        "codec_name": "h264",
-    }
-    defaults.update(kwargs)
-    return VideoMetadata(**defaults)
+    return VideoMetadata(
+        **{
+            "filename": "clip.mp4",
+            "width": 1920,
+            "height": 1080,
+            "fps_num": 24,
+            "fps_den": 1,
+            "pix_fmt": "yuv420p",
+            "codec_name": "h264",
+        }
+        | kwargs
+    )
 
 
 class TestVideoMetadataFps:

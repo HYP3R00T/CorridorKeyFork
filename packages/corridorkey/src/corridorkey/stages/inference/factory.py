@@ -48,7 +48,7 @@ _DEFAULT_MLX_TILE_OVERLAP = 64
 # ---------------------------------------------------------------------------
 
 
-def load_backend(config: InferenceConfig) -> ModelBackend:
+def load_backend(config: InferenceConfig) -> ModelBackend:  # pragma: no cover
     """Construct and return the appropriate inference backend.
 
     Resolves the backend (torch or mlx), resolves "auto" refiner_mode to a
@@ -169,7 +169,7 @@ def _mlx_importable() -> bool:
     return importlib.util.find_spec("corridorkey_mlx") is not None
 
 
-def _assert_mlx_available() -> None:
+def _assert_mlx_available() -> None:  # pragma: no cover
     if sys.platform != "darwin" or platform.machine() != "arm64":
         raise RuntimeError("MLX backend requires Apple Silicon (M1+ Mac)")
     if not _mlx_importable():

@@ -48,6 +48,23 @@ class TestToPostprocessConfig:
         assert result.fg_upsample_mode == "bilinear"
         assert result.alpha_upsample_mode == "bilinear"
 
+    def test_edge_blur_px_passed_through(self):
+        """edge_blur_px must be forwarded from PostprocessSettings to PostprocessConfig."""
+        cfg = CorridorKeyConfig(postprocess=PostprocessSettings(edge_blur_px=5))
+        result = cfg.to_postprocess_config()
+        assert result.edge_blur_px == 5
+
+    def test_edge_blur_px_default_matches_postprocess_config(self):
+        """PostprocessSettings.edge_blur_px default must match PostprocessConfig.edge_blur_px default."""
+        from corridorkey.stages.postprocessor.config import PostprocessConfig
+
+        settings_default = PostprocessSettings().edge_blur_px
+        runtime_default = PostprocessConfig().edge_blur_px
+        assert settings_default == runtime_default, (
+            f"PostprocessSettings.edge_blur_px default ({settings_default}) "
+            f"does not match PostprocessConfig.edge_blur_px default ({runtime_default})"
+        )
+
 
 class TestToWriterConfig:
     def test_returns_write_config(self, tmp_path: Path):

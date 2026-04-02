@@ -13,9 +13,7 @@ from corridorkey.stages.preprocessor.contracts import FrameMeta, PreprocessedFra
 
 
 def _make_config(tmp_path: Path, **kwargs) -> InferenceConfig:
-    defaults = dict(checkpoint_path=tmp_path / "model.pth", device="cpu")
-    defaults.update(kwargs)
-    return InferenceConfig(**defaults)
+    return InferenceConfig(**{"checkpoint_path": tmp_path / "model.pth", "device": "cpu"} | kwargs)
 
 
 def _make_frame() -> PreprocessedFrame:
