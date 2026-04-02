@@ -66,11 +66,11 @@ def wizard(
     ] = False,
 ) -> None:
     """Scan, configure, and process clips. The default command."""
-    from corridorkey import load, resolve_alpha, resolve_device, scan, setup_logging
+    from corridorkey import load, resolve_alpha, resolve_device, resolve_devices, scan, setup_logging
     from corridorkey.infra import APP_NAME, ensure_config_file, load_config_with_metadata
     from corridorkey.infra.config import CorridorKeyConfig
     from corridorkey.infra.model_hub import ensure_model
-    from corridorkey.runtime.runner import PipelineRunner
+    from corridorkey.runtime.runner import Runner
     from corridorkey.stages.inference.loader import load_model as _load_model
 
     from corridorkey_cli._config_table import print_config_table
@@ -108,7 +108,14 @@ def wizard(
     else:
         opt_mode, precision, img_size = _prompt_engine_settings(config_obj)
 
-    device = resolve_device(config_obj.device)
+    # Support multi-GPU selection: 'all' should be resolved to a devices list
+    devices: list[str] = []
+    if config_obj.device == "all":
+        devices = resolve_devices("all")
+        # use the first device as the representative for VRAM/precision probing
+        device = devices[0]
+    else:
+        device = resolve_device(config_obj.device)
 
     run_config = CorridorKeyConfig.model_validate({
         **config_obj.model_dump(),
@@ -147,12 +154,12 @@ def wizard(
             manifest = resolve_alpha(manifest, Path(raw))
 
         printer = RichPrinter(manifest.frame_count)
-        pipeline_config = run_config.to_pipeline_config(device=device, model=model)
+        pipeline_config = run_config.to_pipeline_config(device=device, model=model, devices=(devices or None))
         pipeline_config.events = printer.as_events()
 
         console.print(f"Processing '[bold]{manifest.clip_name}[/bold]' ({manifest.frame_count} frames)...\n")
         with printer:
-            PipelineRunner(manifest, pipeline_config).run()
+            Runner(manifest, pipeline_config).run()
 
         console.print(f"[green]Done.[/green] Output: [cyan]{manifest.output_dir}[/cyan]\n")
 
