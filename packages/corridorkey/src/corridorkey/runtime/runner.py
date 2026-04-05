@@ -52,8 +52,12 @@ class PipelineConfig:
         write: Writer stage config (formats, enabled outputs).
             None means a default WriteConfig is derived from the manifest output_dir.
         devices: Device strings for inference workers. One entry per GPU.
-            Empty list or a single entry runs one worker. Pass
-            ``resolve_devices("all")`` for all available CUDA GPUs.
+            Empty list or a single entry runs one worker.
+            Accepted values per entry: "auto", "cuda", "cuda:N", "rocm",
+            "rocm:N", "mps", "cpu". Pass ``resolve_devices("all")`` to
+            populate this list with every available CUDA GPU.
+            Note: "auto" resolves to a single device — it does not expand
+            to multiple GPUs. Use "all" or an explicit list for multi-GPU.
         events: Optional event callbacks for progress reporting.
         input_queue_depth: Max preprocessed frames waiting for inference.
             Scaled up automatically with the number of devices.
@@ -109,16 +113,32 @@ class Runner:
         self._events = events if events is not None else config.events
 
     def run(self) -> None:
-        """Run the pipeline for the clip. Blocks until all frames are written."""
+        """Run the full pipeline for the clip. Blocks until all frames are written.
+
+        Steps
+        -----
+        1. Validate config — inference must be set before anything can run.
+        2. Resolve devices — fall back to the single device in inference config
+           if no explicit device list was provided.
+        3. Size the queues — scale depth to the number of devices so each GPU
+           always has at least one frame buffered, preventing starvation.
+        4. Create queues and workers — one preprocessor, one inference worker per
+           device, one postwriter. All share the same two queues.
+        5. Load models — delegates to ``_load_models`` to put weights into VRAM.
+        6. Start all threads and block — the assembly line runs concurrently;
+           this method returns only when every frame has been written to disk.
+        """
         cfg = self._config
         manifest = self._manifest
 
+        # Step 1 — validate config.
         if cfg.inference is None:
             raise ValueError(
                 "PipelineConfig.inference is not set. "
                 "Call CorridorKeyConfig.to_pipeline_config() to build a valid config."
             )
 
+        # Step 2 — resolve devices.
         devices = cfg.devices if cfg.devices else [cfg.inference.device]
         n = len(devices)
 
@@ -129,10 +149,11 @@ class Runner:
             devices,
         )
 
-        # Scale queue depth so each device always has at least one frame buffered.
+        # Step 3 — size the queues.
         input_depth = max(cfg.input_queue_depth, n * 2)
         output_depth = max(cfg.output_queue_depth, n * 2)
 
+        # Step 4 — create queues and workers.
         input_queue: BoundedQueue = BoundedQueue(input_depth)
         output_queue: BoundedQueue = BoundedQueue(output_depth)
 
@@ -144,10 +165,11 @@ class Runner:
             events=self._events,
         )
 
+        # Step 5 — load models into VRAM.
         models, resolved_refiner_mode = self._load_models(devices, cfg)
 
-        # Shared counter so only the last inference worker sends STOP downstream.
-        # With n=1 this decrements to 0 immediately — identical to single-GPU.
+        # One shared counter ensures only the last inference worker sends STOP
+        # downstream — with a single worker it decrements to 0 immediately.
         active_workers = _AtomicCounter(n)
 
         inference_threads: list[threading.Thread] = []
@@ -172,6 +194,7 @@ class Runner:
             events=self._events,
         )
 
+        # Step 6 — start all threads and block until done.
         all_threads = [preprocess_worker.start(), *inference_threads, postwrite_worker.start()]
         for t in all_threads:
             t.join()
