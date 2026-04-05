@@ -22,6 +22,7 @@ import logging
 import threading
 from dataclasses import dataclass, field
 
+import torch
 import torch.nn as nn
 
 from corridorkey.events import PipelineEvents
@@ -181,33 +182,65 @@ class Runner:
         self,
         devices: list[str],
         cfg: PipelineConfig,
+        timeout: float = 300.0,
     ) -> tuple[list[nn.Module], str]:
-        """Load one model per device, in parallel threads.
+        """Return one ready-to-run model per device, plus the resolved refiner mode.
 
-        If ``cfg.model`` is set it is shared across all workers — no loading
-        needed. Otherwise each device gets its own copy loaded concurrently
-        to minimise startup time.
+        Steps
+        -----
+        1. Resolve refiner mode — decided once so every model is built identically.
+           "auto" is left as None so the loader probes VRAM and decides itself.
+        2. Skip loading if a pre-loaded model was passed in (cfg.model) — callers
+           processing multiple clips can load the model once and reuse it across
+           the batch to avoid redundant disk I/O. Validate that the model is on
+           the expected device before returning it.
+        3. Load in parallel — one thread per device so startup time stays flat
+           regardless of how many GPUs are in use.
+        4. Check for hangs — any thread still alive after ``timeout`` means the GPU
+           stopped responding; raise immediately rather than blocking forever.
+        5. Clean up and raise on error — if any device failed, release the models
+           that did load to avoid leaking VRAM, then surface the first error.
+
+        Args:
+            devices: Device strings to load onto.
+            cfg: Pipeline configuration.
+            timeout: Seconds to wait per loading thread before giving up.
 
         Returns:
             (models in device order, resolved_refiner_mode)
         """
         from corridorkey.stages.inference.loader import load_model
-        from corridorkey.stages.inference.orchestrator import _should_tile_refiner
 
         assert cfg.inference is not None  # checked by caller
 
-        # Resolve refiner_mode once before spawning threads.
+        # Step 1 — resolve refiner mode.
         if cfg.resolved_refiner_mode is not None:
             resolved_refiner_mode = cfg.resolved_refiner_mode
+        elif cfg.inference.refiner_mode == "auto":
+            resolved_refiner_mode = None  # loader will probe VRAM
         else:
-            resolved_refiner_mode = "tiled" if _should_tile_refiner(cfg.inference) else "full_frame"
+            resolved_refiner_mode = cfg.inference.refiner_mode
 
         logger.info("runner: resolved refiner_mode=%s", resolved_refiner_mode)
 
+        # Step 2 — return pre-loaded model if provided.
         if cfg.model is not None:
-            # Pre-loaded model — share it across all workers.
-            return [cfg.model] * len(devices), resolved_refiner_mode
+            if len(devices) > 1:
+                raise ValueError(
+                    "cfg.model cannot be shared across multiple devices. "
+                    "Remove cfg.model and let the runner load one copy per device, "
+                    "or reduce devices to a single entry."
+                )
+            model_device = next(cfg.model.parameters()).device
+            expected = torch.device(devices[0])
+            if model_device != expected:
+                raise ValueError(
+                    f"cfg.model is on {model_device} but the configured device is "
+                    f"{expected}. Move the model to the correct device before passing it."
+                )
+            return [cfg.model], resolved_refiner_mode or cfg.inference.refiner_mode
 
+        # Step 3 — load one model per device in parallel.
         models: list[nn.Module | None] = [None] * len(devices)
         errors: list[Exception | None] = [None] * len(devices)
 
@@ -227,13 +260,26 @@ class Runner:
         for t in threads:
             t.start()
         for t in threads:
-            t.join()
+            t.join(timeout=timeout)
 
-        for i, err in enumerate(errors):
-            if err is not None:
-                raise RuntimeError(f"Failed to load model on {devices[i]}: {err}") from err
+        # Step 4 — check for hangs.
+        hung = [devices[i] for i, t in enumerate(threads) if t.is_alive()]
+        if hung:
+            raise RuntimeError(
+                f"Model loading timed out after {timeout}s on device(s): {hung}. The GPU may be stalled or unavailable."
+            )
 
-        return models, resolved_refiner_mode  # type: ignore[return-value]
+        # Step 5 — clean up and raise on error.
+        failed = [(i, err) for i, err in enumerate(errors) if err is not None]
+        if failed:
+            for i in range(len(models)):
+                if models[i] is not None:
+                    del models[i]
+            torch.cuda.empty_cache()
+            i, err = failed[0]
+            raise RuntimeError(f"Failed to load model on {devices[i]}: {err}") from err
+
+        return models, resolved_refiner_mode or cfg.inference.refiner_mode  # type: ignore[return-value]
 
 
 # ---------------------------------------------------------------------------

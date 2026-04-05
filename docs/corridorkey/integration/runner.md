@@ -6,6 +6,8 @@ Source: [`corridorkey/runtime/runner.py`](https://github.com/hyp3r00t/CorridorKe
 
 ## Purpose
 
+`Runner` processes one clip per invocation. To process multiple clips, call it in a loop and create a new instance for each clip.
+
 Most interfaces do not need to think about individual frames. They need to hand a clip to the pipeline and be notified when it is done. `Runner` is that hand-off point. The interface provides a manifest and a config; the runner handles everything in between.
 
 ## How It Works
