@@ -47,6 +47,8 @@ Runner(manifest, pipeline_config).run()
 
 When `devices` is empty or contains a single entry, one inference worker runs. When it contains multiple entries, one worker per device runs. The code path is the same in both cases.
 
+For accepted device string values, see [Configuration — Device values](../configuration.md#device-values).
+
 `PipelineConfig` also accepts an optional `events` field for progress callbacks. The `events` kwarg on `Runner` overrides `config.events`, so the same config can be reused across clips with different progress handlers per clip. See [Events](events.md) for the full callback reference.
 
 The `input_queue_depth` and `output_queue_depth` fields control how many frames can be buffered between stages. Each buffered preprocessed frame occupies roughly 64 MB of GPU memory at 2048 resolution.

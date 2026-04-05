@@ -12,7 +12,21 @@ Source priority (lowest to highest): defaults, global file, project file, enviro
 
 | Field | Default | Description |
 |---|---|---|
-| `device` | `"auto"` | Compute device for inference. `"auto"` detects the best available (ROCm > CUDA > MPS > CPU). Accepts `"cuda"`, `"cuda:N"`, `"rocm"`, `"rocm:N"`, `"mps"`, `"cpu"`, `"all"`. |
+| `device` | `"auto"` | Compute device for inference. See [Device values](#device-values) below. |
+
+### Device values
+
+| Value | Description |
+|---|---|
+| `"auto"` or `None` | Auto-detect: picks ROCm > CUDA > MPS > CPU. Resolves to a single device. |
+| `"cuda"` | NVIDIA or AMD GPU 0 via CUDA. |
+| `"cuda:N"` | Specific GPU by index, e.g. `"cuda:1"`. |
+| `"rocm"` | AMD GPU 0 via ROCm (maps to `"cuda"` internally). |
+| `"rocm:N"` | Specific ROCm GPU by index. |
+| `"mps"` | Apple Silicon (M1+, macOS 12.3+). |
+| `"cpu"` | CPU fallback. |
+
+`"auto"` always resolves to a single device — it does not expand to multiple GPUs. To use all available GPUs, pass `resolve_devices("all")` to `PipelineConfig.devices` at runtime.
 
 ## Logging Settings
 
