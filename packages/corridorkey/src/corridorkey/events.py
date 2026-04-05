@@ -64,7 +64,7 @@ class PipelineEvents:
         events = PipelineEvents(
             on_frame_written=lambda idx, total: print(f"  frame {idx + 1}/{total}"),
         )
-        PipelineRunner(manifest, config, events=events).run()
+        Runner(manifest, config, events=events).run()
     """
 
     # Stage-level events

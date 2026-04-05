@@ -172,11 +172,11 @@ from corridorkey.stages.writer import WriteConfig, write_frame
 
 __all__ = [
     # ------------------------------------------------------------------ #
-    # Package version                                                      #
+    # Package version                                                    #
     # ------------------------------------------------------------------ #
     "__version__",
     # ------------------------------------------------------------------ #
-    # Startup                                                              #
+    # Startup                                                            #
     # ------------------------------------------------------------------ #
     "APP_NAME",
     "load_config",
@@ -186,7 +186,7 @@ __all__ = [
     "get_config_path",
     "setup_logging",
     # ------------------------------------------------------------------ #
-    # Device                                                               #
+    # Device                                                             #
     # ------------------------------------------------------------------ #
     "resolve_device",
     "resolve_devices",
@@ -194,14 +194,14 @@ __all__ = [
     "detect_gpu",
     "GPUInfo",
     # ------------------------------------------------------------------ #
-    # Model hub                                                            #
+    # Model hub                                                          #
     # ------------------------------------------------------------------ #
     "ensure_model",
     "default_checkpoint_path",
     "MODEL_URL",
     "MODEL_FILENAME",
     # ------------------------------------------------------------------ #
-    # Configuration models                                                 #
+    # Configuration models                                               #
     # ------------------------------------------------------------------ #
     "CorridorKeyConfig",
     "LoggingSettings",
@@ -210,7 +210,7 @@ __all__ = [
     "PostprocessSettings",
     "WriterSettings",
     # ------------------------------------------------------------------ #
-    # Pipeline runners                                                     #
+    # Pipeline runners                                                   #
     # ------------------------------------------------------------------ #
     "Runner",  # unified entry point — use this for all new code
     "PipelineRunner",  # single-GPU, direct control
@@ -219,7 +219,7 @@ __all__ = [
     "MultiGPUConfig",
     "PipelineEvents",
     # ------------------------------------------------------------------ #
-    # Pipeline stages — entry points                                       #
+    # Pipeline stages — entry points                                     #
     # ------------------------------------------------------------------ #
     "scan",
     "load",
@@ -232,9 +232,9 @@ __all__ = [
     "postprocess_frame",
     "write_frame",
     # ------------------------------------------------------------------ #
-    # Stage contracts                                                      #
+    # Stage contracts                                                    #
     # ------------------------------------------------------------------ #
-    # Scanner
+    # Scanr
     "Clip",
     "ScanResult",
     "SkippedPath",
@@ -265,13 +265,13 @@ __all__ = [
     # Writer
     "WriteConfig",
     # ------------------------------------------------------------------ #
-    # Clip state machine                                                   #
+    # Clip state machine                                                 #
     # ------------------------------------------------------------------ #
     "ClipState",
     "ClipEntry",
     "InOutRange",
     # ------------------------------------------------------------------ #
-    # Errors                                                               #
+    # Errors                                                             #
     # ------------------------------------------------------------------ #
     "CorridorKeyError",
     "ClipScanError",

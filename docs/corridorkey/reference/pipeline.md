@@ -26,6 +26,8 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 
 ## Runner Classes
 
+::: corridorkey.runtime.runner.Runner
+
 ::: corridorkey.runtime.runner.PipelineRunner
 
 ::: corridorkey.runtime.runner.PipelineConfig
@@ -61,6 +63,8 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 ::: corridorkey.stages.loader.validator.FrameScan
 
 ::: corridorkey.stages.loader.validator.scan_frames
+
+::: corridorkey.stages.loader.validator.get_frame_files
 
 ### Preprocessor
 

@@ -4,7 +4,7 @@
 
 ## Config File
 
-The config file is a TOML file at `~/.config/corridorkey/corridorkey.yaml` by default. A project-level `corridorkey.yaml` in the working directory overrides the global file. Environment variables prefixed with `CK_` override both files.
+The config file is a TOML file at `~/.config/corridorkey/corridorkey.toml` by default. A project-level `corridorkey.toml` in the working directory overrides the global file. Environment variables prefixed with `CK_` override both files.
 
 Source priority (lowest to highest): defaults, global file, project file, environment variables.
 
@@ -55,7 +55,7 @@ Source priority (lowest to highest): defaults, global file, project file, enviro
 | `despeckle_blur` | `5` | Gaussian blur radius after dilation. |
 | `source_passthrough` | `true` | Replace model FG in opaque regions with original source pixels. |
 | `edge_erode_px` | `3` | Erosion radius for the interior mask used by source_passthrough. |
-| `edge_blur_px` | `0` | Blur radius for the source_passthrough blend seam. |
+| `edge_blur_px` | `7` | Blur radius for the source_passthrough blend seam. `0` disables. |
 | `hint_sharpen` | `true` | Apply binary alpha hint mask to eliminate soft edge tails. |
 | `hint_sharpen_dilation` | `3` | Dilation radius applied to the binarised hint before masking. |
 | `debug_dump` | `false` | Save intermediate debug images to a `debug/` subfolder. |
