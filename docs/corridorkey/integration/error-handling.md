@@ -75,5 +75,5 @@ The recommended approach is to catch specific subclasses first, in order of how 
 ## Related
 
 - [Startup](startup.md) - Where `DeviceError` and `ModelError` are most likely to surface.
-- [PipelineRunner](pipeline-runner.md) - How frame-level errors are reported through events.
+- [Runner](runner.md) - How frame-level errors are reported through events.
 - [Reference - errors](../reference/errors.md) - Full exception hierarchy reference.

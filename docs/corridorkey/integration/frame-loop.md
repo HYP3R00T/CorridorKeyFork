@@ -56,6 +56,6 @@ It is not the right choice for a CLI or GUI that processes whole clips. For thos
 
 ## Related
 
-- [PipelineRunner](pipeline-runner.md) - Whole-clip processing with internal threading.
+- [Runner](runner.md) - Whole-clip processing with internal threading.
 - [Startup](startup.md) - How to load the backend and build stage configs before the loop begins.
 - [Reference - pipeline](../reference/pipeline.md) - Full signatures for all stage functions.

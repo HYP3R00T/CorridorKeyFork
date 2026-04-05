@@ -30,12 +30,11 @@ The [Startup](startup.md) document covers steps 1 through 5. The integration pat
 
 ## Integration Patterns
 
-Three patterns are available. The right choice depends on how much control the interface needs over individual frames and whether it manages its own threading.
+Two patterns are available. The right choice depends on how much control the interface needs over individual frames and whether it manages its own threading.
 
 | Pattern | Document | Best for |
 |---|---|---|
-| PipelineRunner | [pipeline-runner.md](pipeline-runner.md) | CLI, GUI, batch tools, most plugins |
-| MultiGPURunner | [multi-gpu-runner.md](multi-gpu-runner.md) | Workstations with multiple CUDA GPUs |
+| Runner | [runner.md](runner.md) | CLI, GUI, batch tools, plugins — any number of GPUs |
 | Frame loop | [frame-loop.md](frame-loop.md) | Host-managed threading (Fusion node, Premiere extension) |
 
 ## Cross-Cutting Concerns

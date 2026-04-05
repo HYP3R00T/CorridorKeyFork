@@ -4,7 +4,7 @@ Auto-generated symbol reference for all public exports of the `corridorkey` pack
 
 ## Modules
 
-- [pipeline](pipeline.md) - Pipeline stage functions, `Runner`, `PipelineRunner`, `MultiGPURunner`, backend protocol, and all stage contracts.
+- [pipeline](pipeline.md) - Pipeline stage functions, `Runner`, `PipelineConfig`, backend protocol, and all stage contracts.
 - [clip-state](clip-state.md) - `ClipState`, `ClipEntry`, `InOutRange`.
 - [job-queue](job-queue.md) - `BoundedQueue` and the `STOP` sentinel.
 - [errors](errors.md) - Typed exception hierarchy.

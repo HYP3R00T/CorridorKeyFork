@@ -28,13 +28,7 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 
 ::: corridorkey.runtime.runner.Runner
 
-::: corridorkey.runtime.runner.PipelineRunner
-
 ::: corridorkey.runtime.runner.PipelineConfig
-
-::: corridorkey.runtime.runner.MultiGPURunner
-
-::: corridorkey.runtime.runner.MultiGPUConfig
 
 ## Backend Protocol
 

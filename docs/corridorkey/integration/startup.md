@@ -48,7 +48,7 @@ The config object is immutable after loading. If the user changes settings mid-s
 
 ## Related
 
-- [PipelineRunner](pipeline-runner.md) - How the startup outputs feed into the pipeline.
+- [Runner](runner.md) - How the startup outputs feed into the pipeline.
 - [Configuration](../configuration.md) - All configuration fields and their defaults.
 - [Reference - device-utils](../reference/device-utils.md) - `detect_gpu`, `resolve_device`, `GPUInfo`.
 - [Reference - model-hub](../reference/model-hub.md) - `ensure_model`, `default_checkpoint_path`.

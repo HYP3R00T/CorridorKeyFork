@@ -54,6 +54,6 @@ If a callback needs to do something slow (write to a database, send a network re
 
 ## Related
 
-- [PipelineRunner](pipeline-runner.md) - How events are attached to the runner.
+- [Runner](runner.md) - How events are attached to the runner.
 - [MultiGPURunner](multi-gpu-runner.md) - Events work identically for multi-GPU runs.
 - [Reference - events](../reference/events.md) - Full symbol reference.
