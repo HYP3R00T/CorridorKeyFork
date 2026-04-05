@@ -5,8 +5,10 @@ to an output queue. Workers exit cleanly when they receive the STOP sentinel.
 
 Workers:
     PreprocessWorker   — reads frames from disk, preprocesses, pushes tensors
-    InferenceWorker    — pulls tensors, runs model, pushes InferenceResult
     PostWriteWorker    — pulls InferenceResult, postprocesses, writes to disk
+
+The inference worker lives in runner.py as ``_InferenceWorker`` because it
+needs the shared ``_AtomicCounter`` for coordinated shutdown across N devices.
 """
 
 from __future__ import annotations
@@ -16,15 +18,13 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import torch.nn as nn
-
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import STOP, BoundedQueue
-from corridorkey.stages.inference import InferenceConfig, InferenceResult, run_inference
+from corridorkey.stages.inference import InferenceResult
 from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.validator import get_frame_files
 from corridorkey.stages.postprocessor import PostprocessConfig, postprocess_frame
-from corridorkey.stages.preprocessor import FrameReadError, PreprocessConfig, PreprocessedFrame, preprocess_frame
+from corridorkey.stages.preprocessor import FrameReadError, PreprocessConfig, preprocess_frame
 from corridorkey.stages.writer import WriteConfig, write_frame
 
 logger = logging.getLogger(__name__)
@@ -98,72 +98,8 @@ class PreprocessWorker:
 
 
 # ---------------------------------------------------------------------------
-# Inference worker
+# Postprocess + write worker
 # ---------------------------------------------------------------------------
-
-
-@dataclass
-class InferenceWorker:
-    """Pulls PreprocessedFrame, runs model inference, pushes InferenceResult.
-
-    Attributes:
-        input_queue: Queue to pull PreprocessedFrame objects from.
-        output_queue: Queue to push InferenceResult objects onto.
-        model: Loaded GreenFormer in eval mode.
-        config: Inference configuration (device, precision, refiner_mode).
-        resolved_refiner_mode: Pre-resolved refiner mode ("full_frame" or "tiled").
-            Passed to run_inference to skip the per-frame VRAM probe when
-            refiner_mode="auto". Set by the caller after resolving via
-            _should_tile_refiner or load_backend.
-        events: Optional pipeline event callbacks.
-    """
-
-    input_queue: BoundedQueue
-    output_queue: BoundedQueue
-    model: nn.Module
-    config: InferenceConfig
-    resolved_refiner_mode: str | None = None
-    events: PipelineEvents | None = None
-
-    def run(self) -> None:
-        """Entry point for the inference thread."""
-        if self.events:
-            self.events.stage_start("inference", 0)
-        try:
-            while True:
-                item = self.input_queue.get()
-                if item is STOP:
-                    self.input_queue.put_stop()
-                    break
-                assert isinstance(item, PreprocessedFrame)
-                try:
-                    if self.events:
-                        self.events.inference_start(item.meta.frame_index)
-                    result = run_inference(
-                        item, self.model, self.config, resolved_refiner_mode=self.resolved_refiner_mode
-                    )
-                    self.output_queue.put(result)
-                    logger.debug("inference_worker: queued frame %d", item.meta.frame_index)
-                    if self.events:
-                        self.events.inference_queued(item.meta.frame_index)
-                        self.events.queue_depth(
-                            len(self.input_queue),
-                            len(self.output_queue),
-                        )
-                except Exception as e:
-                    logger.error("inference_worker: skipping frame %d — %s", item.meta.frame_index, e)
-                    if self.events:
-                        self.events.frame_error("inference", item.meta.frame_index, e)
-        finally:
-            self.output_queue.put_stop()
-            logger.debug("inference_worker: sent STOP")
-            if self.events:
-                self.events.stage_done("inference")
-
-    def start(self) -> threading.Thread:
-        t = threading.Thread(target=self.run, name="inference-worker", daemon=True)
-        t.start()
-        return t
 
 
 @dataclass

@@ -74,13 +74,13 @@ for clip in clips.clips:
         write_frame(postprocessed, write_config)
 ```
 
-For a higher-level interface, use `PipelineRunner`:
+For a higher-level interface, use `Runner`:
 
 ```python
-from corridorkey.runtime.runner import PipelineRunner
+from corridorkey import Runner
 
 pipeline_config = config.to_pipeline_config(device=device, model=model)
-PipelineRunner(manifest, pipeline_config).run()
+Runner(manifest, pipeline_config).run()
 ```
 
 ## Pipeline Stages

@@ -69,7 +69,7 @@ Attach callbacks to any runner for progress reporting::
         on_frame_written=lambda idx, total: print(f"{idx + 1}/{total}"),
         on_frame_error=lambda stage, idx, err: print(f"Error at {stage}:{idx}: {err}"),
     )
-    PipelineRunner(manifest, pipeline_config, events=events).run()
+    Runner(manifest, pipeline_config, events=events).run()
 
 Clip state machine
 ------------------
@@ -136,7 +136,7 @@ from corridorkey.infra import (
     write_config,
 )
 from corridorkey.runtime.clip_state import ClipEntry, ClipState, InOutRange
-from corridorkey.runtime.runner import MultiGPUConfig, MultiGPURunner, PipelineConfig, PipelineRunner, Runner
+from corridorkey.runtime.runner import PipelineConfig, Runner
 from corridorkey.stages.inference import (
     BackendChoice,
     InferenceConfig,
@@ -212,11 +212,8 @@ __all__ = [
     # ------------------------------------------------------------------ #
     # Pipeline runners                                                   #
     # ------------------------------------------------------------------ #
-    "Runner",  # unified entry point — use this for all new code
-    "PipelineRunner",  # single-GPU, direct control
+    "Runner",
     "PipelineConfig",
-    "MultiGPURunner",  # multi-GPU, direct control
-    "MultiGPUConfig",
     "PipelineEvents",
     # ------------------------------------------------------------------ #
     # Pipeline stages — entry points                                     #

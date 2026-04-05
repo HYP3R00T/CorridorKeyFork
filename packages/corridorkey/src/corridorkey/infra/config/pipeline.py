@@ -135,8 +135,8 @@ class CorridorKeyConfig(BaseModel):
                 it from the checkpoint path at run time.
             devices: Explicit list of device strings for multi-GPU dispatch.
                 When provided, the returned config's ``devices`` field is set
-                and :class:`~corridorkey.runtime.runner.Runner` will use
-                :class:`~corridorkey.runtime.runner.MultiGPURunner` automatically.
+                and :class:`~corridorkey.runtime.runner.Runner` dispatches
+                automatically to multiple inference workers.
                 Use ``resolve_devices("all")`` to populate this from all
                 available CUDA GPUs.
 
@@ -252,7 +252,7 @@ class CorridorKeyConfig(BaseModel):
             _return_resolved_refiner_mode: Internal flag used by
                 ``to_pipeline_config`` to receive the resolved refiner mode
                 alongside the config so it can be stored in ``PipelineConfig``
-                and passed to ``PipelineRunner`` without a second VRAM probe.
+                and passed to ``Runner`` without a second VRAM probe.
         """
         import torch
 

@@ -10,7 +10,8 @@ import numpy as np
 import torch
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import STOP, BoundedQueue
-from corridorkey.runtime.worker import InferenceWorker, PostWriteWorker, PreprocessWorker
+from corridorkey.runtime.runner import _AtomicCounter, _InferenceWorker
+from corridorkey.runtime.worker import PostWriteWorker, PreprocessWorker
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
 from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.preprocessor import FrameMeta, FrameReadError, PreprocessConfig, PreprocessedFrame
@@ -194,15 +195,9 @@ class TestPreprocessWorker:
 
 
 class TestInferenceWorker:
-    """InferenceWorker tests mock run_inference — no checkpoint required.
-
-    We test queue/threading behaviour only; the inference logic itself
-    is tested in tests/unit/inference/.
-    """
+    """_InferenceWorker tests mock run_inference — no checkpoint required."""
 
     def _make_config(self, tmp_path: Path) -> InferenceConfig:
-        # checkpoint_path must be a Path; the file doesn't need to exist
-        # because run_inference is mocked in all these tests.
         return InferenceConfig(checkpoint_path=tmp_path / "model.pth", device="cpu")
 
     def _make_fake_frame(self) -> PreprocessedFrame:
@@ -217,6 +212,16 @@ class TestInferenceWorker:
             meta=frame.meta,
         )
 
+    def _worker(self, tmp_path, in_q, out_q, **kwargs):
+        return _InferenceWorker(
+            input_queue=in_q,
+            output_queue=out_q,
+            model=MagicMock(),
+            config=self._make_config(tmp_path),
+            active_workers=_AtomicCounter(1),
+            **kwargs,
+        )
+
     def test_passes_items_through(self, tmp_path: Path):
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
@@ -226,14 +231,8 @@ class TestInferenceWorker:
         in_q.put(frame)
         in_q.put_stop()
 
-        with patch("corridorkey.runtime.worker.run_inference", return_value=result):
-            worker = InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
-                model=MagicMock(),
-                config=self._make_config(tmp_path),
-            )
-            t = worker.start()
+        with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
+            t = self._worker(tmp_path, in_q, out_q).start()
             t.join(timeout=5)
 
         assert out_q.get() is result
@@ -244,13 +243,7 @@ class TestInferenceWorker:
         out_q: BoundedQueue = BoundedQueue(10)
         in_q.put_stop()
 
-        worker = InferenceWorker(
-            input_queue=in_q,
-            output_queue=out_q,
-            model=MagicMock(),
-            config=self._make_config(tmp_path),
-        )
-        t = worker.start()
+        t = self._worker(tmp_path, in_q, out_q).start()
         t.join(timeout=5)
 
         assert out_q.get() is STOP
@@ -265,14 +258,8 @@ class TestInferenceWorker:
             in_q.put(f)
         in_q.put_stop()
 
-        with patch("corridorkey.runtime.worker.run_inference", side_effect=results):
-            worker = InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
-                model=MagicMock(),
-                config=self._make_config(tmp_path),
-            )
-            t = worker.start()
+        with patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=results):
+            t = self._worker(tmp_path, in_q, out_q).start()
             t.join(timeout=5)
 
         received = []
@@ -285,7 +272,6 @@ class TestInferenceWorker:
         assert received == results
 
     def test_inference_error_skips_frame(self, tmp_path: Path):
-        """An exception from run_inference skips the frame but doesn't abort."""
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
 
@@ -301,14 +287,8 @@ class TestInferenceWorker:
                 raise RuntimeError("simulated inference failure")
             return result2
 
-        with patch("corridorkey.runtime.worker.run_inference", side_effect=side_effect):
-            worker = InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
-                model=MagicMock(),
-                config=self._make_config(tmp_path),
-            )
-            t = worker.start()
+        with patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=side_effect):
+            t = self._worker(tmp_path, in_q, out_q).start()
             t.join(timeout=5)
 
         assert out_q.get() is result2
@@ -321,14 +301,8 @@ class TestInferenceWorker:
         in_q.put(self._make_fake_frame())
         in_q.put_stop()
 
-        with patch("corridorkey.runtime.worker.run_inference", side_effect=RuntimeError("boom")):
-            worker = InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
-                model=MagicMock(),
-                config=self._make_config(tmp_path),
-            )
-            t = worker.start()
+        with patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=RuntimeError("boom")):
+            t = self._worker(tmp_path, in_q, out_q).start()
             t.join(timeout=5)
 
         assert out_q.get() is STOP
@@ -528,6 +502,16 @@ class TestInferenceWorkerEvents:
             meta=frame.meta,
         )
 
+    def _worker(self, tmp_path, in_q, out_q, **kwargs):
+        return _InferenceWorker(
+            input_queue=in_q,
+            output_queue=out_q,
+            model=MagicMock(),
+            config=self._make_config(tmp_path),
+            active_workers=_AtomicCounter(1),
+            **kwargs,
+        )
+
     def test_stage_start_fires(self, tmp_path: Path):
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
@@ -535,17 +519,10 @@ class TestInferenceWorkerEvents:
 
         starts: list[str] = []
         events = PipelineEvents(on_stage_start=lambda s, t: starts.append(s))
-        worker = InferenceWorker(
-            input_queue=in_q,
-            output_queue=out_q,
-            model=MagicMock(),
-            config=self._make_config(tmp_path),
-            events=events,
-        )
-        t = worker.start()
+        t = self._worker(tmp_path, in_q, out_q, events=events).start()
         t.join(timeout=5)
 
-        assert "inference" in starts
+        assert any("inference" in s for s in starts)
 
     def test_stage_done_fires(self, tmp_path: Path):
         in_q: BoundedQueue = BoundedQueue(10)
@@ -554,17 +531,10 @@ class TestInferenceWorkerEvents:
 
         dones: list[str] = []
         events = PipelineEvents(on_stage_done=lambda s: dones.append(s))
-        worker = InferenceWorker(
-            input_queue=in_q,
-            output_queue=out_q,
-            model=MagicMock(),
-            config=self._make_config(tmp_path),
-            events=events,
-        )
-        t = worker.start()
+        t = self._worker(tmp_path, in_q, out_q, events=events).start()
         t.join(timeout=5)
 
-        assert "inference" in dones
+        assert any("inference" in s for s in dones)
 
     def test_inference_start_fires_per_frame(self, tmp_path: Path):
         in_q: BoundedQueue = BoundedQueue(10)
@@ -576,15 +546,8 @@ class TestInferenceWorkerEvents:
 
         started: list[int] = []
         events = PipelineEvents(on_inference_start=lambda i: started.append(i))
-        with patch("corridorkey.runtime.worker.run_inference", return_value=result):
-            worker = InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
-                model=MagicMock(),
-                config=self._make_config(tmp_path),
-                events=events,
-            )
-            t = worker.start()
+        with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
+            t = self._worker(tmp_path, in_q, out_q, events=events).start()
             t.join(timeout=5)
 
         assert started == [3]
@@ -599,15 +562,8 @@ class TestInferenceWorkerEvents:
 
         queued: list[int] = []
         events = PipelineEvents(on_inference_queued=lambda i: queued.append(i))
-        with patch("corridorkey.runtime.worker.run_inference", return_value=result):
-            worker = InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
-                model=MagicMock(),
-                config=self._make_config(tmp_path),
-                events=events,
-            )
-            t = worker.start()
+        with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
+            t = self._worker(tmp_path, in_q, out_q, events=events).start()
             t.join(timeout=5)
 
         assert queued == [7]
@@ -621,18 +577,12 @@ class TestInferenceWorkerEvents:
 
         errors: list[tuple[str, int]] = []
         events = PipelineEvents(on_frame_error=lambda s, i, e: errors.append((s, i)))
-        with patch("corridorkey.runtime.worker.run_inference", side_effect=RuntimeError("boom")):
-            worker = InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
-                model=MagicMock(),
-                config=self._make_config(tmp_path),
-                events=events,
-            )
-            t = worker.start()
+        with patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=RuntimeError("boom")):
+            t = self._worker(tmp_path, in_q, out_q, events=events).start()
             t.join(timeout=5)
 
-        assert errors == [("inference", 2)]
+        assert len(errors) == 1
+        assert errors[0][1] == 2
 
 
 class TestPostWriteWorkerEvents:

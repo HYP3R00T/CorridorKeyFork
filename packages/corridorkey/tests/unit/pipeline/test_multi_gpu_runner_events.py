@@ -1,4 +1,4 @@
-"""Tests for _MultiGPUInferenceWorker event callbacks — covering uncovered lines 473-516."""
+"""Tests for _InferenceWorker event callbacks."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import torch
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import BoundedQueue
-from corridorkey.runtime.runner import _AtomicCounter, _MultiGPUInferenceWorker
+from corridorkey.runtime.runner import _AtomicCounter, _InferenceWorker
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
 from corridorkey.stages.preprocessor import FrameMeta, PreprocessedFrame
 
@@ -30,7 +30,7 @@ def _make_result(frame: PreprocessedFrame) -> InferenceResult:
     )
 
 
-class TestMultiGPUInferenceWorkerEvents:
+class TestInferenceWorkerEvents:
     def test_stage_start_fires(self, tmp_path: Path):
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
@@ -38,13 +38,12 @@ class TestMultiGPUInferenceWorkerEvents:
 
         starts: list[str] = []
         events = PipelineEvents(on_stage_start=lambda s, t: starts.append(s))
-        worker = _MultiGPUInferenceWorker(
+        worker = _InferenceWorker(
             input_queue=in_q,
             output_queue=out_q,
             model=MagicMock(),
             config=_make_config(tmp_path),
             active_workers=_AtomicCounter(1),
-            worker_index=0,
             events=events,
         )
         t = worker.start()
@@ -59,13 +58,12 @@ class TestMultiGPUInferenceWorkerEvents:
 
         dones: list[str] = []
         events = PipelineEvents(on_stage_done=lambda s: dones.append(s))
-        worker = _MultiGPUInferenceWorker(
+        worker = _InferenceWorker(
             input_queue=in_q,
             output_queue=out_q,
             model=MagicMock(),
             config=_make_config(tmp_path),
             active_workers=_AtomicCounter(1),
-            worker_index=0,
             events=events,
         )
         t = worker.start()
@@ -84,13 +82,12 @@ class TestMultiGPUInferenceWorkerEvents:
         started: list[int] = []
         events = PipelineEvents(on_inference_start=lambda i: started.append(i))
         with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
-            worker = _MultiGPUInferenceWorker(
+            worker = _InferenceWorker(
                 input_queue=in_q,
                 output_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
                 active_workers=_AtomicCounter(1),
-                worker_index=0,
                 events=events,
             )
             t = worker.start()
@@ -109,13 +106,12 @@ class TestMultiGPUInferenceWorkerEvents:
         queued: list[int] = []
         events = PipelineEvents(on_inference_queued=lambda i: queued.append(i))
         with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
-            worker = _MultiGPUInferenceWorker(
+            worker = _InferenceWorker(
                 input_queue=in_q,
                 output_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
                 active_workers=_AtomicCounter(1),
-                worker_index=0,
                 events=events,
             )
             t = worker.start()
@@ -133,13 +129,12 @@ class TestMultiGPUInferenceWorkerEvents:
         errors: list[tuple[str, int]] = []
         events = PipelineEvents(on_frame_error=lambda s, i, e: errors.append((s, i)))
         with patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=RuntimeError("boom")):
-            worker = _MultiGPUInferenceWorker(
+            worker = _InferenceWorker(
                 input_queue=in_q,
                 output_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
                 active_workers=_AtomicCounter(1),
-                worker_index=0,
                 events=events,
             )
             t = worker.start()
@@ -161,13 +156,12 @@ class TestMultiGPUInferenceWorkerEvents:
         depths: list[tuple[int, int]] = []
         events = PipelineEvents(on_queue_depth=lambda p, w: depths.append((p, w)))
         with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
-            worker = _MultiGPUInferenceWorker(
+            worker = _InferenceWorker(
                 input_queue=in_q,
                 output_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
                 active_workers=_AtomicCounter(1),
-                worker_index=0,
                 events=events,
             )
             t = worker.start()
