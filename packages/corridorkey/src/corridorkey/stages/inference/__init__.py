@@ -12,18 +12,13 @@ Contracts:
 """
 
 from corridorkey.stages.inference.backend import ModelBackend
-from corridorkey.stages.inference.config import BackendChoice, InferenceConfig, RefinerMode
+from corridorkey.stages.inference.config import InferenceConfig
 from corridorkey.stages.inference.contracts import InferenceResult
 from corridorkey.stages.inference.factory import load_backend
 
 __all__ = [
-    # Preferred entry point
     "load_backend",
-    # Contracts
     "InferenceConfig",
     "InferenceResult",
-    "RefinerMode",
-    "BackendChoice",
-    # Backend protocol
     "ModelBackend",
 ]

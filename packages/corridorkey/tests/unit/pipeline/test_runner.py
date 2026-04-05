@@ -13,7 +13,8 @@ from corridorkey.events import PipelineEvents
 from corridorkey.runtime.runner import PipelineConfig, Runner, _AtomicCounter, _InferenceWorker, _override_device
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
 from corridorkey.stages.loader.contracts import LoadResult
-from corridorkey.stages.preprocessor import FrameMeta, PreprocessConfig, PreprocessedFrame
+from corridorkey.stages.preprocessor import PreprocessConfig, PreprocessedFrame
+from corridorkey.stages.preprocessor.contracts import FrameMeta
 
 # ---------------------------------------------------------------------------
 # Helpers

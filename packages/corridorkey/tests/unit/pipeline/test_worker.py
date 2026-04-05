@@ -14,7 +14,8 @@ from corridorkey.runtime.runner import _AtomicCounter, _InferenceWorker
 from corridorkey.runtime.worker import PostWriteWorker, PreprocessWorker
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
 from corridorkey.stages.loader.contracts import LoadResult
-from corridorkey.stages.preprocessor import FrameMeta, FrameReadError, PreprocessConfig, PreprocessedFrame
+from corridorkey.stages.preprocessor import FrameReadError, PreprocessConfig, PreprocessedFrame
+from corridorkey.stages.preprocessor.contracts import FrameMeta
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -490,7 +491,7 @@ class TestInferenceWorkerEvents:
 
     def _make_fake_frame(self, idx: int = 0) -> PreprocessedFrame:
         import torch
-        from corridorkey.stages.preprocessor import FrameMeta
+        from corridorkey.stages.preprocessor.contracts import FrameMeta
 
         meta = FrameMeta(frame_index=idx, original_h=32, original_w=32)
         return PreprocessedFrame(tensor=torch.zeros(1, 4, 32, 32), meta=meta)
@@ -590,7 +591,7 @@ class TestInferenceWorkerEvents:
 class TestPostWriteWorkerEvents:
     def _make_fake_result(self, idx: int = 0) -> InferenceResult:
         import torch
-        from corridorkey.stages.preprocessor import FrameMeta
+        from corridorkey.stages.preprocessor.contracts import FrameMeta
 
         meta = FrameMeta(frame_index=idx, original_h=32, original_w=32)
         return InferenceResult(

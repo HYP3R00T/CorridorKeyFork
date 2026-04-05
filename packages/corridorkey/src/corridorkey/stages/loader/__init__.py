@@ -27,13 +27,10 @@ VideoMetadata
 """
 
 from corridorkey.stages.loader.contracts import LoadResult
-from corridorkey.stages.loader.extractor import VideoMetadata, load_video_metadata
 from corridorkey.stages.loader.orchestrator import load, resolve_alpha
 
 __all__ = [
     "load",
     "resolve_alpha",
     "LoadResult",
-    "VideoMetadata",
-    "load_video_metadata",
 ]

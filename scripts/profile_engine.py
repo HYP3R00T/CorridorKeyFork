@@ -108,7 +108,8 @@ def main() -> None:
     from corridorkey import InferenceConfig
     from corridorkey.stages.inference.loader import load_model
     from corridorkey.stages.inference.orchestrator import run_inference
-    from corridorkey.stages.preprocessor import FrameMeta, PreprocessedFrame
+    from corridorkey.stages.preprocessor import PreprocessedFrame
+    from corridorkey.stages.preprocessor.contracts import FrameMeta
 
     print("Loading engine...")
     t0 = time.monotonic()

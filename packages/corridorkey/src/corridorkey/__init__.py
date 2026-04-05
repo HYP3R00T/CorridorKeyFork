@@ -143,24 +143,19 @@ from corridorkey.runtime.clip_state import ClipState
 from corridorkey.runtime.clip_state import _resolve_state as resolve_clip_state
 from corridorkey.runtime.runner import PipelineConfig, Runner
 from corridorkey.stages.inference import (
-    BackendChoice,
     InferenceConfig,
     InferenceResult,
     ModelBackend,
-    RefinerMode,
     load_backend,
 )
 from corridorkey.stages.loader import (
     LoadResult,
-    VideoMetadata,
     load,
-    load_video_metadata,
     resolve_alpha,
 )
 from corridorkey.stages.loader.validator import get_frame_files
 from corridorkey.stages.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
 from corridorkey.stages.preprocessor import (
-    FrameMeta,
     PreprocessConfig,
     PreprocessedFrame,
     preprocess_frame,
@@ -226,26 +221,21 @@ __all__ = [
     # ------------------------------------------------------------------ #
     # Stage contracts (both paths)                                       #
     # ------------------------------------------------------------------ #
-    # Scanr
+    # Scanner
     "Clip",
     "ScanResult",
     "SkippedPath",
     # Loader
     "LoadResult",
-    "VideoMetadata",
-    "load_video_metadata",
     "get_frame_files",
     # Preprocessor
     "PreprocessConfig",
     "PreprocessedFrame",
-    "FrameMeta",
     "FrameReadError",
     # Inference
     "InferenceConfig",
     "InferenceResult",
     "ModelBackend",
-    "BackendChoice",
-    "RefinerMode",
     # Postprocessor
     "PostprocessConfig",
     "PostprocessedFrame",

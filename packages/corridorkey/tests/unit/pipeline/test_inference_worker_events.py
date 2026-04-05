@@ -10,7 +10,8 @@ from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import BoundedQueue
 from corridorkey.runtime.runner import _AtomicCounter, _InferenceWorker
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
-from corridorkey.stages.preprocessor import FrameMeta, PreprocessedFrame
+from corridorkey.stages.preprocessor import PreprocessedFrame
+from corridorkey.stages.preprocessor.contracts import FrameMeta
 
 
 def _make_config(tmp_path: Path) -> InferenceConfig:
