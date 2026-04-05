@@ -77,6 +77,7 @@ nav = [
     { "Clip State Machine" = "corridorkey/clip-state.md" },
     { "Job Queue" = "corridorkey/job-queue.md" },
     { "Configuration" = "corridorkey/configuration.md" },
+    { "Configuration Layers" = "corridorkey/configuration-layers.md" },
     { "Reference" = [
       { "Overview" = "corridorkey/reference/index.md" },
       { "pipeline" = "corridorkey/reference/pipeline.md" },
