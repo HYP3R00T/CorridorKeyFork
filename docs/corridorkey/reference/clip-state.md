@@ -4,6 +4,4 @@ Clip lifecycle state machine. Tracks a single clip from discovery through comple
 
 ::: corridorkey.ClipState
 
-::: corridorkey.ClipEntry
-
-::: corridorkey.InOutRange
+::: corridorkey.resolve_clip_state

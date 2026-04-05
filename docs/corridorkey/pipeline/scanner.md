@@ -74,11 +74,10 @@ If a `PipelineEvents` instance is provided, `on_clip_found` fires for each valid
 `ScanResult` wraps both the valid clips and the skipped paths. `Clip` is frozen - all fields are immutable after construction.
 
 ```python
-@dataclass
-class Clip:
-    name: str           # clip folder name
-    root: Path          # absolute path to clip folder
-    input_path: Path    # Input/ dir or video file inside Input/
+class Clip(BaseModel):
+    name: str                # clip folder name
+    root: Path               # absolute path to clip folder
+    input_path: Path         # Input/ dir or video file inside Input/
     alpha_path: Path | None  # AlphaHint/ dir or video, None if absent
 ```
 

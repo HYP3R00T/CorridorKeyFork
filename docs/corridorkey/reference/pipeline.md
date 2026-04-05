@@ -16,10 +16,6 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 
 ::: corridorkey.load_backend
 
-::: corridorkey.load_model
-
-::: corridorkey.run_inference
-
 ::: corridorkey.postprocess_frame
 
 ::: corridorkey.write_frame
@@ -33,10 +29,6 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 ## Backend Protocol
 
 ::: corridorkey.stages.inference.backend.ModelBackend
-
-::: corridorkey.stages.inference.backend.TorchBackend
-
-::: corridorkey.stages.inference.factory.discover_checkpoint
 
 ## Stage Contracts
 
@@ -53,10 +45,6 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 ::: corridorkey.ClipManifest
 
 ::: corridorkey.VideoMetadata
-
-::: corridorkey.stages.loader.validator.FrameScan
-
-::: corridorkey.stages.loader.validator.scan_frames
 
 ::: corridorkey.stages.loader.validator.get_frame_files
 
@@ -77,10 +65,6 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 `BackendChoice` - Type alias for the backend field: `Literal["auto", "torch", "mlx"]`.
 
 `RefinerMode` - Type alias for the refiner_mode field: `Literal["auto", "full_frame", "tiled"]`.
-
-`VALID_IMG_SIZES` - Tuple of accepted img_size values: `(0, 512, 1024, 1536, 2048)`. `0` means auto-select based on VRAM.
-
-::: corridorkey.stages.inference.config.adaptive_img_size
 
 ### Postprocessor
 
