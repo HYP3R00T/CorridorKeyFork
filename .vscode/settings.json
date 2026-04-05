@@ -21,6 +21,10 @@
   "python.terminal.activateEnvironment": false,
   "ruff.lint.enable": true,
   "ruff.nativeServer": true,
+  "search.exclude": {
+    "**/.git": true,
+    "**/.venv": true
+  },
   "ty.inlayHints.callArgumentNames": false,
   "ty.inlayHints.variableTypes": false,
   "yaml.schemas": {
