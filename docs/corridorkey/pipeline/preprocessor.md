@@ -124,5 +124,6 @@ class FrameMeta:
 
 ## Related
 
-- [Loader Stage](loader.md) - Produces the `ClipManifest` consumed here.
+- [Loader Stage](loader.md) - Produces the `LoadResult` consumed here.
 - [Inference Stage](inference.md) - Consumes `PreprocessedFrame`.
+

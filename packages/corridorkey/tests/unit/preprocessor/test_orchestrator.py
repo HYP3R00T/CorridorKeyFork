@@ -8,7 +8,7 @@ import cv2
 import numpy as np
 import pytest
 import torch
-from corridorkey.stages.loader.contracts import ClipManifest
+from corridorkey.stages.loader.contracts import LoadResult
 from corridorkey.stages.loader.validator import get_frame_files
 from corridorkey.stages.preprocessor import PreprocessConfig, PreprocessedFrame, preprocess_frame
 
@@ -25,7 +25,7 @@ def _make_manifest(
     with_alpha: bool = True,
     img_h: int = 64,
     img_w: int = 64,
-) -> ClipManifest:
+) -> LoadResult:
     frames_dir = tmp_path / "Frames"
     frames_dir.mkdir(parents=True)
     alpha_dir = tmp_path / "AlphaFrames"
@@ -40,7 +40,7 @@ def _make_manifest(
         for i in range(frame_count):
             _write_png(alpha_dir / f"frame_{i:06d}.png", h=img_h, w=img_w, channels=1)
 
-    return ClipManifest(
+    return LoadResult(
         clip_name="test_clip",
         clip_root=tmp_path,
         frames_dir=frames_dir,
@@ -152,7 +152,7 @@ class TestPreprocessFrame:
         alpha = np.full((64, 64), 255, dtype=np.uint8)
         cv2.imwrite(str(alpha_dir / "frame_000000.png"), alpha)
 
-        manifest_srgb = ClipManifest(
+        manifest_srgb = LoadResult(
             clip_name="test_clip",
             clip_root=clip_dir,
             frames_dir=frames_dir,
@@ -163,7 +163,7 @@ class TestPreprocessFrame:
             frame_range=(0, 1),
             is_linear=False,
         )
-        manifest_linear = ClipManifest(
+        manifest_linear = LoadResult(
             clip_name=manifest_srgb.clip_name,
             clip_root=manifest_srgb.clip_root,
             frames_dir=manifest_srgb.frames_dir,
@@ -215,7 +215,7 @@ class TestPreprocessFrame:
         cv2.imwrite(str(frames_dir / "frame_000000.png"), grey)
         cv2.imwrite(str(alpha_dir / "frame_000000.png"), np.full((8, 8), 255, dtype=np.uint8))
 
-        manifest = ClipManifest(
+        manifest = LoadResult(
             clip_name="linear",
             clip_root=clip_dir,
             frames_dir=frames_dir,
@@ -254,7 +254,7 @@ class TestPreprocessFrame:
         red_bgr[:, :, 2] = 255
         cv2.imwrite(str(frames_dir / "frame_000000.png"), red_bgr)
         cv2.imwrite(str(alpha_dir / "frame_000000.png"), np.full((8, 8), 255, dtype=np.uint8))
-        manifest = ClipManifest(
+        manifest = LoadResult(
             clip_name="rgb_test",
             clip_root=tmp_path,
             frames_dir=frames_dir,
@@ -302,15 +302,3 @@ class TestPreprocessConfigValidation:
     def test_img_size_positive_is_valid(self):
         cfg = PreprocessConfig(img_size=1)
         assert cfg.img_size == 1
-
-
-class TestPreprocessorPackageExports:
-    def test_image_upsample_mode_importable(self):
-        from corridorkey.stages.preprocessor import ImageUpsampleMode
-
-        assert ImageUpsampleMode is not None
-
-    def test_default_image_upsample_mode_importable(self):
-        from corridorkey.stages.preprocessor import DEFAULT_IMAGE_UPSAMPLE_MODE
-
-        assert isinstance(DEFAULT_IMAGE_UPSAMPLE_MODE, str)

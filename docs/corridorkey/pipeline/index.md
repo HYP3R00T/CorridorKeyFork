@@ -7,8 +7,8 @@ The `corridorkey` package processes footage through six sequential stages. Each 
 | Stage | Name | Entry point | Input | Output |
 |---|---|---|---|---|
 | 0 | [Scanner](scanner.md) | `scan(path)` | Filesystem path | `ScanResult` containing `Clip` objects |
-| 1 | [Loader](loader.md) | `load(clip)` | `Clip` | `ClipManifest` |
-| 2 | [Preprocessor](preprocessor.md) | `preprocess_frame(manifest, i, config)` | `ClipManifest` + frame index | `PreprocessedFrame` |
+| 1 | [Loader](loader.md) | `load(clip)` | `Clip` | `LoadResult` |
+| 2 | [Preprocessor](preprocessor.md) | `preprocess_frame(manifest, i, config)` | `LoadResult` + frame index | `PreprocessedFrame` |
 | 3 | [Inference](inference.md) | `run_inference(frame, model, config)` | `PreprocessedFrame` | `InferenceResult` |
 | 4 | [Postprocessor](postprocessor.md) | `postprocess_frame(result, config)` | `InferenceResult` | `PostprocessedFrame` |
 | 5 | [Writer](writer.md) | `write_frame(frame, config)` | `PostprocessedFrame` | Files on disk |
@@ -31,3 +31,4 @@ The orchestrator owns the order of steps and calls into the step modules. It nev
 
 - [Clip State Machine](../clip-state.md) - How clip lifecycle states are tracked across stages.
 - [Job Queue](../job-queue.md) - How stages are wired together in the pipeline runner.
+

@@ -13,7 +13,7 @@ from corridorkey.runtime.queue import STOP, BoundedQueue
 from corridorkey.runtime.runner import _AtomicCounter, _InferenceWorker
 from corridorkey.runtime.worker import PostWriteWorker, PreprocessWorker
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
-from corridorkey.stages.loader.contracts import ClipManifest
+from corridorkey.stages.loader.contracts import LoadResult
 from corridorkey.stages.preprocessor import FrameMeta, FrameReadError, PreprocessConfig, PreprocessedFrame
 
 # ---------------------------------------------------------------------------
@@ -26,7 +26,7 @@ def _write_png(path: Path, h: int = 32, w: int = 32, channels: int = 3) -> None:
     cv2.imwrite(str(path), img)
 
 
-def _make_manifest(tmp_path: Path, frame_count: int = 2) -> ClipManifest:
+def _make_manifest(tmp_path: Path, frame_count: int = 2) -> LoadResult:
     frames_dir = tmp_path / "Frames"
     frames_dir.mkdir()
     alpha_dir = tmp_path / "AlphaFrames"
@@ -38,7 +38,7 @@ def _make_manifest(tmp_path: Path, frame_count: int = 2) -> ClipManifest:
         _write_png(frames_dir / f"frame_{i:06d}.png", channels=3)
         _write_png(alpha_dir / f"frame_{i:06d}.png", channels=1)
 
-    return ClipManifest(
+    return LoadResult(
         clip_name="test_clip",
         clip_root=tmp_path,
         frames_dir=frames_dir,

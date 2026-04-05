@@ -42,7 +42,7 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 
 ### Loader
 
-::: corridorkey.ClipManifest
+::: corridorkey.LoadResult
 
 ::: corridorkey.VideoMetadata
 
@@ -75,3 +75,4 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 ### Writer
 
 ::: corridorkey.WriteConfig
+

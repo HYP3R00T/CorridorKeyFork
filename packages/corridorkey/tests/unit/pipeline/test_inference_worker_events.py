@@ -168,5 +168,3 @@ class TestInferenceWorkerEvents:
             t.join(timeout=5)
 
         assert len(depths) >= 1
-
-

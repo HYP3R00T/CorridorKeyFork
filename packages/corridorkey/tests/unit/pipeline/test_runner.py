@@ -12,7 +12,7 @@ import torch
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.runner import PipelineConfig, Runner, _AtomicCounter, _InferenceWorker, _override_device
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
-from corridorkey.stages.loader.contracts import ClipManifest
+from corridorkey.stages.loader.contracts import LoadResult
 from corridorkey.stages.preprocessor import FrameMeta, PreprocessConfig, PreprocessedFrame
 
 # ---------------------------------------------------------------------------
@@ -20,7 +20,7 @@ from corridorkey.stages.preprocessor import FrameMeta, PreprocessConfig, Preproc
 # ---------------------------------------------------------------------------
 
 
-def _make_manifest(tmp_path: Path, frame_count: int = 2) -> ClipManifest:
+def _make_manifest(tmp_path: Path, frame_count: int = 2) -> LoadResult:
     frames_dir = tmp_path / "Frames"
     frames_dir.mkdir()
     alpha_dir = tmp_path / "AlphaFrames"
@@ -31,7 +31,7 @@ def _make_manifest(tmp_path: Path, frame_count: int = 2) -> ClipManifest:
         img = np.zeros((32, 32, 3), dtype=np.uint8)
         cv2.imwrite(str(frames_dir / f"frame_{i:06d}.png"), img)
         cv2.imwrite(str(alpha_dir / f"frame_{i:06d}.png"), np.zeros((32, 32), dtype=np.uint8))
-    return ClipManifest(
+    return LoadResult(
         clip_name="test",
         clip_root=tmp_path,
         frames_dir=frames_dir,

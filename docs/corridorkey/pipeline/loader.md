@@ -1,6 +1,6 @@
 # Loader Stage
 
-The loader is stage 1. It validates a `Clip` and returns a `ClipManifest` with resolved frame paths, output destination, and clip metadata ready for all downstream stages.
+The loader is stage 1. It validates a `Clip` and returns a `LoadResult` with resolved frame paths, output destination, and clip metadata ready for all downstream stages.
 
 Source: [`corridorkey/stages/loader/`](https://github.com/nikopueringer/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/stages/loader/)
 
@@ -13,7 +13,7 @@ The loader is the last stage that touches the filesystem for setup purposes. It 
 ```python
 from corridorkey import load
 
-manifest = load(clip)        # ClipManifest
+manifest = load(clip)        # LoadResult
 manifest.needs_alpha         # True if alpha must be generated externally
 ```
 
@@ -50,7 +50,7 @@ The scan result is returned and reused for `frame_count` and `is_linear` - no se
 
 `clip/Output/` is created with `mkdir(exist_ok=True)`. Subdirectories (`alpha/`, `fg/`, `comp/`, `processed/`) are created by the writer stage on first write.
 
-### Step 5 - Build and return ClipManifest
+### Step 5 - Build and return LoadResult
 
 The manifest is constructed from the resolved paths and scan results. It is frozen - all fields are immutable after construction.
 
@@ -71,11 +71,10 @@ Alpha generation is not a pipeline stage. It is entirely the interface's respons
 
 ## Output Contract
 
-`ClipManifest` is the single output of this stage and the input to all downstream stages.
+`LoadResult` is the single output of this stage and the input to all downstream stages.
 
 ```python
-@dataclass
-class ClipManifest:
+class LoadResult(BaseModel):
     clip_name: str
     clip_root: Path
     frames_dir: Path           # Input/ or Frames/ (extracted)
@@ -92,4 +91,4 @@ class ClipManifest:
 ## Related
 
 - [Scanner Stage](scanner.md) - Produces the `Clip` consumed here.
-- [Preprocessor Stage](preprocessor.md) - Consumes `ClipManifest`.
+- [Preprocessor Stage](preprocessor.md) - Consumes `LoadResult`.

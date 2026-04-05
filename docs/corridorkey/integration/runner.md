@@ -59,7 +59,7 @@ Before the runner can be used, the interface must scan for clips and load each o
 
 `scan()` accepts a path to a clips directory, a single clip folder, or a single video file. It returns a `ScanResult` containing a tuple of valid `Clip` objects and a tuple of `SkippedPath` objects. The interface should present both to the user.
 
-`load()` accepts a `Clip` and returns a `ClipManifest`. When `needs_alpha` is `True`, the clip has no alpha hint frames. The interface is responsible for generating them externally. Once generated, `resolve_alpha()` returns an updated manifest with `needs_alpha` set to `False`. The runner cannot be started until `needs_alpha` is `False`.
+`load()` accepts a `Clip` and returns a `LoadResult`. When `needs_alpha` is `True`, the clip has no alpha hint frames. The interface is responsible for generating them externally. Once generated, `resolve_alpha()` returns an updated manifest with `needs_alpha` set to `False`. The runner cannot be started until `needs_alpha` is `False`.
 
 ## When to Use Runner
 
@@ -75,3 +75,4 @@ It is not the right choice when the host application manages its own threading m
 - [Frame Loop](frame-loop.md) - Per-frame control for host-managed threading.
 - [Events](events.md) - Progress callbacks.
 - [Job Queue](../job-queue.md) - How the bounded queues and shutdown signalling work internally.
+

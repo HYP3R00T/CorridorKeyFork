@@ -105,7 +105,9 @@ def main() -> None:
         torch.compile = lambda model, **kwargs: model  # type: ignore[assignment]
         print("torch.compile disabled")
 
-    from corridorkey import InferenceConfig, load_model, run_inference
+    from corridorkey import InferenceConfig
+    from corridorkey.stages.inference.loader import load_model
+    from corridorkey.stages.inference.orchestrator import run_inference
     from corridorkey.stages.preprocessor import FrameMeta, PreprocessedFrame
 
     print("Loading engine...")

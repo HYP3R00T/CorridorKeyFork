@@ -151,7 +151,7 @@ from corridorkey.stages.inference import (
     load_backend,
 )
 from corridorkey.stages.loader import (
-    ClipManifest,
+    LoadResult,
     VideoMetadata,
     load,
     load_video_metadata,
@@ -231,7 +231,7 @@ __all__ = [
     "ScanResult",
     "SkippedPath",
     # Loader
-    "ClipManifest",
+    "LoadResult",
     "VideoMetadata",
     "load_video_metadata",
     "get_frame_files",

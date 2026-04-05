@@ -29,7 +29,7 @@ from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import BoundedQueue
 from corridorkey.runtime.worker import PostWriteWorker, PreprocessWorker
 from corridorkey.stages.inference import InferenceConfig
-from corridorkey.stages.loader.contracts import ClipManifest
+from corridorkey.stages.loader.contracts import LoadResult
 from corridorkey.stages.postprocessor import PostprocessConfig
 from corridorkey.stages.preprocessor import PreprocessConfig
 from corridorkey.stages.writer import WriteConfig
@@ -104,7 +104,7 @@ class Runner:
 
     def __init__(
         self,
-        manifest: ClipManifest,
+        manifest: LoadResult,
         config: PipelineConfig,
         events: PipelineEvents | None = None,
     ) -> None:

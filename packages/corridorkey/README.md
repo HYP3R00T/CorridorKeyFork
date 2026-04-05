@@ -98,7 +98,7 @@ Accepts a clips root directory, a single clip folder, or a single video file.
 ### load
 
 ```python
-manifest = load(clip)  # -> ClipManifest
+manifest = load(clip)  # -> LoadResult
 # manifest.needs_alpha: bool — True if no alpha hint frames found
 # manifest.frames_dir: Path
 # manifest.alpha_frames_dir: Path
@@ -173,3 +173,4 @@ Config is resolved from (lowest → highest priority):
 | `mps` | Apple Silicon |
 | `cpu` | CPU fallback |
 | `all` | All CUDA GPUs in parallel |
+

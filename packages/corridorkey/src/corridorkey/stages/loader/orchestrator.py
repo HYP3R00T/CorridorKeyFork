@@ -15,7 +15,7 @@ from pathlib import Path
 
 from corridorkey.errors import ExtractionError
 from corridorkey.events import PipelineEvents
-from corridorkey.stages.loader.contracts import ClipManifest
+from corridorkey.stages.loader.contracts import LoadResult
 from corridorkey.stages.loader.extractor import (
     DEFAULT_PNG_COMPRESSION,
     extract_video,
@@ -33,7 +33,7 @@ def load(
     clip: Clip,
     events: PipelineEvents | None = None,
     png_compression: int = DEFAULT_PNG_COMPRESSION,
-) -> ClipManifest:
+) -> LoadResult:
     """Validate a clip and return its manifest.
 
     For image sequence inputs, reads directly from Input/ and AlphaHint/.
@@ -91,7 +91,7 @@ def load(
                 clip.name,
             )
 
-    return ClipManifest(
+    return LoadResult(
         clip_name=clip.name,
         clip_root=clip.root,
         frames_dir=frames_dir,
@@ -181,7 +181,7 @@ def _resolve_frames(
     return output_dir
 
 
-def resolve_alpha(manifest: ClipManifest, alpha_frames_dir: Path) -> ClipManifest:
+def resolve_alpha(manifest: LoadResult, alpha_frames_dir: Path) -> LoadResult:
     """Update a manifest with an externally generated alpha sequence.
 
     Called by the interface layer (CLI, GUI, etc.) after it has generated alpha
