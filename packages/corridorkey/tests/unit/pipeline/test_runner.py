@@ -131,8 +131,8 @@ class TestInferenceWorker:
     def _make_worker(self, tmp_path, in_q, out_q, counter, worker_index=0):
 
         return _InferenceWorker(
-            input_queue=in_q,
-            output_queue=out_q,
+            preprocess_queue=in_q,
+            inference_queue=out_q,
             model=MagicMock(),
             config=_make_inference_config(tmp_path),
             active_workers=counter,
@@ -151,8 +151,8 @@ class TestInferenceWorker:
         counter = _AtomicCounter(1)
         with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
             t = _InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
+                preprocess_queue=in_q,
+                inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_inference_config(tmp_path),
                 active_workers=counter,
@@ -171,8 +171,8 @@ class TestInferenceWorker:
 
         counter = _AtomicCounter(2)  # this worker is not last
         t = _InferenceWorker(
-            input_queue=in_q,
-            output_queue=out_q,
+            preprocess_queue=in_q,
+            inference_queue=out_q,
             model=MagicMock(),
             config=_make_inference_config(tmp_path),
             active_workers=counter,
@@ -203,8 +203,8 @@ class TestInferenceWorker:
         with patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=side_effect):
             for _ in range(2):
                 _InferenceWorker(
-                    input_queue=in_q,
-                    output_queue=out_q,
+                    preprocess_queue=in_q,
+                    inference_queue=out_q,
                     model=MagicMock(),
                     config=_make_inference_config(tmp_path),
                     active_workers=counter,

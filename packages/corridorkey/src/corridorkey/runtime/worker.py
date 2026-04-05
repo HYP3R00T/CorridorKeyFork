@@ -42,16 +42,16 @@ class PreprocessWorker:
     Attributes:
         manifest: ClipManifest for the clip being processed.
         config: Preprocessing configuration (img_size, device, strategy).
-        output_queue: Queue to push PreprocessedFrame objects onto.
-        postwrite_queue: Postwrite queue reference — used only for queue depth
+        preprocess_queue: Queue to push PreprocessedFrame objects onto.
+        inference_queue: Inference queue reference — used only for queue depth
             snapshots fired via events.
         events: Optional pipeline event callbacks.
     """
 
     manifest: ClipManifest
     config: PreprocessConfig
-    output_queue: BoundedQueue
-    postwrite_queue: BoundedQueue | None = None
+    preprocess_queue: BoundedQueue
+    inference_queue: BoundedQueue | None = None
     events: PipelineEvents | None = None
 
     def run(self) -> None:
@@ -73,20 +73,20 @@ class PreprocessWorker:
                         image_files=image_files,
                         alpha_files=alpha_files,
                     )
-                    self.output_queue.put(frame)
+                    self.preprocess_queue.put(frame)
                     logger.debug("preprocess_worker: queued frame %d", i)
                     if self.events:
                         self.events.preprocess_queued(i)
                         self.events.queue_depth(
-                            len(self.output_queue),
-                            len(self.postwrite_queue) if self.postwrite_queue else 0,
+                            len(self.preprocess_queue),
+                            len(self.inference_queue) if self.inference_queue else 0,
                         )
                 except FrameReadError as e:
                     logger.error("preprocess_worker: skipping frame %d — %s", i, e)
                     if self.events:
                         self.events.frame_error("preprocess", i, e)
         finally:
-            self.output_queue.put_stop()
+            self.preprocess_queue.put_stop()
             logger.debug("preprocess_worker: sent STOP")
             if self.events:
                 self.events.stage_done("preprocess")
@@ -107,7 +107,7 @@ class PostWriteWorker:
     """Pulls InferenceResult, postprocesses, and writes frames to disk.
 
     Attributes:
-        input_queue: Queue to pull InferenceResult objects from.
+        inference_queue: Queue to pull InferenceResult objects from.
         output_dir: Directory to write output frames into.
         postprocess_config: Postprocessing options (despill, despeckle, checkerboard).
         write_config: Writer options (formats, enabled outputs).
@@ -116,7 +116,7 @@ class PostWriteWorker:
         events: Optional pipeline event callbacks.
     """
 
-    input_queue: BoundedQueue
+    inference_queue: BoundedQueue
     output_dir: Path
     postprocess_config: PostprocessConfig = field(default_factory=PostprocessConfig)
     write_config: WriteConfig | None = None
@@ -129,9 +129,9 @@ class PostWriteWorker:
             self.events.stage_start("postwrite", self.total_frames)
         write_cfg = self.write_config or WriteConfig(output_dir=self.output_dir)
         while True:
-            item = self.input_queue.get()
+            item = self.inference_queue.get()
             if item is STOP:
-                self.input_queue.put_stop()
+                self.inference_queue.put_stop()
                 break
             assert isinstance(item, InferenceResult)
             try:

@@ -39,8 +39,8 @@ class TestInferenceWorkerEvents:
         starts: list[str] = []
         events = PipelineEvents(on_stage_start=lambda s, t: starts.append(s))
         worker = _InferenceWorker(
-            input_queue=in_q,
-            output_queue=out_q,
+            preprocess_queue=in_q,
+            inference_queue=out_q,
             model=MagicMock(),
             config=_make_config(tmp_path),
             active_workers=_AtomicCounter(1),
@@ -59,8 +59,8 @@ class TestInferenceWorkerEvents:
         dones: list[str] = []
         events = PipelineEvents(on_stage_done=lambda s: dones.append(s))
         worker = _InferenceWorker(
-            input_queue=in_q,
-            output_queue=out_q,
+            preprocess_queue=in_q,
+            inference_queue=out_q,
             model=MagicMock(),
             config=_make_config(tmp_path),
             active_workers=_AtomicCounter(1),
@@ -83,8 +83,8 @@ class TestInferenceWorkerEvents:
         events = PipelineEvents(on_inference_start=lambda i: started.append(i))
         with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
             worker = _InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
+                preprocess_queue=in_q,
+                inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
                 active_workers=_AtomicCounter(1),
@@ -107,8 +107,8 @@ class TestInferenceWorkerEvents:
         events = PipelineEvents(on_inference_queued=lambda i: queued.append(i))
         with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
             worker = _InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
+                preprocess_queue=in_q,
+                inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
                 active_workers=_AtomicCounter(1),
@@ -130,8 +130,8 @@ class TestInferenceWorkerEvents:
         events = PipelineEvents(on_frame_error=lambda s, i, e: errors.append((s, i)))
         with patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=RuntimeError("boom")):
             worker = _InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
+                preprocess_queue=in_q,
+                inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
                 active_workers=_AtomicCounter(1),
@@ -157,8 +157,8 @@ class TestInferenceWorkerEvents:
         events = PipelineEvents(on_queue_depth=lambda p, w: depths.append((p, w)))
         with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
             worker = _InferenceWorker(
-                input_queue=in_q,
-                output_queue=out_q,
+                preprocess_queue=in_q,
+                inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
                 active_workers=_AtomicCounter(1),
@@ -168,3 +168,5 @@ class TestInferenceWorkerEvents:
             t.join(timeout=5)
 
         assert len(depths) >= 1
+
+

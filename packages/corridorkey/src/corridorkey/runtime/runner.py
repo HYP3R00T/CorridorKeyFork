@@ -150,18 +150,18 @@ class Runner:
         )
 
         # Step 3 — size the queues.
-        input_depth = max(cfg.input_queue_depth, n * 2)
-        output_depth = max(cfg.output_queue_depth, n * 2)
+        preprocess_depth = max(cfg.input_queue_depth, n * 2)
+        inference_depth = max(cfg.output_queue_depth, n * 2)
 
         # Step 4 — create queues and workers.
-        input_queue: BoundedQueue = BoundedQueue(input_depth)
-        output_queue: BoundedQueue = BoundedQueue(output_depth)
+        preprocess_queue: BoundedQueue = BoundedQueue(preprocess_depth)
+        inference_queue: BoundedQueue = BoundedQueue(inference_depth)
 
         preprocess_worker = PreprocessWorker(
             manifest=manifest,
             config=cfg.preprocess,
-            output_queue=input_queue,
-            postwrite_queue=output_queue,
+            preprocess_queue=preprocess_queue,
+            inference_queue=inference_queue,
             events=self._events,
         )
 
@@ -175,8 +175,8 @@ class Runner:
         inference_threads: list[threading.Thread] = []
         for _i, (device, model) in enumerate(zip(devices, models, strict=True)):
             worker = _InferenceWorker(
-                input_queue=input_queue,
-                output_queue=output_queue,
+                preprocess_queue=preprocess_queue,
+                inference_queue=inference_queue,
                 model=model,
                 config=_override_device(cfg.inference, device),
                 resolved_refiner_mode=resolved_refiner_mode,
@@ -186,7 +186,7 @@ class Runner:
             inference_threads.append(worker.start(name=f"inference-worker-{device}"))
 
         postwrite_worker = PostWriteWorker(
-            input_queue=output_queue,
+            inference_queue=inference_queue,
             output_dir=manifest.output_dir,
             postprocess_config=cfg.postprocess,
             write_config=cfg.write,
@@ -329,14 +329,14 @@ class _InferenceWorker:
     """Pulls PreprocessedFrame, runs inference, pushes InferenceResult.
 
     Coordinates shutdown via a shared ``_AtomicCounter``: each worker
-    re-puts STOP on the input queue so sibling workers also see it, then
+    re-puts STOP on the preprocess queue so sibling workers also see it, then
     decrements the counter. Only the last worker (counter reaches 0) sends
     STOP downstream to PostWriteWorker. With a single worker this is
     equivalent to the classic single-GPU pattern.
     """
 
-    input_queue: BoundedQueue
-    output_queue: BoundedQueue
+    preprocess_queue: BoundedQueue
+    inference_queue: BoundedQueue
     model: nn.Module
     config: InferenceConfig
     active_workers: _AtomicCounter
@@ -352,9 +352,9 @@ class _InferenceWorker:
             self.events.stage_start(f"inference[{self.config.device}]", 0)
         try:
             while True:
-                item = self.input_queue.get()
+                item = self.preprocess_queue.get()
                 if item is STOP:
-                    self.input_queue.put_stop()  # pass STOP to sibling workers
+                    self.preprocess_queue.put_stop()  # pass STOP to sibling workers
                     break
                 assert isinstance(item, PreprocessedFrame)
                 try:
@@ -363,7 +363,7 @@ class _InferenceWorker:
                     result = run_inference(
                         item, self.model, self.config, resolved_refiner_mode=self.resolved_refiner_mode
                     )
-                    self.output_queue.put(result)
+                    self.inference_queue.put(result)
                     logger.debug(
                         "inference[%s]: queued frame %d",
                         self.config.device,
@@ -371,7 +371,7 @@ class _InferenceWorker:
                     )
                     if self.events:
                         self.events.inference_queued(item.meta.frame_index)
-                        self.events.queue_depth(len(self.input_queue), len(self.output_queue))
+                        self.events.queue_depth(len(self.preprocess_queue), len(self.inference_queue))
                 except Exception as e:
                     logger.error(
                         "inference[%s]: skipping frame %d — %s",
@@ -383,7 +383,7 @@ class _InferenceWorker:
                         self.events.frame_error(f"inference[{self.config.device}]", item.meta.frame_index, e)
         finally:
             if self.active_workers.decrement() == 0:
-                self.output_queue.put_stop()
+                self.inference_queue.put_stop()
                 logger.debug("inference: last worker done, sent STOP downstream")
             if self.events:
                 self.events.stage_done(f"inference[{self.config.device}]")

@@ -62,7 +62,7 @@ class TestPreprocessWorker:
         config = PreprocessConfig(img_size=32, device="cpu")
         q: BoundedQueue = BoundedQueue(10)
 
-        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q)
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q)
         t = worker.start()
         t.join(timeout=10)
 
@@ -81,7 +81,7 @@ class TestPreprocessWorker:
         config = PreprocessConfig(img_size=32, device="cpu")
         q: BoundedQueue = BoundedQueue(10)
 
-        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q)
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q)
         t = worker.start()
         t.join(timeout=10)
 
@@ -100,7 +100,7 @@ class TestPreprocessWorker:
         config = PreprocessConfig(img_size=32, device="cpu")
         q: BoundedQueue = BoundedQueue(10)
 
-        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q)
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q)
         t = worker.start()
         t.join(timeout=10)
 
@@ -130,7 +130,7 @@ class TestPreprocessWorker:
             return original_preprocess(m, i, c, **kwargs)
 
         with patch("corridorkey.runtime.worker.preprocess_frame", side_effect=patched_preprocess):
-            worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q)
+            worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q)
             t = worker.start()
             t.join(timeout=10)
 
@@ -156,7 +156,7 @@ class TestPreprocessWorker:
             "corridorkey.runtime.worker.preprocess_frame",
             side_effect=FrameReadError("all broken"),
         ):
-            worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q)
+            worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q)
             t = worker.start()
             t.join(timeout=10)
 
@@ -169,7 +169,7 @@ class TestPreprocessWorker:
         config = PreprocessConfig(img_size=32, device="cpu")
         q: BoundedQueue = BoundedQueue(10)
 
-        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q)
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q)
         t = worker.start()
         assert isinstance(t, threading.Thread)
         t.join(timeout=10)
@@ -179,7 +179,7 @@ class TestPreprocessWorker:
         config = PreprocessConfig(img_size=32, device="cpu")
         q: BoundedQueue = BoundedQueue(10)
 
-        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q)
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q)
         t = worker.start()
         t.join(timeout=10)
 
@@ -214,8 +214,8 @@ class TestInferenceWorker:
 
     def _worker(self, tmp_path, in_q, out_q, **kwargs):
         return _InferenceWorker(
-            input_queue=in_q,
-            output_queue=out_q,
+            preprocess_queue=in_q,
+            inference_queue=out_q,
             model=MagicMock(),
             config=self._make_config(tmp_path),
             active_workers=_AtomicCounter(1),
@@ -333,7 +333,7 @@ class TestPostWriteWorker:
             patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
             patch("corridorkey.runtime.worker.write_frame"),
         ):
-            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
+            worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path)
             t = worker.start()
             t.join(timeout=5)
 
@@ -343,7 +343,7 @@ class TestPostWriteWorker:
         in_q: BoundedQueue = BoundedQueue(10)
         in_q.put_stop()
 
-        worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
+        worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path)
         t = worker.start()
         t.join(timeout=5)
 
@@ -355,7 +355,7 @@ class TestPostWriteWorker:
         in_q: BoundedQueue = BoundedQueue(10)
         in_q.put_stop()
 
-        worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
+        worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path)
         t = worker.start()
         assert isinstance(t, threading.Thread)
         t.join(timeout=5)
@@ -370,7 +370,7 @@ class TestPostWriteWorker:
             patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()) as mock_pp,
             patch("corridorkey.runtime.worker.write_frame") as mock_wf,
         ):
-            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
+            worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path)
             t = worker.start()
             t.join(timeout=5)
 
@@ -387,7 +387,7 @@ class TestPostWriteWorker:
             patch("corridorkey.runtime.worker.postprocess_frame", side_effect=RuntimeError("boom")),
             patch("corridorkey.runtime.worker.write_frame"),
         ):
-            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path)
+            worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path)
             t = worker.start()
             t.join(timeout=5)
 
@@ -407,7 +407,7 @@ class TestPreprocessWorkerEvents:
 
         starts: list[tuple[str, int]] = []
         events = PipelineEvents(on_stage_start=lambda s, t: starts.append((s, t)))
-        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, events=events)
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q, events=events)
         t = worker.start()
         t.join(timeout=10)
         # drain
@@ -423,7 +423,7 @@ class TestPreprocessWorkerEvents:
 
         dones: list[str] = []
         events = PipelineEvents(on_stage_done=lambda s: dones.append(s))
-        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, events=events)
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q, events=events)
         t = worker.start()
         t.join(timeout=10)
         while q.get() is not STOP:
@@ -438,7 +438,7 @@ class TestPreprocessWorkerEvents:
 
         queued: list[int] = []
         events = PipelineEvents(on_preprocess_queued=lambda i: queued.append(i))
-        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, events=events)
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q, events=events)
         t = worker.start()
         t.join(timeout=10)
         while q.get() is not STOP:
@@ -458,7 +458,7 @@ class TestPreprocessWorkerEvents:
             "corridorkey.runtime.worker.preprocess_frame",
             side_effect=FrameReadError("bad"),
         ):
-            worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, events=events)
+            worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q, events=events)
             t = worker.start()
             t.join(timeout=10)
 
@@ -473,7 +473,9 @@ class TestPreprocessWorkerEvents:
 
         depths: list[tuple[int, int]] = []
         events = PipelineEvents(on_queue_depth=lambda p, w: depths.append((p, w)))
-        worker = PreprocessWorker(manifest=manifest, config=config, output_queue=q, postwrite_queue=pw_q, events=events)
+        worker = PreprocessWorker(
+            manifest=manifest, config=config, preprocess_queue=q, inference_queue=pw_q, events=events
+        )
         t = worker.start()
         t.join(timeout=10)
         while q.get() is not STOP:
@@ -504,8 +506,8 @@ class TestInferenceWorkerEvents:
 
     def _worker(self, tmp_path, in_q, out_q, **kwargs):
         return _InferenceWorker(
-            input_queue=in_q,
-            output_queue=out_q,
+            preprocess_queue=in_q,
+            inference_queue=out_q,
             model=MagicMock(),
             config=self._make_config(tmp_path),
             active_workers=_AtomicCounter(1),
@@ -603,7 +605,7 @@ class TestPostWriteWorkerEvents:
 
         starts: list[tuple[str, int]] = []
         events = PipelineEvents(on_stage_start=lambda s, t: starts.append((s, t)))
-        worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path, total_frames=5, events=events)
+        worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path, total_frames=5, events=events)
         t = worker.start()
         t.join(timeout=5)
 
@@ -616,7 +618,7 @@ class TestPostWriteWorkerEvents:
 
         dones: list[str] = []
         events = PipelineEvents(on_stage_done=lambda s: dones.append(s))
-        worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path, events=events)
+        worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path, events=events)
         t = worker.start()
         t.join(timeout=5)
 
@@ -634,7 +636,7 @@ class TestPostWriteWorkerEvents:
             patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
             patch("corridorkey.runtime.worker.write_frame"),
         ):
-            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path, total_frames=3, events=events)
+            worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path, total_frames=3, events=events)
             t = worker.start()
             t.join(timeout=5)
 
@@ -648,7 +650,7 @@ class TestPostWriteWorkerEvents:
         errors: list[tuple[str, int]] = []
         events = PipelineEvents(on_frame_error=lambda s, i, e: errors.append((s, i)))
         with patch("corridorkey.runtime.worker.postprocess_frame", side_effect=RuntimeError("boom")):
-            worker = PostWriteWorker(input_queue=in_q, output_dir=tmp_path, events=events)
+            worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path, events=events)
             t = worker.start()
             t.join(timeout=5)
 
