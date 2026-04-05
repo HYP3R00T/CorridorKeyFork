@@ -3,90 +3,94 @@
 This is the single import surface for any interface (CLI, GUI, TUI, plugin).
 Import everything you need from here — do not import from submodules directly.
 
-Startup
--------
-Call these once before running the pipeline::
+There are two integration paths. Choose the one that fits your use case.
 
-    config = load_config()  # load + validate from file / env vars
-    setup_logging(config)  # configure file logging for this run
-    device = resolve_device(config.device)  # validate compute device
+-------------------------------------------------------------------------------
+Path 1 — Managed pipeline (recommended)
+-------------------------------------------------------------------------------
+The package owns threading, queuing, multi-GPU dispatch, backpressure, and
+shutdown. Your interface provides a clip and a config, then waits for
+completion. Progress is delivered via PipelineEvents callbacks.
 
-Model
------
-Download the model on first run, then load a backend::
+Use this for: CLI, TUI, GUI, web backends — anything that processes clips
+from disk and does not need to control the frame loop itself.
 
-    ensure_model()  # downloads if absent, verifies checksum
-    inference_config = config.to_inference_config(device=device)
-    backend = load_backend(inference_config)
-    print(backend.resolved_config)  # {"backend": "torch", "device": "cuda", ...}
+    # 1. Startup
+    config = load_config()
+    setup_logging(config)
+    device = resolve_device(config.device)
+    ensure_model()
 
-Pipeline — high-level (recommended)
-------------------------------------
-Use ``Runner`` for all new code. Pass ``devices`` to ``to_pipeline_config``
-for multi-GPU — no need to choose a different class::
-
+    # 2. Discover clips
     result = scan("/path/to/clips")
+
+    # 3. Build config once — reuse across all clips in the session
+    pipeline_config = config.to_pipeline_config(device=device)
+
+    # 4. Attach progress callbacks (optional)
+    pipeline_config.events = PipelineEvents(
+        on_frame_written=lambda idx, total: print(f"{idx + 1}/{total}"),
+        on_frame_error=lambda stage, idx, err: print(f"Error: {err}"),
+    )
+
+    # 5. Process each clip
     for clip in result.clips:
         manifest = load(clip)
         if manifest.needs_alpha:
             manifest = resolve_alpha(manifest, "/path/to/alpha_frames")
-
-        # Single GPU
-        pipeline_config = config.to_pipeline_config(device=device)
-
-        # Multiple GPUs — same API, Runner dispatches automatically
-        # pipeline_config = config.to_pipeline_config(devices=resolve_devices("all"))
-
         Runner(manifest, pipeline_config).run()
 
-        # Pass events at run time — same config, different handlers per clip
-        Runner(manifest, pipeline_config, events=my_events).run()
+    # Multi-GPU: pass devices to to_pipeline_config — everything else is the same
+    pipeline_config = config.to_pipeline_config(devices=resolve_devices("all"))
 
-Pipeline — low-level (frame loop)
------------------------------------
-For custom integrations (DaVinci node, Premiere plugin) that need per-frame
-control::
+-------------------------------------------------------------------------------
+Path 2 — Frame loop (low-level)
+-------------------------------------------------------------------------------
+Your interface owns the loop. The package provides the stage functions; you
+call them one frame at a time in whatever threading model suits your host.
 
+Use this for: DaVinci Resolve Fusion nodes, Premiere/After Effects plugins,
+or any host application that manages its own frame scheduling.
+
+    # 1. Load a backend once at startup
+    inference_config = config.to_inference_config(device=device)
+    backend = load_backend(inference_config)
+
+    # 2. Build stage configs
     preprocess_config = config.to_preprocess_config(device=device)
     postprocess_config = config.to_postprocess_config()
     write_config = config.to_writer_config(manifest.output_dir)
 
-    # Build file lists once per clip — avoids a directory scan per frame
+    # 3. Build file lists once per clip
     imgs = get_frame_files(manifest.frames_dir)
     alps = get_frame_files(manifest.alpha_frames_dir)
 
+    # 4. Your host calls this per frame
     for i in range(*manifest.frame_range):
-        preprocessed = preprocess_frame(manifest, i, preprocess_config, image_files=imgs, alpha_files=alps)
+        preprocessed = preprocess_frame(manifest, i, preprocess_config,
+                                        image_files=imgs, alpha_files=alps)
         result = backend.run(preprocessed)
         postprocessed = postprocess_frame(result, postprocess_config)
         write_frame(postprocessed, write_config)
 
-Events
-------
-Attach callbacks to any runner for progress reporting::
+-------------------------------------------------------------------------------
+Clip state inspection
+-------------------------------------------------------------------------------
+Resolve what stage a clip has reached based on what is present on disk.
+Useful for interfaces that need to resume a session or skip already-complete
+clips without re-running them.
 
-    events = PipelineEvents(
-        on_frame_written=lambda idx, total: print(f"{idx + 1}/{total}"),
-        on_frame_error=lambda stage, idx, err: print(f"Error at {stage}:{idx}: {err}"),
-    )
-    Runner(manifest, pipeline_config, events=events).run()
+    state = resolve_clip_state(clip)   # ClipState.READY / RAW / COMPLETE / ...
 
-Clip state machine
-------------------
-Track clip lifecycle across multiple runs::
-
-    entry = ClipEntry.from_clip(clip)  # resolves state from disk
-    entry.state  # ClipState.READY / RAW / COMPLETE / ...
-    entry.transition_to(ClipState.COMPLETE)
-
-Stages
-------
-    Stage 0  scan()             Clip, ScanResult, SkippedPath
-    Stage 1  load()             ClipManifest, VideoMetadata, FrameScan
-    Stage 2  preprocess_frame() PreprocessedFrame, FrameMeta
-    Stage 3  backend.run()      InferenceResult
-    Stage 4  postprocess_frame() PostprocessedFrame
-    Stage 5  write_frame()      files on disk
+-------------------------------------------------------------------------------
+Stages reference
+-------------------------------------------------------------------------------
+    Stage 0  scan()              -> ScanResult  (Clip, SkippedPath)
+    Stage 1  load()              -> ClipManifest
+    Stage 2  preprocess_frame()  -> PreprocessedFrame
+    Stage 3  backend.run()       -> InferenceResult
+    Stage 4  postprocess_frame() -> PostprocessedFrame
+    Stage 5  write_frame()       -> files on disk
 """
 
 from importlib.metadata import PackageNotFoundError
@@ -94,7 +98,7 @@ from importlib.metadata import version as _version
 
 try:
     __version__: str = _version("corridorkey")
-except PackageNotFoundError:  # editable install or not installed
+except PackageNotFoundError:
     __version__ = "0.0.0.dev0"
 
 from corridorkey.errors import (
@@ -135,7 +139,8 @@ from corridorkey.infra import (
     setup_logging,
     write_config,
 )
-from corridorkey.runtime.clip_state import ClipEntry, ClipState, InOutRange
+from corridorkey.runtime.clip_state import ClipState
+from corridorkey.runtime.clip_state import _resolve_state as resolve_clip_state
 from corridorkey.runtime.runner import PipelineConfig, Runner
 from corridorkey.stages.inference import (
     BackendChoice,
@@ -143,21 +148,14 @@ from corridorkey.stages.inference import (
     InferenceResult,
     ModelBackend,
     RefinerMode,
-    TorchBackend,
-    discover_checkpoint,
     load_backend,
-    load_model,
-    run_inference,
 )
-from corridorkey.stages.inference.config import VALID_IMG_SIZES, adaptive_img_size
 from corridorkey.stages.loader import (
     ClipManifest,
-    FrameScan,
     VideoMetadata,
     load,
     load_video_metadata,
     resolve_alpha,
-    scan_frames,
 )
 from corridorkey.stages.loader.validator import get_frame_files
 from corridorkey.stages.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
@@ -178,13 +176,13 @@ __all__ = [
     # ------------------------------------------------------------------ #
     # Startup                                                            #
     # ------------------------------------------------------------------ #
-    "APP_NAME",
     "load_config",
     "load_config_with_metadata",
     "write_config",
     "ensure_config_file",
     "get_config_path",
     "setup_logging",
+    "APP_NAME",
     # ------------------------------------------------------------------ #
     # Device                                                             #
     # ------------------------------------------------------------------ #
@@ -201,7 +199,7 @@ __all__ = [
     "MODEL_URL",
     "MODEL_FILENAME",
     # ------------------------------------------------------------------ #
-    # Configuration models                                               #
+    # Configuration                                                      #
     # ------------------------------------------------------------------ #
     "CorridorKeyConfig",
     "LoggingSettings",
@@ -210,26 +208,23 @@ __all__ = [
     "PostprocessSettings",
     "WriterSettings",
     # ------------------------------------------------------------------ #
-    # Pipeline runners                                                   #
-    # ------------------------------------------------------------------ #
-    "Runner",
-    "PipelineConfig",
-    "PipelineEvents",
-    # ------------------------------------------------------------------ #
-    # Pipeline stages — entry points                                     #
+    # Path 1 — Managed pipeline                                         #
     # ------------------------------------------------------------------ #
     "scan",
     "load",
     "resolve_alpha",
-    "load_video_metadata",
-    "preprocess_frame",
+    "Runner",
+    "PipelineConfig",
+    "PipelineEvents",
+    # ------------------------------------------------------------------ #
+    # Path 2 — Frame loop                                                #
+    # ------------------------------------------------------------------ #
     "load_backend",
-    "load_model",
-    "run_inference",
+    "preprocess_frame",
     "postprocess_frame",
     "write_frame",
     # ------------------------------------------------------------------ #
-    # Stage contracts                                                    #
+    # Stage contracts (both paths)                                       #
     # ------------------------------------------------------------------ #
     # Scanr
     "Clip",
@@ -238,35 +233,29 @@ __all__ = [
     # Loader
     "ClipManifest",
     "VideoMetadata",
-    "FrameScan",
-    "scan_frames",
+    "load_video_metadata",
     "get_frame_files",
     # Preprocessor
     "PreprocessConfig",
     "PreprocessedFrame",
     "FrameMeta",
+    "FrameReadError",
     # Inference
     "InferenceConfig",
     "InferenceResult",
+    "ModelBackend",
     "BackendChoice",
     "RefinerMode",
-    "VALID_IMG_SIZES",
-    "adaptive_img_size",
-    # Inference backends
-    "ModelBackend",
-    "TorchBackend",
-    "discover_checkpoint",
     # Postprocessor
     "PostprocessConfig",
     "PostprocessedFrame",
     # Writer
     "WriteConfig",
     # ------------------------------------------------------------------ #
-    # Clip state machine                                                 #
+    # Clip state inspection                                              #
     # ------------------------------------------------------------------ #
     "ClipState",
-    "ClipEntry",
-    "InOutRange",
+    "resolve_clip_state",
     # ------------------------------------------------------------------ #
     # Errors                                                             #
     # ------------------------------------------------------------------ #

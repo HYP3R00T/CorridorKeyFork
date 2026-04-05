@@ -29,7 +29,6 @@ VideoMetadata
 from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.extractor import VideoMetadata, load_video_metadata
 from corridorkey.stages.loader.orchestrator import load, resolve_alpha
-from corridorkey.stages.loader.validator import FrameScan, scan_frames
 
 __all__ = [
     "load",
@@ -37,6 +36,4 @@ __all__ = [
     "ClipManifest",
     "VideoMetadata",
     "load_video_metadata",
-    "FrameScan",
-    "scan_frames",
 ]

@@ -11,27 +11,19 @@ Contracts:
     ModelBackend      — protocol satisfied by TorchBackend and MLXBackend
 """
 
-from corridorkey.stages.inference.backend import ModelBackend, TorchBackend
+from corridorkey.stages.inference.backend import ModelBackend
 from corridorkey.stages.inference.config import BackendChoice, InferenceConfig, RefinerMode
 from corridorkey.stages.inference.contracts import InferenceResult
-from corridorkey.stages.inference.factory import discover_checkpoint, load_backend
-from corridorkey.stages.inference.loader import load_model
-from corridorkey.stages.inference.orchestrator import run_inference
+from corridorkey.stages.inference.factory import load_backend
 
 __all__ = [
     # Preferred entry point
     "load_backend",
-    # Lower-level torch-only entry points
-    "load_model",
-    "run_inference",
     # Contracts
     "InferenceConfig",
     "InferenceResult",
     "RefinerMode",
     "BackendChoice",
-    # Backend protocol + implementations
+    # Backend protocol
     "ModelBackend",
-    "TorchBackend",
-    # Utilities
-    "discover_checkpoint",
 ]
