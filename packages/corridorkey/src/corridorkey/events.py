@@ -44,6 +44,16 @@ on_queue_depth(preprocess_queue, postwrite_queue)
 
 on_frame_error(stage, frame_index, error)
     A frame was skipped due to an error in ``stage``.
+
+on_clip_complete(clip_name, frames_written)
+    The clip finished successfully. ``frames_written`` is the total number of
+    frames that were written to disk. Fired by ``Runner.run()`` after all
+    worker threads have joined cleanly.
+
+on_clip_error(clip_name, error)
+    The clip did not complete. ``error`` is the exception that caused the
+    failure (e.g. ``JobCancelledError``, ``RuntimeError``). Fired by
+    ``Runner.run()`` before the exception propagates to the caller.
 """
 
 from __future__ import annotations
@@ -88,6 +98,24 @@ class PipelineEvents:
 
     # Error events
     on_frame_error: Callable[[str, int, Exception], None] | None = field(default=None)
+
+    # Clip-level events — fired by Runner.run() once per clip
+    on_clip_complete: Callable[[str, int], None] | None = field(default=None)
+    """on_clip_complete(clip_name, frames_written)
+
+    Fired after all frames have been written and all worker threads have
+    exited cleanly. ``frames_written`` is the manifest frame count.
+    Useful for updating a batch progress list in a GUI.
+    """
+
+    on_clip_error: Callable[[str, Exception], None] | None = field(default=None)
+    """on_clip_error(clip_name, error)
+
+    Fired when a clip does not complete — either because it was cancelled
+    (``JobCancelledError``) or because an unhandled exception occurred.
+    Fired before the exception propagates to the caller, so the UI can
+    update the clip's status before handling the error itself.
+    """
 
     # Scan events
     on_clip_found: Callable[[str, Path], None] | None = field(default=None)
@@ -143,3 +171,11 @@ class PipelineEvents:
     def clip_skipped(self, reason: str, path: Path) -> None:
         if self.on_clip_skipped:
             self.on_clip_skipped(reason, path)
+
+    def clip_complete(self, clip_name: str, frames_written: int) -> None:
+        if self.on_clip_complete:
+            self.on_clip_complete(clip_name, frames_written)
+
+    def clip_error(self, clip_name: str, error: Exception) -> None:
+        if self.on_clip_error:
+            self.on_clip_error(clip_name, error)

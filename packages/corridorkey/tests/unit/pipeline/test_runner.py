@@ -559,3 +559,176 @@ class TestRunnerCancellation:
         runner.cancel()
         runner.cancel()  # second call must not raise
         runner.cancel()
+
+
+# ---------------------------------------------------------------------------
+# Runner — clip-level events
+# ---------------------------------------------------------------------------
+
+
+class TestRunnerClipEvents:
+    """Verifies on_clip_complete and on_clip_error fire at the right times."""
+
+    def _base_patches(self, frame_count: int = 3):
+        """Return the standard mock stack used by most tests in this class."""
+        from unittest.mock import MagicMock, patch
+
+        def fake_run_inference(frame, model, config, **kwargs):
+            return _make_fake_result(frame.meta.frame_index)
+
+        return [
+            patch("corridorkey.stages.inference.loader.load_model", return_value=MagicMock()),
+            patch(
+                "corridorkey.stages.inference.orchestrator.run_inference",
+                side_effect=fake_run_inference,
+            ),
+            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey.runtime.worker.write_frame"),
+        ]
+
+    def test_clip_complete_fires_on_success(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path, frame_count=3)
+        cfg = _make_pipeline_config(tmp_path)
+
+        completed: list[tuple[str, int]] = []
+        cfg.events = PipelineEvents(on_clip_complete=lambda name, n: completed.append((name, n)))
+
+        patches = self._base_patches()
+        with patches[0], patches[1], patches[2], patches[3]:
+            Runner(manifest, cfg).run()
+
+        assert completed == [("test", 3)]
+
+    def test_clip_complete_carries_frame_count(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path, frame_count=5)
+        cfg = _make_pipeline_config(tmp_path)
+
+        frame_counts: list[int] = []
+        cfg.events = PipelineEvents(on_clip_complete=lambda name, n: frame_counts.append(n))
+
+        patches = self._base_patches(frame_count=5)
+        with patches[0], patches[1], patches[2], patches[3]:
+            Runner(manifest, cfg).run()
+
+        assert frame_counts == [5]
+
+    def test_clip_complete_not_fired_on_cancel(self, tmp_path: Path):
+        from corridorkey.errors import JobCancelledError
+
+        manifest = _make_manifest(tmp_path, frame_count=10)
+        cfg = _make_pipeline_config(tmp_path)
+
+        completed: list[str] = []
+        cfg.events = PipelineEvents(on_clip_complete=lambda name, n: completed.append(name))
+
+        runner = Runner(manifest, cfg)
+
+        def fake_write(frame, config):
+            runner.cancel()
+
+        def fake_run_inference(frame, model, config, **kwargs):
+            return _make_fake_result(frame.meta.frame_index)
+
+        with (
+            patch("corridorkey.stages.inference.loader.load_model", return_value=MagicMock()),
+            patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=fake_run_inference),
+            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey.runtime.worker.write_frame", side_effect=fake_write),
+            pytest.raises(JobCancelledError),
+        ):
+            runner.run()
+
+        assert completed == []
+
+    def test_clip_error_fires_on_cancel(self, tmp_path: Path):
+        from corridorkey.errors import JobCancelledError
+
+        manifest = _make_manifest(tmp_path, frame_count=10)
+        cfg = _make_pipeline_config(tmp_path)
+
+        errors: list[tuple[str, Exception]] = []
+        cfg.events = PipelineEvents(on_clip_error=lambda name, err: errors.append((name, err)))
+
+        runner = Runner(manifest, cfg)
+
+        def fake_write(frame, config):
+            runner.cancel()
+
+        def fake_run_inference(frame, model, config, **kwargs):
+            return _make_fake_result(frame.meta.frame_index)
+
+        with (
+            patch("corridorkey.stages.inference.loader.load_model", return_value=MagicMock()),
+            patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=fake_run_inference),
+            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey.runtime.worker.write_frame", side_effect=fake_write),
+            pytest.raises(JobCancelledError),
+        ):
+            runner.run()
+
+        assert len(errors) == 1
+        name, err = errors[0]
+        assert name == "test"
+        assert isinstance(err, JobCancelledError)
+
+    def test_clip_error_fires_before_exception_propagates(self, tmp_path: Path):
+        """on_clip_error must be called before JobCancelledError reaches the caller."""
+        from corridorkey.errors import JobCancelledError
+
+        manifest = _make_manifest(tmp_path, frame_count=10)
+        cfg = _make_pipeline_config(tmp_path)
+
+        sequence: list[str] = []
+        cfg.events = PipelineEvents(on_clip_error=lambda name, err: sequence.append("event"))
+
+        runner = Runner(manifest, cfg)
+
+        def fake_write(frame, config):
+            runner.cancel()
+
+        def fake_run_inference(frame, model, config, **kwargs):
+            return _make_fake_result(frame.meta.frame_index)
+
+        try:
+            with (
+                patch("corridorkey.stages.inference.loader.load_model", return_value=MagicMock()),
+                patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=fake_run_inference),
+                patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
+                patch("corridorkey.runtime.worker.write_frame", side_effect=fake_write),
+            ):
+                runner.run()
+        except JobCancelledError:
+            sequence.append("exception")
+
+        assert sequence == ["event", "exception"]
+
+    def test_clip_error_not_fired_on_success(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path, frame_count=3)
+        cfg = _make_pipeline_config(tmp_path)
+
+        errors: list[str] = []
+        cfg.events = PipelineEvents(on_clip_error=lambda name, err: errors.append(name))
+
+        patches = self._base_patches()
+        with patches[0], patches[1], patches[2], patches[3]:
+            Runner(manifest, cfg).run()
+
+        assert errors == []
+
+    def test_both_callbacks_can_be_set_simultaneously(self, tmp_path: Path):
+        manifest = _make_manifest(tmp_path, frame_count=2)
+        cfg = _make_pipeline_config(tmp_path)
+
+        completed: list[str] = []
+        errors: list[str] = []
+        cfg.events = PipelineEvents(
+            on_clip_complete=lambda name, n: completed.append(name),
+            on_clip_error=lambda name, err: errors.append(name),
+        )
+
+        patches = self._base_patches()
+        with patches[0], patches[1], patches[2], patches[3]:
+            Runner(manifest, cfg).run()
+
+        assert completed == ["test"]
+        assert errors == []

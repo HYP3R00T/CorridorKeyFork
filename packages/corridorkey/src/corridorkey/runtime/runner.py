@@ -229,9 +229,14 @@ class Runner:
 
         if self._cancel_event.is_set():
             logger.info("runner: clip='%s' cancelled", manifest.clip_name)
-            raise JobCancelledError(manifest.clip_name)
+            exc = JobCancelledError(manifest.clip_name)
+            if self._events:
+                self._events.clip_error(manifest.clip_name, exc)
+            raise exc
 
         logger.info("runner: clip='%s' complete", manifest.clip_name)
+        if self._events:
+            self._events.clip_complete(manifest.clip_name, manifest.frame_count)
 
     def _load_models(
         self,

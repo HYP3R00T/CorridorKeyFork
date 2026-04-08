@@ -75,6 +75,19 @@ class TestPipelineEventsFireHelpers:
         e.clip_skipped("no input", Path("/some/path"))
         assert calls == ["no input"]
 
+    def test_clip_complete_fires_callback(self):
+        calls: list[tuple[str, int]] = []
+        e = PipelineEvents(on_clip_complete=lambda name, n: calls.append((name, n)))
+        e.clip_complete("my_clip", 42)
+        assert calls == [("my_clip", 42)]
+
+    def test_clip_error_fires_callback(self):
+        calls: list[tuple[str, Exception]] = []
+        err = RuntimeError("boom")
+        e = PipelineEvents(on_clip_error=lambda name, ex: calls.append((name, ex)))
+        e.clip_error("my_clip", err)
+        assert calls == [("my_clip", err)]
+
     def test_none_callbacks_do_not_raise(self):
         e = PipelineEvents()
         e.stage_start("extract", 0)
@@ -88,6 +101,8 @@ class TestPipelineEventsFireHelpers:
         e.frame_error("stage", 0, Exception())
         e.clip_found("x", Path("."))
         e.clip_skipped("reason", Path("."))
+        e.clip_complete("x", 0)
+        e.clip_error("x", Exception())
 
 
 class TestPipelineEventsConstruction:
@@ -104,6 +119,8 @@ class TestPipelineEventsConstruction:
         assert e.on_frame_error is None
         assert e.on_clip_found is None
         assert e.on_clip_skipped is None
+        assert e.on_clip_complete is None
+        assert e.on_clip_error is None
 
     def test_callback_stored_when_provided(self):
         def cb(idx, total):
