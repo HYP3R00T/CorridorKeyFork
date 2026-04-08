@@ -83,6 +83,26 @@ clips without re-running them.
     state = resolve_clip_state(clip)   # ClipState.READY / RAW / COMPLETE / ...
 
 -------------------------------------------------------------------------------
+Session management
+-------------------------------------------------------------------------------
+``ClipEntry`` wraps a ``Clip`` with mutable processing state, making it the
+right building block for a session list in a GUI or TUI. Construct one per
+clip after scanning; the state machine tracks progress through the pipeline.
+
+    entries = [ClipEntry.from_clip(c) for c in result.clips]
+
+    # Check what stage each clip is at
+    for entry in entries:
+        print(entry.name, entry.state)   # ClipState.RAW / READY / COMPLETE / ...
+
+    # Narrow a clip to an in/out range before processing
+    entry.in_out_range = InOutRange(in_point=10, out_point=49)
+
+    # After processing, inspect outputs
+    print(entry.completed_frame_count())
+    print(entry.has_outputs)
+
+-------------------------------------------------------------------------------
 Stages reference
 -------------------------------------------------------------------------------
     Stage 0  scan()              -> ScanResult  (Clip, SkippedPath)
@@ -139,8 +159,7 @@ from corridorkey.infra import (
     setup_logging,
     write_config,
 )
-from corridorkey.runtime.clip_state import ClipState
-from corridorkey.runtime.clip_state import _resolve_state as resolve_clip_state
+from corridorkey.runtime.clip_state import ClipEntry, ClipState, InOutRange, resolve_clip_state
 from corridorkey.runtime.runner import PipelineConfig, Runner
 from corridorkey.stages.inference import (
     InferenceConfig,
@@ -244,9 +263,11 @@ __all__ = [
     # Writer
     "WriteConfig",
     # ------------------------------------------------------------------ #
-    # Clip state inspection                                              #
+    # Clip state inspection & session management                        #
     # ------------------------------------------------------------------ #
     "ClipState",
+    "ClipEntry",
+    "InOutRange",
     "resolve_clip_state",
     # ------------------------------------------------------------------ #
     # Errors                                                             #

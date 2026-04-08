@@ -331,3 +331,19 @@ def _resolve_state(clip: Clip) -> ClipState:
             )
 
     return ClipState.RAW
+
+
+def resolve_clip_state(clip: Clip) -> ClipState:
+    """Resolve the current :class:`ClipState` for a clip from what is on disk.
+
+    Convenience wrapper around the internal ``_resolve_state`` function,
+    exposed as part of the public API.
+
+    Args:
+        clip: :class:`~corridorkey.stages.scanner.contracts.Clip` produced
+            by :func:`~corridorkey.scan`.
+
+    Returns:
+        The most advanced :class:`ClipState` the clip has reached.
+    """
+    return _resolve_state(clip)
