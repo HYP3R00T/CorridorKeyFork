@@ -256,7 +256,16 @@ class Runner:
                 )
             model_device = next(cfg.model.parameters()).device
             expected = torch.device(devices[0])
-            if model_device != expected:
+
+            # Normalize both to index-qualified form before comparing.
+            # torch.device("cuda") != torch.device("cuda:0") even though they
+            # refer to the same physical device, so we resolve the index explicitly.
+            def _resolve(d: torch.device) -> torch.device:
+                if d.type == "cuda" and d.index is None:
+                    return torch.device("cuda", torch.cuda.current_device())
+                return d
+
+            if _resolve(model_device) != _resolve(expected):
                 raise ValueError(
                     f"cfg.model is on {model_device} but the configured device is "
                     f"{expected}. Move the model to the correct device before passing it."
