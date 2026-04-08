@@ -342,6 +342,82 @@ class TestRunnerEndToEnd:
 
 
 # ---------------------------------------------------------------------------
+# Runner — pre-loaded model (cfg.model) device validation
+# ---------------------------------------------------------------------------
+
+
+class TestRunnerPreloadedModel:
+    """Tests for the cfg.model fast-path in _load_models."""
+
+    def _make_model_on(self, device: torch.device) -> MagicMock:
+        """Return a mock nn.Module whose first parameter lives on *device*."""
+        param = MagicMock()
+        param.device = device
+        model = MagicMock()
+        model.parameters = MagicMock(return_value=iter([param]))
+        return model
+
+    def _run_with_preloaded(self, tmp_path: Path, model_device: torch.device, config_device: str) -> None:
+        """Wire up Runner with a pre-loaded model and run it end-to-end."""
+        manifest = _make_manifest(tmp_path, frame_count=1)
+        model = self._make_model_on(model_device)
+        cfg = PipelineConfig(
+            preprocess=PreprocessConfig(img_size=512, device="cpu"),
+            inference=_make_inference_config(tmp_path, device=config_device),
+            model=model,
+        )
+
+        def fake_run_inference(frame, mdl, config, **kwargs):
+            return _make_fake_result(frame.meta.frame_index)
+
+        with (
+            patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=fake_run_inference),
+            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey.runtime.worker.write_frame"),
+        ):
+            Runner(manifest, cfg).run()
+
+    def test_exact_device_match_accepted(self, tmp_path: Path):
+        """Model on cpu, config device cpu — should pass without error."""
+        self._run_with_preloaded(tmp_path, torch.device("cpu"), "cpu")
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_bare_cuda_matches_cuda_0(self, tmp_path: Path):
+        """Model on cuda:0, config device 'cuda' — must not raise (the bug fix)."""
+        self._run_with_preloaded(tmp_path, torch.device("cuda:0"), "cuda")
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_cuda_0_matches_cuda_0(self, tmp_path: Path):
+        """Model on cuda:0, config device 'cuda:0' — exact match should pass."""
+        self._run_with_preloaded(tmp_path, torch.device("cuda:0"), "cuda:0")
+
+    def test_device_mismatch_raises(self, tmp_path: Path):
+        """Model on cpu, config device cuda:0 — must raise ValueError."""
+        manifest = _make_manifest(tmp_path, frame_count=1)
+        model = self._make_model_on(torch.device("cpu"))
+        cfg = PipelineConfig(
+            preprocess=PreprocessConfig(img_size=512, device="cpu"),
+            inference=_make_inference_config(tmp_path, device="cuda:0"),
+            model=model,
+        )
+        with pytest.raises(ValueError, match="cfg.model is on"):
+            Runner(manifest, cfg).run()
+
+    def test_multi_device_with_preloaded_model_raises(self, tmp_path: Path):
+        """cfg.model cannot be shared across multiple devices."""
+        manifest = _make_manifest(tmp_path, frame_count=1)
+        model = self._make_model_on(torch.device("cpu"))
+        cfg = PipelineConfig(
+            preprocess=PreprocessConfig(img_size=512, device="cpu"),
+            inference=_make_inference_config(tmp_path, device="cpu"),
+            devices=["cpu", "cpu"],
+            model=model,
+        )
+        with pytest.raises(ValueError, match="cfg.model cannot be shared"):
+            Runner(manifest, cfg).run()
+
+
+# ---------------------------------------------------------------------------
 # PipelineConfig defaults
 # ---------------------------------------------------------------------------
 
