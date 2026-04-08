@@ -5,15 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from corridorkey.stages.loader.contracts import LoadResult
+from corridorkey.stages.loader.contracts import ClipManifest
 
 
-def _make_manifest(tmp_path: Path, **overrides) -> LoadResult:
+def _make_manifest(tmp_path: Path, **overrides) -> ClipManifest:
     frames = tmp_path / "Frames"
     frames.mkdir(exist_ok=True)
     output = tmp_path / "Output"
     output.mkdir(exist_ok=True)
-    return LoadResult(
+    return ClipManifest(
         clip_name=str(overrides.get("clip_name", "test")),
         clip_root=overrides.get("clip_root", tmp_path),
         frames_dir=overrides.get("frames_dir", frames),

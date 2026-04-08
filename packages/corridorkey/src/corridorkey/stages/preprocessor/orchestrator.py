@@ -28,7 +28,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from corridorkey.stages.loader.contracts import LoadResult
+from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.validator import get_frame_files
 from corridorkey.stages.preprocessor.colorspace import linear_to_srgb, linear_to_srgb_numpy
 from corridorkey.stages.preprocessor.contracts import FrameMeta, PreprocessedFrame
@@ -74,7 +74,7 @@ class PreprocessConfig:
 
 
 def preprocess_frame(
-    manifest: LoadResult,
+    manifest: ClipManifest,
     i: int,
     config: PreprocessConfig,
     *,
@@ -176,7 +176,7 @@ def preprocess_frame(
 
 
 def _resolve_paths(
-    manifest: LoadResult,
+    manifest: ClipManifest,
     i: int,
     image_files: list[Path] | None,
     alpha_files: list[Path] | None,

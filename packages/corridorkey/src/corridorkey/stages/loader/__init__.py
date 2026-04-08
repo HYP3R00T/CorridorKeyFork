@@ -26,11 +26,11 @@ VideoMetadata
     for re-encoding output sequences with matching properties.
 """
 
-from corridorkey.stages.loader.contracts import LoadResult
+from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.orchestrator import load, resolve_alpha
 
 __all__ = [
     "load",
     "resolve_alpha",
-    "LoadResult",
+    "ClipManifest",
 ]

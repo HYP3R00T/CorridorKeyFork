@@ -21,7 +21,7 @@ from pathlib import Path
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import STOP, BoundedQueue
 from corridorkey.stages.inference import InferenceResult
-from corridorkey.stages.loader.contracts import LoadResult
+from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.validator import get_frame_files
 from corridorkey.stages.postprocessor import PostprocessConfig, postprocess_frame
 from corridorkey.stages.preprocessor import FrameReadError, PreprocessConfig, preprocess_frame
@@ -48,7 +48,7 @@ class PreprocessWorker:
         events: Optional pipeline event callbacks.
     """
 
-    manifest: LoadResult
+    manifest: ClipManifest
     config: PreprocessConfig
     preprocess_queue: BoundedQueue
     inference_queue: BoundedQueue | None = None

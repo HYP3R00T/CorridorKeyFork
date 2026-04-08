@@ -149,13 +149,14 @@ from corridorkey.stages.inference import (
     load_backend,
 )
 from corridorkey.stages.loader import (
-    LoadResult,
+    ClipManifest,
     load,
     resolve_alpha,
 )
 from corridorkey.stages.loader.validator import get_frame_files
 from corridorkey.stages.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
 from corridorkey.stages.preprocessor import (
+    FrameMeta,
     PreprocessConfig,
     PreprocessedFrame,
     preprocess_frame,
@@ -226,11 +227,12 @@ __all__ = [
     "ScanResult",
     "SkippedPath",
     # Loader
-    "LoadResult",
+    "ClipManifest",
     "get_frame_files",
     # Preprocessor
     "PreprocessConfig",
     "PreprocessedFrame",
+    "FrameMeta",
     "FrameReadError",
     # Inference
     "InferenceConfig",

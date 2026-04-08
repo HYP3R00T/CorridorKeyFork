@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from corridorkey.errors import ExtractionError, FrameMismatchError
 from corridorkey.events import PipelineEvents
-from corridorkey.stages.loader.contracts import LoadResult
+from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.extractor import DEFAULT_PNG_COMPRESSION, VideoMetadata
 from corridorkey.stages.loader.orchestrator import load, resolve_alpha
 from corridorkey.stages.scanner.contracts import Clip
@@ -336,7 +336,7 @@ class TestLoadEvents:
 
 
 class TestResolveAlpha:
-    def _base_manifest(self, tmp_path: Path) -> LoadResult:
+    def _base_manifest(self, tmp_path: Path) -> ClipManifest:
         return load(_make_clip(tmp_path / "my_clip"))
 
     def test_sets_alpha_frames_dir(self, tmp_path: Path):

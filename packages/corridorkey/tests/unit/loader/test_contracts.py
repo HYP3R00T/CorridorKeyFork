@@ -5,17 +5,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from corridorkey.stages.loader.contracts import LoadResult
+from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.extractor import DEFAULT_PNG_COMPRESSION
 from pydantic import ValidationError
 
 
-def _make_manifest(tmp_path: Path, **overrides: object) -> LoadResult:
+def _make_manifest(tmp_path: Path, **overrides: object) -> ClipManifest:
     frames = tmp_path / "Frames"
     frames.mkdir(exist_ok=True)
     output = tmp_path / "Output"
     output.mkdir(exist_ok=True)
-    return LoadResult(
+    return ClipManifest(
         clip_name=str(overrides.get("clip_name", "test")),
         clip_root=overrides.get("clip_root", tmp_path),  # type: ignore[arg-type]
         frames_dir=overrides.get("frames_dir", frames),  # type: ignore[arg-type]
@@ -70,7 +70,7 @@ class TestClipManifest:
 
     def test_model_dump_json_roundtrip(self, tmp_path: Path):
         m = _make_manifest(tmp_path, frame_count=5, frame_range=(0, 5))
-        restored = LoadResult.model_validate_json(m.model_dump_json())
+        restored = ClipManifest.model_validate_json(m.model_dump_json())
         assert restored.clip_name == m.clip_name
         assert restored.frame_count == m.frame_count
         assert restored.png_compression == m.png_compression

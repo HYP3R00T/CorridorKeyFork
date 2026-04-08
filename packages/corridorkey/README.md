@@ -32,8 +32,8 @@ pip install "corridorkey[rocm]"
 from corridorkey import (
     load_config, setup_logging, resolve_device,
     scan, load, resolve_alpha,
-    preprocess_frame, run_inference, postprocess_frame, write_frame,
-    InferenceConfig, load_model,
+    preprocess_frame, postprocess_frame, write_frame,
+    InferenceConfig, load_backend, get_frame_files,
 )
 
 config = load_config()
@@ -51,25 +51,22 @@ for clip in clips.clips:
         manifest = resolve_alpha(manifest, "/path/to/alpha_frames")
 
     # Build stage configs
-    inference_config, resolved_refiner_mode = config.to_inference_config(
-        device=device, _return_resolved_refiner_mode=True
-    )
+    inference_config = config.to_inference_config(device=device)
     preprocess_config = config.to_preprocess_config(
         device=device, resolved_img_size=inference_config.img_size
     )
     postprocess_config = config.to_postprocess_config()
     write_config = config.to_writer_config(manifest.output_dir)
 
-    model = load_model(inference_config, resolved_refiner_mode=resolved_refiner_mode)
+    backend = load_backend(inference_config)
 
-    from corridorkey import get_frame_files
     imgs = get_frame_files(manifest.frames_dir)
     alps = get_frame_files(manifest.alpha_frames_dir)
 
     for i in range(*manifest.frame_range):
         preprocessed = preprocess_frame(manifest, i, preprocess_config,
                                         image_files=imgs, alpha_files=alps)
-        result = run_inference(preprocessed, model, inference_config)
+        result = backend.run(preprocessed)
         postprocessed = postprocess_frame(result, postprocess_config)
         write_frame(postprocessed, write_config)
 ```
@@ -98,7 +95,7 @@ Accepts a clips root directory, a single clip folder, or a single video file.
 ### load
 
 ```python
-manifest = load(clip)  # -> LoadResult
+manifest = load(clip)  # -> ClipManifest
 # manifest.needs_alpha: bool — True if no alpha hint frames found
 # manifest.frames_dir: Path
 # manifest.alpha_frames_dir: Path

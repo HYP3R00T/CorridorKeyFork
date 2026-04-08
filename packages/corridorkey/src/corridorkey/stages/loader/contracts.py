@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from corridorkey.stages.loader.extractor import DEFAULT_PNG_COMPRESSION
 
 
-class LoadResult(BaseModel):
+class ClipManifest(BaseModel):
     """Output contract of stage 1. Input to all downstream stages.
 
     Frozen — all fields are immutable after construction. Use model_copy()
@@ -62,7 +62,7 @@ class LoadResult(BaseModel):
     png_compression: int = DEFAULT_PNG_COMPRESSION
 
     @model_validator(mode="after")
-    def validate_frame_range(self) -> LoadResult:
+    def validate_frame_range(self) -> ClipManifest:
         start, end = self.frame_range
         if start < 0:
             raise ValueError(f"frame_range start must be >= 0, got {start}")
