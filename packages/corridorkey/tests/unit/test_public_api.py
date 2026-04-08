@@ -159,3 +159,46 @@ class TestResolveClipStateExported:
 
         assert isinstance(state, ClipState)
         assert state == ClipState.RAW
+
+
+class TestModelConstantsNotInAll:
+    def test_model_url_not_in_all(self):
+        assert "MODEL_URL" not in corridorkey.__all__
+
+    def test_model_filename_not_in_all(self):
+        assert "MODEL_FILENAME" not in corridorkey.__all__
+
+    def test_model_constants_still_importable_from_submodule(self):
+        # CLI and other consumers can still import them directly — they're
+        # just not advertised as primary API.
+        from corridorkey.infra.model_hub import MODEL_FILENAME, MODEL_URL
+
+        assert isinstance(MODEL_URL, str)
+        assert MODEL_URL.startswith("https://")
+        assert isinstance(MODEL_FILENAME, str)
+        assert MODEL_FILENAME.endswith(".pth")
+
+
+class TestSettingsMetadataExported:
+    def test_settings_metadata_in_all(self):
+        assert "SettingsMetadata" in corridorkey.__all__
+
+    def test_settings_metadata_importable(self):
+        from corridorkey import SettingsMetadata
+
+        assert SettingsMetadata is not None
+
+    def test_load_config_with_metadata_returns_settings_metadata(self):
+        from corridorkey import SettingsMetadata, load_config_with_metadata
+
+        _, metadata = load_config_with_metadata()
+        assert isinstance(metadata, SettingsMetadata)
+
+    def test_settings_metadata_get_source_callable(self):
+        from corridorkey import load_config_with_metadata
+
+        _, metadata = load_config_with_metadata()
+        # get_source returns None for unknown fields, not an error
+        result = metadata.get_source("device")
+        # result is either a FieldSource or None — either is valid
+        assert result is None or hasattr(result, "source")

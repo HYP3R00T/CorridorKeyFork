@@ -8,6 +8,13 @@ load_config([overrides]) -> CorridorKeyConfig
     Load and validate configuration from config files, environment variables,
     and optional runtime overrides. Always call this first.
 
+load_config_with_metadata([overrides]) -> tuple[CorridorKeyConfig, SettingsMetadata]
+    Like load_config, but also returns per-field source attribution. Use this
+    when you need to show the user where each config value came from (e.g. a
+    "show config" command or a settings UI that highlights overridden fields).
+    ``metadata.get_source("field_name")`` returns a FieldSource with .source
+    ("defaults", "global", "project", or "env") and .raw_value.
+
 setup_logging(config)
     Configure the file handler for this run. The interface layer is
     responsible for adding its own console/GUI handler on top.
@@ -38,6 +45,7 @@ default_checkpoint_path() -> Path
 """
 
 from utilityhub_config import ensure_config_file, get_config_path, write_config
+from utilityhub_config.metadata import SettingsMetadata
 
 from corridorkey.infra.config import (
     APP_NAME,
@@ -59,6 +67,7 @@ __all__ = [
     "APP_NAME",
     "load_config",
     "load_config_with_metadata",
+    "SettingsMetadata",
     "write_config",
     "ensure_config_file",
     "get_config_path",
@@ -81,6 +90,4 @@ __all__ = [
     # Model hub
     "ensure_model",
     "default_checkpoint_path",
-    "MODEL_URL",
-    "MODEL_FILENAME",
 ]

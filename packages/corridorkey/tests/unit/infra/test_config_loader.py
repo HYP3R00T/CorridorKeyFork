@@ -39,6 +39,18 @@ class TestLoadConfigWithMetadata:
         cfg, _ = load_config_with_metadata()
         assert isinstance(cfg, CorridorKeyConfig)
 
+    def test_second_element_is_settings_metadata(self):
+        from utilityhub_config.metadata import SettingsMetadata
+
+        _, metadata = load_config_with_metadata()
+        assert isinstance(metadata, SettingsMetadata)
+
+    def test_metadata_has_per_field(self):
+
+        _, metadata = load_config_with_metadata()
+        assert hasattr(metadata, "per_field")
+        assert isinstance(metadata.per_field, dict)
+
     def test_overrides_applied(self):
         cfg, _ = load_config_with_metadata(overrides={"device": "cpu"})
         assert cfg.device == "cpu"

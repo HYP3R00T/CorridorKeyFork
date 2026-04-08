@@ -137,14 +137,13 @@ from corridorkey.errors import (
 from corridorkey.events import PipelineEvents
 from corridorkey.infra import (
     APP_NAME,
-    MODEL_FILENAME,
-    MODEL_URL,
     CorridorKeyConfig,
     GPUInfo,
     InferenceSettings,
     LoggingSettings,
     PostprocessSettings,
     PreprocessSettings,
+    SettingsMetadata,
     WriterSettings,
     clear_device_cache,
     default_checkpoint_path,
@@ -193,6 +192,7 @@ __all__ = [
     # ------------------------------------------------------------------ #
     "load_config",
     "load_config_with_metadata",
+    "SettingsMetadata",
     "write_config",
     "ensure_config_file",
     "get_config_path",
@@ -211,8 +211,6 @@ __all__ = [
     # ------------------------------------------------------------------ #
     "ensure_model",
     "default_checkpoint_path",
-    "MODEL_URL",
-    "MODEL_FILENAME",
     # ------------------------------------------------------------------ #
     # Configuration                                                      #
     # ------------------------------------------------------------------ #
