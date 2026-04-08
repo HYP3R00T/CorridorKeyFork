@@ -14,6 +14,7 @@ automatically without any shared flags or events.
 from __future__ import annotations
 
 import queue
+import threading
 
 # Sentinel — a unique object that signals no more items will be produced.
 # Identity comparison (``item is STOP``) is used, never equality.
@@ -40,6 +41,28 @@ class BoundedQueue[T]:
     def put(self, item: T) -> None:
         """Put an item. Blocks if the queue is full."""
         self._q.put(item)
+
+    def put_unless_cancelled(self, item: T, cancel_event: threading.Event, poll_interval: float = 0.05) -> bool:
+        """Put an item, returning False immediately if ``cancel_event`` is set.
+
+        Polls in short intervals so a cancellation signal is never missed even
+        when the queue is full and the normal ``put()`` would block indefinitely.
+
+        Args:
+            item: The item to enqueue.
+            cancel_event: Event that signals cancellation.
+            poll_interval: Seconds between attempts when the queue is full.
+
+        Returns:
+            True if the item was enqueued, False if cancelled before it could be.
+        """
+        while not cancel_event.is_set():
+            try:
+                self._q.put(item, timeout=poll_interval)
+                return True
+            except queue.Full:
+                continue
+        return False
 
     def put_stop(self) -> None:
         """Signal that no more items will be produced.

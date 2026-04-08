@@ -656,3 +656,212 @@ class TestPostWriteWorkerEvents:
             t.join(timeout=5)
 
         assert errors == [("postwrite", 4)]
+
+
+# ---------------------------------------------------------------------------
+# Cancellation — PreprocessWorker
+# ---------------------------------------------------------------------------
+
+
+class TestPreprocessWorkerCancellation:
+    def test_cancel_before_start_produces_stop_only(self, tmp_path: Path):
+        """If cancel is set before the worker runs, no frames should be queued."""
+        manifest = _make_manifest(tmp_path, frame_count=5)
+        config = PreprocessConfig(img_size=32, device="cpu")
+        q: BoundedQueue = BoundedQueue(10)
+
+        import threading
+
+        cancel = threading.Event()
+        cancel.set()  # cancelled before the worker even starts
+
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q, cancel_event=cancel)
+        t = worker.start()
+        t.join(timeout=5)
+
+        # Queue should contain only STOP — no frames
+        assert q.get() is STOP
+
+    def test_cancel_mid_run_stops_early(self, tmp_path: Path):
+        """Cancelling mid-run should stop the worker before all frames are queued."""
+        import threading
+        import time
+
+        frame_count = 20
+        manifest = _make_manifest(tmp_path, frame_count=frame_count)
+        config = PreprocessConfig(img_size=32, device="cpu")
+        q: BoundedQueue = BoundedQueue(frame_count + 1)
+
+        cancel = threading.Event()
+
+        # Cancel after the first frame is queued
+        original_preprocess = __import__(
+            "corridorkey.stages.preprocessor", fromlist=["preprocess_frame"]
+        ).preprocess_frame
+        call_count = 0
+
+        def slow_preprocess(m, i, c, **kwargs):
+            nonlocal call_count
+            result = original_preprocess(m, i, c, **kwargs)
+            call_count += 1
+            if call_count == 1:
+                cancel.set()  # trigger cancel after first frame
+            time.sleep(0.01)  # give the cancel check a chance to fire
+            return result
+
+        with patch("corridorkey.runtime.worker.preprocess_frame", side_effect=slow_preprocess):
+            worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q, cancel_event=cancel)
+            t = worker.start()
+            t.join(timeout=10)
+
+        items = []
+        while True:
+            item = q.get()
+            if item is STOP:
+                break
+            items.append(item)
+
+        # Should have stopped well before all 20 frames
+        assert len(items) < frame_count
+
+    def test_stop_always_sent_on_cancel(self, tmp_path: Path):
+        """STOP must be sent even when the worker exits due to cancellation."""
+        import threading
+
+        manifest = _make_manifest(tmp_path, frame_count=3)
+        config = PreprocessConfig(img_size=32, device="cpu")
+        q: BoundedQueue = BoundedQueue(10)
+
+        cancel = threading.Event()
+        cancel.set()
+
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q, cancel_event=cancel)
+        t = worker.start()
+        t.join(timeout=5)
+
+        # Drain whatever was queued and confirm STOP is present
+        found_stop = False
+        for _ in range(10):
+            item = q.get()
+            if item is STOP:
+                found_stop = True
+                break
+        assert found_stop
+
+    def test_no_cancel_event_behaves_normally(self, tmp_path: Path):
+        """Omitting cancel_event should not change normal behaviour."""
+        manifest = _make_manifest(tmp_path, frame_count=3)
+        config = PreprocessConfig(img_size=32, device="cpu")
+        q: BoundedQueue = BoundedQueue(10)
+
+        worker = PreprocessWorker(manifest=manifest, config=config, preprocess_queue=q)
+        t = worker.start()
+        t.join(timeout=10)
+
+        items = []
+        while True:
+            item = q.get()
+            if item is STOP:
+                break
+            items.append(item)
+
+        assert len(items) == 3
+
+
+# ---------------------------------------------------------------------------
+# Cancellation — PostWriteWorker
+# ---------------------------------------------------------------------------
+
+
+class TestPostWriteWorkerCancellation:
+    def _make_fake_result(self, idx: int = 0) -> InferenceResult:
+        meta = FrameMeta(frame_index=idx, original_h=64, original_w=64)
+        return InferenceResult(
+            alpha=torch.zeros(1, 1, 32, 32),
+            fg=torch.zeros(1, 3, 32, 32),
+            meta=meta,
+        )
+
+    def test_cancel_before_start_exits_without_processing(self, tmp_path: Path):
+        """If cancel is set before the worker runs, no frames should be processed."""
+        import threading
+
+        in_q: BoundedQueue = BoundedQueue(10)
+        for i in range(3):
+            in_q.put(self._make_fake_result(i))
+        # Note: no STOP — the cancel should cause exit before the queue is drained
+
+        cancel = threading.Event()
+        cancel.set()
+
+        with (
+            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()) as mock_pp,
+            patch("corridorkey.runtime.worker.write_frame"),
+        ):
+            worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path, cancel_event=cancel)
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert mock_pp.call_count == 0
+
+    def test_cancel_mid_run_stops_early(self, tmp_path: Path):
+        """Cancelling mid-run should stop the worker before all frames are written."""
+        import threading
+
+        frame_count = 10
+        in_q: BoundedQueue = BoundedQueue(frame_count + 1)
+        for i in range(frame_count):
+            in_q.put(self._make_fake_result(i))
+        # No STOP — rely on cancel to exit
+
+        cancel = threading.Event()
+        written: list[int] = []
+
+        def slow_postprocess(result, config, **kwargs):
+            written.append(result.meta.frame_index)
+            if len(written) == 2:
+                cancel.set()
+            return MagicMock()
+
+        with (
+            patch("corridorkey.runtime.worker.postprocess_frame", side_effect=slow_postprocess),
+            patch("corridorkey.runtime.worker.write_frame"),
+        ):
+            worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path, cancel_event=cancel)
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert len(written) < frame_count
+
+    def test_stop_sent_downstream_on_cancel(self, tmp_path: Path):
+        """PostWriteWorker must re-put STOP when it exits due to cancellation."""
+        import threading
+
+        in_q: BoundedQueue = BoundedQueue(10)
+        cancel = threading.Event()
+        cancel.set()
+
+        worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path, cancel_event=cancel)
+        t = worker.start()
+        t.join(timeout=5)
+
+        # The worker should have put STOP on the queue so any downstream
+        # consumer (if one existed) would also unblock.
+        assert in_q.get() is STOP
+
+    def test_no_cancel_event_behaves_normally(self, tmp_path: Path):
+        """Omitting cancel_event should not change normal behaviour."""
+        in_q: BoundedQueue = BoundedQueue(10)
+        for i in range(3):
+            in_q.put(self._make_fake_result(i))
+        in_q.put_stop()
+
+        with (
+            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()) as mock_pp,
+            patch("corridorkey.runtime.worker.write_frame"),
+        ):
+            worker = PostWriteWorker(inference_queue=in_q, output_dir=tmp_path)
+            t = worker.start()
+            t.join(timeout=5)
+
+        assert mock_pp.call_count == 3

@@ -92,3 +92,63 @@ class TestBoundedQueue:
         q.put(1)
         q.get()
         q.task_done()  # should not raise
+
+
+class TestPutUnlessCancelled:
+    def test_enqueues_item_when_not_cancelled(self):
+        q: BoundedQueue[int] = BoundedQueue(4)
+        event = threading.Event()
+        result = q.put_unless_cancelled(99, event)
+        assert result is True
+        assert q.get() == 99
+
+    def test_returns_false_when_already_cancelled(self):
+        q: BoundedQueue[int] = BoundedQueue(4)
+        event = threading.Event()
+        event.set()
+        result = q.put_unless_cancelled(99, event)
+        assert result is False
+        assert len(q) == 0
+
+    def test_returns_false_when_cancelled_while_full(self):
+        """Cancel while the queue is full — should unblock and return False."""
+        q: BoundedQueue[int] = BoundedQueue(1)
+        q.put(1)  # fill the queue
+        event = threading.Event()
+
+        result_holder: list[bool] = []
+
+        def producer():
+            result_holder.append(q.put_unless_cancelled(2, event, poll_interval=0.02))
+
+        t = threading.Thread(target=producer)
+        t.start()
+        import time
+
+        time.sleep(0.05)  # let producer block on the full queue
+        event.set()  # cancel it
+        t.join(timeout=2)
+
+        assert result_holder == [False]
+        assert len(q) == 1  # original item still there, new one was not added
+
+    def test_enqueues_when_space_becomes_available_before_cancel(self):
+        """Item should be enqueued if space opens up before cancellation."""
+        q: BoundedQueue[int] = BoundedQueue(1)
+        q.put(1)  # fill the queue
+        event = threading.Event()
+
+        result_holder: list[bool] = []
+
+        def producer():
+            result_holder.append(q.put_unless_cancelled(2, event, poll_interval=0.02))
+
+        t = threading.Thread(target=producer)
+        t.start()
+        import time
+
+        time.sleep(0.05)
+        q.get()  # free up space — producer should succeed
+        t.join(timeout=2)
+
+        assert result_holder == [True]

@@ -100,6 +100,13 @@ class Runner:
         events: Optional event callbacks. Overrides ``config.events`` when
             provided, so the same config can be reused with different handlers
             per clip.
+
+    Cancellation
+    ------------
+    Call :meth:`cancel` from any thread (e.g. a GUI button handler) to request
+    early termination. Workers stop after their current frame, drain the queues
+    cleanly, and ``run()`` raises :exc:`~corridorkey.errors.JobCancelledError`.
+    Frames already written to disk are not removed.
     """
 
     def __init__(
@@ -111,6 +118,18 @@ class Runner:
         self._manifest = manifest
         self._config = config
         self._events = events if events is not None else config.events
+        self._cancel_event = threading.Event()
+
+    def cancel(self) -> None:
+        """Request cancellation of the running pipeline.
+
+        Thread-safe — may be called from any thread at any time. Workers
+        will stop after their current frame. ``run()`` raises
+        :exc:`~corridorkey.errors.JobCancelledError` once all threads exit.
+        Has no effect if called before or after ``run()``.
+        """
+        logger.info("runner: cancel requested for clip='%s'", self._manifest.clip_name)
+        self._cancel_event.set()
 
     def run(self) -> None:
         """Run the full pipeline for the clip. Blocks until all frames are written.
@@ -127,7 +146,13 @@ class Runner:
         5. Load models — delegates to ``_load_models`` to put weights into VRAM.
         6. Start all threads and block — the assembly line runs concurrently;
            this method returns only when every frame has been written to disk.
+
+        Raises:
+            JobCancelledError: If :meth:`cancel` was called before all frames
+                were processed. Frames already written to disk are not removed.
         """
+        from corridorkey.errors import JobCancelledError
+
         cfg = self._config
         manifest = self._manifest
 
@@ -163,6 +188,7 @@ class Runner:
             preprocess_queue=preprocess_queue,
             inference_queue=inference_queue,
             events=self._events,
+            cancel_event=self._cancel_event,
         )
 
         # Step 5 — load models into VRAM.
@@ -182,6 +208,7 @@ class Runner:
                 resolved_refiner_mode=resolved_refiner_mode,
                 active_workers=active_workers,
                 events=self._events,
+                cancel_event=self._cancel_event,
             )
             inference_threads.append(worker.start(name=f"inference-worker-{device}"))
 
@@ -192,12 +219,17 @@ class Runner:
             write_config=cfg.write,
             total_frames=manifest.frame_count,
             events=self._events,
+            cancel_event=self._cancel_event,
         )
 
         # Step 6 — start all threads and block until done.
         all_threads = [preprocess_worker.start(), *inference_threads, postwrite_worker.start()]
         for t in all_threads:
             t.join()
+
+        if self._cancel_event.is_set():
+            logger.info("runner: clip='%s' cancelled", manifest.clip_name)
+            raise JobCancelledError(manifest.clip_name)
 
         logger.info("runner: clip='%s' complete", manifest.clip_name)
 
@@ -351,6 +383,7 @@ class _InferenceWorker:
     active_workers: _AtomicCounter
     resolved_refiner_mode: str | None = None
     events: PipelineEvents | None = None
+    cancel_event: threading.Event | None = None
 
     def run(self) -> None:
         from corridorkey.runtime.queue import STOP
@@ -361,6 +394,10 @@ class _InferenceWorker:
             self.events.stage_start(f"inference[{self.config.device}]", 0)
         try:
             while True:
+                if self.cancel_event and self.cancel_event.is_set():
+                    logger.debug("inference[%s]: cancelled", self.config.device)
+                    self.preprocess_queue.put_stop()  # unblock sibling workers
+                    break
                 item = self.preprocess_queue.get()
                 if item is STOP:
                     self.preprocess_queue.put_stop()  # pass STOP to sibling workers

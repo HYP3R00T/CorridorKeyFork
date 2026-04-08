@@ -437,3 +437,125 @@ class TestPipelineConfigDefaults:
             devices=["cuda:0", "cuda:1"],
         )
         assert cfg.devices == ["cuda:0", "cuda:1"]
+
+
+# ---------------------------------------------------------------------------
+# Runner — cancellation
+# ---------------------------------------------------------------------------
+
+
+class TestRunnerCancellation:
+    """Tests for Runner.cancel() — verifies JobCancelledError is raised and
+    the pipeline shuts down cleanly without deadlocking."""
+
+    def _make_config(self, tmp_path: Path) -> PipelineConfig:
+        return _make_pipeline_config(tmp_path, devices=[])
+
+    def _run_with_cancel(
+        self,
+        tmp_path: Path,
+        frame_count: int = 10,
+        cancel_after_frames: int = 2,
+    ):
+        """Run the pipeline and cancel after ``cancel_after_frames`` are written.
+
+        Returns the JobCancelledError raised by run(), or None if it completed.
+        """
+        import threading
+
+        manifest = _make_manifest(tmp_path, frame_count=frame_count)
+        cfg = self._make_config(tmp_path)
+        runner = Runner(manifest, cfg)
+
+        written: list[int] = []
+        error_holder: list[Exception] = []
+
+        original_write = __import__("corridorkey.runtime.worker", fromlist=["write_frame"]).write_frame
+
+        def counting_write(frame, config):
+            written.append(frame.frame_index)
+            if len(written) >= cancel_after_frames:
+                runner.cancel()
+
+        def fake_run_inference(frame, model, config, **kwargs):
+            return _make_fake_result(frame.meta.frame_index)
+
+        def run_target():
+            try:
+                with (
+                    patch("corridorkey.stages.inference.loader.load_model", return_value=MagicMock()),
+                    patch(
+                        "corridorkey.stages.inference.orchestrator.run_inference",
+                        side_effect=fake_run_inference,
+                    ),
+                    patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
+                    patch("corridorkey.runtime.worker.write_frame", side_effect=counting_write),
+                ):
+                    runner.run()
+            except Exception as e:
+                error_holder.append(e)
+
+        t = threading.Thread(target=run_target)
+        t.start()
+        t.join(timeout=15)
+
+        assert not t.is_alive(), "Runner thread did not exit — possible deadlock"
+        return error_holder[0] if error_holder else None
+
+    def test_cancel_raises_job_cancelled_error(self, tmp_path: Path):
+        from corridorkey.errors import JobCancelledError
+
+        err = self._run_with_cancel(tmp_path, frame_count=10, cancel_after_frames=2)
+        assert isinstance(err, JobCancelledError)
+
+    def test_cancelled_error_contains_clip_name(self, tmp_path: Path):
+        from corridorkey.errors import JobCancelledError
+
+        err = self._run_with_cancel(tmp_path, frame_count=10, cancel_after_frames=2)
+        assert isinstance(err, JobCancelledError)
+        assert err.clip_name == "test"
+
+    def test_cancel_does_not_deadlock(self, tmp_path: Path):
+        """Cancelling on the first frame must not leave any thread blocked."""
+        err = self._run_with_cancel(tmp_path, frame_count=10, cancel_after_frames=1)
+        from corridorkey.errors import JobCancelledError
+
+        assert isinstance(err, JobCancelledError)
+
+    def test_cancel_before_run_raises_immediately(self, tmp_path: Path):
+        """Calling cancel() before run() should cause run() to raise JobCancelledError."""
+        from corridorkey.errors import JobCancelledError
+
+        manifest = _make_manifest(tmp_path, frame_count=3)
+        cfg = self._make_config(tmp_path)
+        runner = Runner(manifest, cfg)
+        runner.cancel()  # cancel before run
+
+        def fake_run_inference(frame, model, config, **kwargs):
+            return _make_fake_result(frame.meta.frame_index)
+
+        with (
+            patch("corridorkey.stages.inference.loader.load_model", return_value=MagicMock()),
+            patch(
+                "corridorkey.stages.inference.orchestrator.run_inference",
+                side_effect=fake_run_inference,
+            ),
+            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey.runtime.worker.write_frame"),
+            pytest.raises(JobCancelledError),
+        ):
+            runner.run()
+
+    def test_no_cancel_completes_normally(self, tmp_path: Path):
+        """Without cancellation, run() should complete without raising."""
+        err = self._run_with_cancel(tmp_path, frame_count=3, cancel_after_frames=999)
+        assert err is None
+
+    def test_cancel_is_idempotent(self, tmp_path: Path):
+        """Calling cancel() multiple times should not raise or cause issues."""
+        manifest = _make_manifest(tmp_path, frame_count=1)
+        cfg = self._make_config(tmp_path)
+        runner = Runner(manifest, cfg)
+        runner.cancel()
+        runner.cancel()  # second call must not raise
+        runner.cancel()
