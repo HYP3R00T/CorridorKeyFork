@@ -36,28 +36,28 @@ class TestRunnerExported:
         assert isinstance(Runner, type)
 
 
-class TestGetFrameFilesExported:
-    def test_get_frame_files_in_all(self):
-        assert "get_frame_files" in corridorkey.__all__
+class TestListClipFramesExported:
+    def test_list_clip_frames_in_all(self):
+        assert "list_clip_frames" in corridorkey.__all__
 
-    def test_get_frame_files_callable(self):
-        from corridorkey import get_frame_files
+    def test_list_clip_frames_callable(self):
+        from corridorkey import list_clip_frames
 
-        assert callable(get_frame_files)
+        assert callable(list_clip_frames)
 
-    def test_get_frame_files_returns_list(self, tmp_path):
+    def test_list_clip_frames_returns_list(self, tmp_path):
         import cv2
         import numpy as np
-        from corridorkey import get_frame_files
+        from corridorkey import list_clip_frames
 
         # Empty directory returns empty list
-        assert get_frame_files(tmp_path) == []
+        assert list_clip_frames(tmp_path) == []
 
         # Directory with images returns sorted list
         for i in range(3):
             cv2.imwrite(str(tmp_path / f"frame_{i:06d}.png"), np.zeros((4, 4, 3), dtype=np.uint8))
 
-        files = get_frame_files(tmp_path)
+        files = list_clip_frames(tmp_path)
         assert len(files) == 3
         assert [f.name for f in files] == [
             "frame_000000.png",

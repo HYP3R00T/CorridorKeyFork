@@ -470,8 +470,6 @@ class TestRunnerCancellation:
         written: list[int] = []
         error_holder: list[Exception] = []
 
-        original_write = __import__("corridorkey.runtime.worker", fromlist=["write_frame"]).write_frame
-
         def counting_write(frame, config):
             written.append(frame.frame_index)
             if len(written) >= cancel_after_frames:

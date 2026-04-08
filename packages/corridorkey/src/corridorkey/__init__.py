@@ -62,8 +62,8 @@ or any host application that manages its own frame scheduling.
     write_config = config.to_writer_config(manifest.output_dir)
 
     # 3. Build file lists once per clip
-    imgs = get_frame_files(manifest.frames_dir)
-    alps = get_frame_files(manifest.alpha_frames_dir)
+    imgs = list_clip_frames(manifest.frames_dir)
+    alps = list_clip_frames(manifest.alpha_frames_dir)
 
     # 4. Your host calls this per frame
     for i in range(*manifest.frame_range):
@@ -171,7 +171,7 @@ from corridorkey.stages.loader import (
     load,
     resolve_alpha,
 )
-from corridorkey.stages.loader.validator import get_frame_files
+from corridorkey.stages.loader.validator import list_clip_frames
 from corridorkey.stages.postprocessor import PostprocessConfig, PostprocessedFrame, postprocess_frame
 from corridorkey.stages.preprocessor import (
     FrameMeta,
@@ -245,15 +245,15 @@ __all__ = [
     "SkippedPath",
     # Loader
     "ClipManifest",
-    "get_frame_files",
+    "list_clip_frames",
     # Preprocessor
     "PreprocessConfig",
     "PreprocessedFrame",
-    "FrameMeta",
+    "FrameMeta",  # pass-through — needed only for custom ModelBackend implementations
     "FrameReadError",
     # Inference
     "InferenceConfig",
-    "InferenceResult",
+    "InferenceResult",  # pass-through — flows from backend.run() into postprocess_frame()
     "ModelBackend",
     # Postprocessor
     "PostprocessConfig",

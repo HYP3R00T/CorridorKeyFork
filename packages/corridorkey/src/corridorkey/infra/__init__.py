@@ -60,7 +60,7 @@ from corridorkey.infra.config import (
 )
 from corridorkey.infra.device_utils import GPUInfo, clear_device_cache, detect_gpu, resolve_device, resolve_devices
 from corridorkey.infra.logging import setup_logging
-from corridorkey.infra.model_hub import MODEL_FILENAME, MODEL_URL, default_checkpoint_path, ensure_model
+from corridorkey.infra.model_hub import default_checkpoint_path, ensure_model
 
 __all__ = [
     # Config loading

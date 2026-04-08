@@ -10,7 +10,7 @@ from corridorkey.stages.loader.validator import (
     FrameScan,
     count_frames,
     detect_is_linear,
-    get_frame_files,
+    list_clip_frames,
     scan_frames,
     validate,
 )
@@ -92,17 +92,17 @@ class TestGetFrameFiles:
 
     def test_returns_image_files_only(self, tmp_path: Path):
         _touch_frames(tmp_path, ["frame_1.png", "frame_2.png", "readme.txt"])
-        result = get_frame_files(tmp_path)
+        result = list_clip_frames(tmp_path)
         assert len(result) == 2
         assert all(f.suffix == ".png" for f in result)
 
     def test_natural_sort_order(self, tmp_path: Path):
         _touch_frames(tmp_path, ["frame_10.png", "frame_2.png", "frame_1.png"])
-        result = get_frame_files(tmp_path)
+        result = list_clip_frames(tmp_path)
         assert [f.name for f in result] == ["frame_1.png", "frame_2.png", "frame_10.png"]
 
     def test_empty_directory_returns_empty(self, tmp_path: Path):
-        assert get_frame_files(tmp_path) == []
+        assert list_clip_frames(tmp_path) == []
 
 
 class TestCountFrames:

@@ -10,7 +10,17 @@ import torch
 
 @dataclass(frozen=True)
 class FrameMeta:
-    """Metadata carried alongside the tensor for use by postprocessing.
+    """Metadata carried alongside the tensor between pipeline stages.
+
+    .. note::
+        **Pass-through type.** Downstream consumers (GUI, CLI, plugin) do not
+        construct or inspect ``FrameMeta`` directly. It is created by
+        :func:`~corridorkey.preprocess_frame`, embedded in
+        :class:`~corridorkey.PreprocessedFrame` and
+        :class:`~corridorkey.InferenceResult`, and consumed internally by
+        :func:`~corridorkey.postprocess_frame`. It is exported so that custom
+        :class:`~corridorkey.ModelBackend` implementations can satisfy the
+        protocol without importing from submodules.
 
     Attributes:
         frame_index: Index of this frame within the clip's frame_range.

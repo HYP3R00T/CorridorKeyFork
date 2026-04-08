@@ -61,12 +61,25 @@ def scan_frames(path: Path) -> FrameScan:
     return FrameScan(files=tuple(files), is_linear=is_linear)
 
 
-def get_frame_files(path: Path) -> list[Path]:
-    """Return naturally sorted image files in a directory.
+def list_clip_frames(path: Path) -> list[Path]:
+    """Return naturally sorted image files in a clip frame directory.
 
-    Convenience wrapper around scan_frames() for callers that only need the
-    file list. Prefer scan_frames() directly when you also need the count or
-    linearity flag to avoid redundant attribute access.
+    Convenience wrapper around :func:`scan_frames` for callers that only need
+    the file list. Prefer :func:`scan_frames` directly when you also need the
+    count or linearity flag to avoid redundant attribute access.
+
+    Typical use in the frame loop (Path 2)::
+
+        imgs = list_clip_frames(manifest.frames_dir)
+        alps = list_clip_frames(manifest.alpha_frames_dir)
+        for i in range(*manifest.frame_range):
+            preprocessed = preprocess_frame(manifest, i, config, image_files=imgs, alpha_files=alps)
+
+    Args:
+        path: Directory containing the frame sequence.
+
+    Returns:
+        Naturally sorted list of image file paths.
     """
     return list(scan_frames(path).files)
 

@@ -37,7 +37,7 @@ from enum import Enum
 from pathlib import Path
 
 from corridorkey.errors import InvalidStateTransitionError
-from corridorkey.stages.loader.validator import count_frames, get_frame_files
+from corridorkey.stages.loader.validator import count_frames, list_clip_frames
 from corridorkey.stages.scanner.contracts import Clip
 
 logger = logging.getLogger(__name__)
@@ -268,7 +268,7 @@ class ClipEntry:
         for subdir in ("alpha", "fg", "comp", "processed"):
             d = self.output_dir / subdir
             if d.is_dir():
-                stems = {p.stem for p in get_frame_files(d)}
+                stems = {p.stem for p in list_clip_frames(d)}
                 if stems:
                     stem_sets.append(stems)
 
