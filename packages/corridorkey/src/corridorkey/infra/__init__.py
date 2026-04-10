@@ -7,6 +7,11 @@ Public API
 load_config([overrides]) -> CorridorKeyConfig
     Load and validate configuration from config files, environment variables,
     and optional runtime overrides. Always call this first.
+    ``CorridorKeyConfig`` is the single entry point for all configuration —
+    use its ``.to_pipeline_config()``, ``.to_preprocess_config()``,
+    ``.to_inference_config()``, ``.to_postprocess_config()``, and
+    ``.to_writer_config()`` bridge methods to produce stage configs.
+    Never construct internal stage configs directly.
 
 load_config_with_metadata([overrides]) -> tuple[CorridorKeyConfig, SettingsMetadata]
     Like load_config, but also returns per-field source attribution. Use this

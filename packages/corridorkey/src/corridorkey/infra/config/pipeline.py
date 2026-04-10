@@ -28,12 +28,32 @@ logger = logging.getLogger(__name__)
 
 
 class CorridorKeyConfig(BaseModel):
-    """Validated top-level configuration for the CorridorKey pipeline.
+    """Single entry point for all pipeline configuration.
 
-    Nests one settings block per stage plus cross-cutting concerns (logging,
-    device). All Path fields support tilde and environment variable expansion.
+    Load once at startup with :func:`~corridorkey.load_config`, then use the
+    bridge methods below to produce the stage configs each function needs.
+    Never construct internal stage configs (``PreprocessConfig``,
+    ``InferenceConfig``, etc.) directly — the bridge methods resolve "auto"
+    values (device, img_size, precision, refiner_mode) correctly and
+    consistently.
 
-    Load with :func:`~corridorkey.infra.config.load_config`.
+    Bridge methods
+    --------------
+    :meth:`to_pipeline_config`
+        Layer 1 — produces a :class:`~corridorkey.runtime.runner.PipelineConfig`
+        ready to pass to :class:`~corridorkey.Runner`. Resolves all "auto"
+        values in a single VRAM probe.
+    :meth:`to_preprocess_config`
+        Layer 2 — produces a :class:`~corridorkey.stages.preprocessor.PreprocessConfig`.
+    :meth:`to_inference_config`
+        Layer 2 — produces an :class:`~corridorkey.stages.inference.InferenceConfig`.
+    :meth:`to_postprocess_config`
+        Layer 2 — produces a :class:`~corridorkey.stages.postprocessor.PostprocessConfig`.
+    :meth:`to_writer_config`
+        Layer 2 — produces a :class:`~corridorkey.stages.writer.WriteConfig`
+        for a specific clip output directory.
+
+    All Path fields support tilde and environment variable expansion.
 
     Example ``corridorkey.toml``::
 
@@ -121,8 +141,11 @@ class CorridorKeyConfig(BaseModel):
     ) -> PipelineConfig:
         """Build a :class:`~corridorkey.runtime.runner.PipelineConfig` from this config.
 
-        Resolves device and img_size once, then builds all stage configs
-        consistently. Pass the result directly to :class:`~corridorkey.runtime.runner.Runner`.
+        **Layer 1 entry point.** Pass the result directly to
+        :class:`~corridorkey.Runner`. All "auto" values (device, img_size,
+        precision, refiner_mode) are resolved here in a single VRAM probe —
+        do not call the individual ``to_*_config()`` methods separately when
+        using Layer 1.
 
         Args:
             device: Resolved device string (from ``resolve_device(config.device)``).
@@ -131,8 +154,8 @@ class CorridorKeyConfig(BaseModel):
                 it from the checkpoint path at run time.
             devices: Explicit list of device strings for multi-GPU dispatch.
                 When provided, the returned config's ``devices`` field is set
-                and :class:`~corridorkey.runtime.runner.Runner` dispatches
-                automatically to multiple inference workers.
+                and :class:`~corridorkey.Runner` dispatches automatically to
+                multiple inference workers.
                 Use ``resolve_devices("all")`` to populate this from all
                 available CUDA GPUs.
 
@@ -165,6 +188,10 @@ class CorridorKeyConfig(BaseModel):
     ) -> PreprocessConfig:
         """Build a :class:`~corridorkey.stages.preprocessor.PreprocessConfig`.
 
+        **Layer 2.** When using Layer 1 (``Runner``), call
+        :meth:`to_pipeline_config` instead — it calls this internally and
+        ensures img_size is consistent with the resolved inference config.
+
         Args:
             device: Override the device string. If None, uses ``self.device``.
             resolved_img_size: Pre-resolved img_size (from to_inference_config).
@@ -184,7 +211,11 @@ class CorridorKeyConfig(BaseModel):
         )
 
     def to_postprocess_config(self) -> PostprocessConfig:
-        """Build a :class:`~corridorkey.stages.postprocessor.PostprocessConfig`."""
+        """Build a :class:`~corridorkey.stages.postprocessor.PostprocessConfig`.
+
+        **Layer 2.** When using Layer 1 (``Runner``), call
+        :meth:`to_pipeline_config` instead.
+        """
         from corridorkey.stages.postprocessor.config import PostprocessConfig
 
         return PostprocessConfig(
@@ -206,8 +237,12 @@ class CorridorKeyConfig(BaseModel):
     def to_writer_config(self, output_dir: str | Path) -> WriteConfig:
         """Build a :class:`~corridorkey.stages.writer.WriteConfig`.
 
+        **Layer 2.** When using Layer 1 (``Runner``), the write config is
+        derived automatically from the manifest — you do not need to call this.
+
         Args:
             output_dir: Root directory for all outputs (clip-specific).
+                Typically ``manifest.output_dir``.
         """
 
         from corridorkey.stages.writer.contracts import WriteConfig
@@ -238,6 +273,10 @@ class CorridorKeyConfig(BaseModel):
         self, device: str | None = None, _return_resolved_refiner_mode: bool = False
     ) -> InferenceConfig | tuple[InferenceConfig, str]:
         """Build an :class:`~corridorkey.stages.inference.InferenceConfig`.
+
+        **Layer 2.** When using Layer 1 (``Runner``), call
+        :meth:`to_pipeline_config` instead — it calls this internally and
+        shares the VRAM probe result with the preprocess config.
 
         Probes VRAM at most once — the same measurement resolves both
         ``img_size`` (when set to 0/auto) and ``refiner_mode`` (when set to

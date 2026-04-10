@@ -3,8 +3,43 @@
 Single import surface for any interface (CLI, GUI, TUI, plugin).
 Do not import from submodules directly.
 
-Two integration layers are available. See the integration guide in the docs
-for full usage examples: docs/corridorkey/integration/
+Configuration entry point
+-------------------------
+``CorridorKeyConfig`` is the single entry point for all configuration, in both
+integration layers. Load it once at startup, then pass it (or the configs it
+produces) into the pipeline. Never construct internal stage configs directly.
+
+    config = load_config()          # reads TOML + env, resolves "auto" values
+    setup_logging(config)
+
+Layer 1 — Managed runtime (recommended)
+----------------------------------------
+Hand the whole clip to the runner. Device resolution, queue management, and
+multi-GPU dispatch are handled for you.
+
+    manifest = load(clip)
+    pipeline_config = config.to_pipeline_config(device=resolve_device(config.device))
+    Runner(manifest, pipeline_config, events=PipelineEvents(...)).run()
+
+Layer 2 — Frame loop (custom pipelines)
+-----------------------------------------
+Use individual stage functions when you need to own the loop — e.g. to feed
+frames to a GUI preview, integrate with a host application's threading model,
+or swap out a stage entirely.
+
+    manifest = load(clip)
+    backend = load_backend(config.to_inference_config(device=device))
+    preprocess_cfg = config.to_preprocess_config(device=device)
+    postprocess_cfg = config.to_postprocess_config()
+    write_cfg = config.to_writer_config(manifest.output_dir)
+
+    for i in range(*manifest.frame_range):
+        pre = preprocess_frame(manifest, i, preprocess_cfg)
+        result = backend.run(pre)
+        post = postprocess_frame(result, postprocess_cfg)
+        write_frame(post, write_cfg)
+
+See docs/corridorkey/integration/ for full usage examples.
 """
 
 from importlib.metadata import PackageNotFoundError
@@ -78,13 +113,20 @@ from corridorkey.stages.writer import WriteConfig, write_frame
 
 __all__ = [
     "__version__",
-    # -- Shared foundation (both layers) -------------------------------- #
+    # Configuration
     "load_config",
     "load_config_with_metadata",
     "SettingsMetadata",
     "write_config",
     "ensure_config_file",
     "get_config_path",
+    "CorridorKeyConfig",
+    "LoggingSettings",
+    "PreprocessSettings",
+    "InferenceSettings",
+    "PostprocessSettings",
+    "WriterSettings",
+    # Infrastructure
     "setup_logging",
     "APP_NAME",
     "resolve_device",
@@ -94,15 +136,11 @@ __all__ = [
     "GPUInfo",
     "ensure_model",
     "default_checkpoint_path",
-    "CorridorKeyConfig",
-    "LoggingSettings",
-    "PreprocessSettings",
-    "InferenceSettings",
-    "PostprocessSettings",
-    "WriterSettings",
+    # Clip lifecycle
     "scan",
     "load",
     "resolve_alpha",
+    "list_clip_frames",
     "Clip",
     "ScanResult",
     "SkippedPath",
@@ -111,25 +149,25 @@ __all__ = [
     "ClipState",
     "InOutRange",
     "resolve_clip_state",
-    # Layer 1 — Managed pipeline
+    # Layer 1 — managed runtime
     "Runner",
     "PipelineConfig",
     "PipelineEvents",
-    # Layer 2 — Frame loop
+    # Layer 2 — frame loop
     "load_backend",
     "preprocess_frame",
     "postprocess_frame",
     "write_frame",
-    "PreprocessConfig",
-    "InferenceConfig",
-    "PostprocessConfig",
-    "WriteConfig",
-    "list_clip_frames",
     "PreprocessedFrame",
     "FrameMeta",
     "InferenceResult",
     "PostprocessedFrame",
     "ModelBackend",
+    # Internal stage configs (advanced — prefer config.to_*_config())
+    "PreprocessConfig",
+    "InferenceConfig",
+    "PostprocessConfig",
+    "WriteConfig",
     # Errors
     "CorridorKeyError",
     "DeviceError",
