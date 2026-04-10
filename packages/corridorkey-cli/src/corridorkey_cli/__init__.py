@@ -66,9 +66,10 @@ def wizard(
     ] = False,
 ) -> None:
     """Scan, configure, and process clips. The default command."""
-    from corridorkey import load, resolve_alpha, resolve_device, resolve_devices, scan, setup_logging
+    from corridorkey import attach_alpha, load, resolve_device, resolve_devices, scan
     from corridorkey.infra import APP_NAME, ensure_config_file, load_config_with_metadata
     from corridorkey.infra.config import CorridorKeyConfig
+    from corridorkey.infra.logging import setup_logging
     from corridorkey.infra.model_hub import ensure_model
     from corridorkey.runtime.runner import Runner
     from corridorkey.stages.inference.loader import load_model as _load_model
@@ -151,7 +152,7 @@ def wizard(
         if manifest.needs_alpha:
             console.print(f"  Alpha required for '[cyan]{manifest.clip_name}[/cyan]'.")
             raw = Prompt.ask("  Enter path to generated alpha frames directory")
-            manifest = resolve_alpha(manifest, Path(raw))
+            manifest = attach_alpha(manifest, Path(raw))
 
         printer = RichPrinter(manifest.frame_count)
         pipeline_config = run_config.to_pipeline_config(device=device, model=model, devices=(devices or None))

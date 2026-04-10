@@ -23,7 +23,7 @@ from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import STOP, BoundedQueue
 from corridorkey.stages.inference import InferenceResult
 from corridorkey.stages.loader.contracts import ClipManifest
-from corridorkey.stages.loader.validator import list_clip_frames
+from corridorkey.stages.loader.validator import list_frames
 from corridorkey.stages.postprocessor import PostprocessConfig, postprocess_frame
 from corridorkey.stages.preprocessor import FrameReadError, PreprocessConfig, preprocess_frame
 from corridorkey.stages.writer import WriteConfig, write_frame
@@ -60,8 +60,8 @@ class PreprocessWorker:
         if self.events:
             self.events.stage_start("preprocess", total)
 
-        image_files = list_clip_frames(self.manifest.frames_dir)
-        alpha_files = list_clip_frames(self.manifest.alpha_frames_dir)  # type: ignore[arg-type]
+        image_files = list_frames(self.manifest.frames_dir)
+        alpha_files = list_frames(self.manifest.alpha_frames_dir)  # type: ignore[arg-type]
 
         try:
             for i in range(*self.manifest.frame_range):

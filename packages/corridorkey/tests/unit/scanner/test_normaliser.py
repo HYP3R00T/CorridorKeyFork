@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from corridorkey.stages.scanner.contracts import SkippedPath
+from corridorkey.stages.scanner.contracts import SkippedClip
 from corridorkey.stages.scanner.normaliser import (
     _find_icase,
     _find_videos_in,
@@ -65,7 +65,7 @@ class TestFindAlphaAmbiguous:
         (alpha_dir / "b.mp4").touch()
         path, skip = find_alpha(tmp_path)
         assert path is None
-        assert isinstance(skip, SkippedPath)
+        assert isinstance(skip, SkippedClip)
         assert "multiple" in skip.reason.lower()
 
 
@@ -92,7 +92,7 @@ class TestTryBuildClipErrors:
         ):
             clip, skip = try_build_clip(clip_dir)
         assert clip is None
-        assert isinstance(skip, SkippedPath)
+        assert isinstance(skip, SkippedClip)
         assert "cannot read directory" in skip.reason
 
     def test_validation_error_returns_skipped(self, tmp_path: Path):
@@ -112,7 +112,7 @@ class TestTryBuildClipErrors:
             clip, skip = try_build_clip(clip_dir)
 
         assert clip is None
-        assert isinstance(skip, SkippedPath)
+        assert isinstance(skip, SkippedClip)
         assert "validation failed" in skip.reason
 
 

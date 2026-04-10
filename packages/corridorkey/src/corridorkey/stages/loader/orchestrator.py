@@ -181,7 +181,7 @@ def _resolve_frames(
     return output_dir
 
 
-def resolve_alpha(manifest: ClipManifest, alpha_frames_dir: Path) -> ClipManifest:
+def attach_alpha(manifest: ClipManifest, alpha_frames_dir: Path) -> ClipManifest:
     """Update a manifest with an externally generated alpha sequence.
 
     Called by the interface layer (CLI, GUI, etc.) after it has generated alpha

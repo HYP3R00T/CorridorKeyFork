@@ -1,7 +1,7 @@
 """Inference stage — public surface.
 
 Entry points:
-    load_backend(config)                  -> ModelBackend  (backend-agnostic, preferred)
+    load_model_backend(config)            -> ModelBackend  (backend-agnostic, preferred)
     load_model(config)                    -> nn.Module     (torch-only, lower-level)
     run_inference(frame, model, config)   -> InferenceResult
 
@@ -14,10 +14,10 @@ Contracts:
 from corridorkey.stages.inference.backend import ModelBackend
 from corridorkey.stages.inference.config import InferenceConfig
 from corridorkey.stages.inference.contracts import InferenceResult
-from corridorkey.stages.inference.factory import load_backend
+from corridorkey.stages.inference.factory import load_model_backend
 
 __all__ = [
-    "load_backend",
+    "load_model_backend",
     "InferenceConfig",
     "InferenceResult",
     "ModelBackend",

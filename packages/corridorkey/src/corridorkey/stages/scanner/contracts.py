@@ -51,7 +51,7 @@ class Clip(BaseModel):
         return f"Clip(name={self.name!r}, input={self.input_path}, alpha={self.alpha_path})"
 
 
-class SkippedPath(BaseModel):
+class SkippedClip(BaseModel):
     """A path that was encountered during scanning but could not be used.
 
     Attributes:
@@ -83,7 +83,7 @@ class ScanResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     clips: tuple[Clip, ...]
-    skipped: tuple[SkippedPath, ...]
+    skipped: tuple[SkippedClip, ...]
 
     @property
     def clip_count(self) -> int:

@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import torch
 from corridorkey.stages.loader.contracts import ClipManifest
-from corridorkey.stages.loader.validator import list_clip_frames
+from corridorkey.stages.loader.validator import list_frames
 from corridorkey.stages.preprocessor import PreprocessConfig, PreprocessedFrame, preprocess_frame
 
 
@@ -118,8 +118,8 @@ class TestPreprocessFrame:
     def test_all_frames_in_range(self, tmp_path: Path):
         manifest = _make_manifest(tmp_path, frame_count=3)
         config = PreprocessConfig(img_size=64, device="cpu")
-        imgs = list_clip_frames(manifest.frames_dir)
-        alps = list_clip_frames(manifest.alpha_frames_dir)  # type: ignore[arg-type]
+        imgs = list_frames(manifest.frames_dir)
+        alps = list_frames(manifest.alpha_frames_dir)  # type: ignore[arg-type]
         for i in range(*manifest.frame_range):
             result = preprocess_frame(manifest, i, config, image_files=imgs, alpha_files=alps)
             assert result.meta.frame_index == i
@@ -128,8 +128,8 @@ class TestPreprocessFrame:
         """Passing pre-built file lists should produce the same result as not passing them."""
         manifest = _make_manifest(tmp_path, frame_count=2)
         config = PreprocessConfig(img_size=64, device="cpu")
-        imgs = list_clip_frames(manifest.frames_dir)
-        alps = list_clip_frames(manifest.alpha_frames_dir)  # type: ignore[arg-type]
+        imgs = list_frames(manifest.frames_dir)
+        alps = list_frames(manifest.alpha_frames_dir)  # type: ignore[arg-type]
         r1 = preprocess_frame(manifest, 0, config)
         r2 = preprocess_frame(manifest, 0, config, image_files=imgs, alpha_files=alps)
         assert r1.tensor.shape == r2.tensor.shape

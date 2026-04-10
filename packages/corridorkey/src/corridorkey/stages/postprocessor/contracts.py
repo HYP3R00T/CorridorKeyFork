@@ -8,7 +8,7 @@ import numpy as np
 
 
 @dataclass(frozen=True)
-class PostprocessedFrame:
+class ProcessedFrame:
     """Output contract of the postprocessor stage. Input to the writer stage.
 
     All arrays are at original source resolution, float32, numpy.

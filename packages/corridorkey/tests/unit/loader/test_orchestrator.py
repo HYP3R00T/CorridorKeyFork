@@ -10,7 +10,7 @@ from corridorkey.errors import ExtractionError, FrameMismatchError
 from corridorkey.events import PipelineEvents
 from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.extractor import DEFAULT_PNG_COMPRESSION, VideoMetadata
-from corridorkey.stages.loader.orchestrator import load, resolve_alpha
+from corridorkey.stages.loader.orchestrator import attach_alpha, load
 from corridorkey.stages.scanner.contracts import Clip
 from pydantic import ValidationError
 
@@ -324,7 +324,7 @@ class TestResolveAlpha:
         manifest = self._base_manifest(tmp_path)
         alpha_dir = tmp_path / "my_clip" / "AlphaFrames"
         _make_frames(alpha_dir, count=3)
-        updated = resolve_alpha(manifest, alpha_dir)
+        updated = attach_alpha(manifest, alpha_dir)
         assert updated.alpha_frames_dir == alpha_dir
         assert updated.needs_alpha is False
 
@@ -333,7 +333,7 @@ class TestResolveAlpha:
         manifest = self._base_manifest(tmp_path)
         alpha_dir = tmp_path / "my_clip" / "AlphaFrames"
         _make_frames(alpha_dir, count=3)
-        resolve_alpha(manifest, alpha_dir)
+        attach_alpha(manifest, alpha_dir)
         assert manifest.needs_alpha is True
         assert manifest.alpha_frames_dir is None
 
@@ -343,26 +343,26 @@ class TestResolveAlpha:
         alpha_dir = tmp_path / "my_clip" / "AlphaFrames"
         _make_frames(alpha_dir, count=3)
         with pytest.raises(ValueError, match="already has alpha"):
-            resolve_alpha(manifest, alpha_dir)
+            attach_alpha(manifest, alpha_dir)
 
     def test_raises_on_frame_count_mismatch(self, tmp_path: Path):
         manifest = self._base_manifest(tmp_path)
         alpha_dir = tmp_path / "my_clip" / "AlphaFrames"
         _make_frames(alpha_dir, count=2)  # manifest has 3 frames
         with pytest.raises(FrameMismatchError, match="frame count mismatch"):
-            resolve_alpha(manifest, alpha_dir)
+            attach_alpha(manifest, alpha_dir)
 
     def test_raises_on_empty_alpha_dir(self, tmp_path: Path):
         manifest = self._base_manifest(tmp_path)
         alpha_dir = tmp_path / "my_clip" / "AlphaFrames"
         alpha_dir.mkdir()
         with pytest.raises(FrameMismatchError):
-            resolve_alpha(manifest, alpha_dir)
+            attach_alpha(manifest, alpha_dir)
 
     def test_raises_if_alpha_dir_does_not_exist(self, tmp_path: Path):
         manifest = self._base_manifest(tmp_path)
         with pytest.raises(ValueError, match="does not exist"):
-            resolve_alpha(manifest, tmp_path / "ghost")
+            attach_alpha(manifest, tmp_path / "ghost")
 
     def test_does_not_rescan_input_dir(self, tmp_path: Path):
         """resolve_alpha should use manifest.frame_count, not re-scan frames_dir."""
@@ -374,7 +374,7 @@ class TestResolveAlpha:
             "corridorkey.stages.loader.orchestrator.scan_frames",
             wraps=__import__("corridorkey.stages.loader.validator", fromlist=["scan_frames"]).scan_frames,
         ) as mock_scan:
-            resolve_alpha(manifest, alpha_dir)
+            attach_alpha(manifest, alpha_dir)
             # scan_frames should only be called for alpha_dir, not frames_dir
             called_paths = [call.args[0] for call in mock_scan.call_args_list]
             assert manifest.frames_dir not in called_paths

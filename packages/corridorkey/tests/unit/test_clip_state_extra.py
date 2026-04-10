@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import cv2
 import numpy as np
-from corridorkey.runtime.clip_state import ClipEntry, ClipState, _resolve_state
+from corridorkey.runtime.clip_state import ClipRecord, ClipState, _resolve_state
 from corridorkey.stages.scanner.contracts import Clip
 
 
@@ -30,7 +30,7 @@ class TestCompletedFrameCountNoOutputDir:
     def test_completed_frame_count_no_output_dir(self, tmp_path: Path):
         """completed_frame_count() when output_dir doesn't exist returns 0 (line 251)."""
         clip = _make_clip(tmp_path)
-        entry = ClipEntry(clip=clip, state=ClipState.RAW)
+        entry = ClipRecord(clip=clip, state=ClipState.RAW)
         # Output dir does not exist
         assert not entry.output_dir.exists()
         assert entry.completed_frame_count() == 0

@@ -29,7 +29,7 @@ import numpy as np
 import torch
 
 from corridorkey.stages.loader.contracts import ClipManifest
-from corridorkey.stages.loader.validator import list_clip_frames
+from corridorkey.stages.loader.validator import list_frames
 from corridorkey.stages.preprocessor.colorspace import linear_to_srgb, linear_to_srgb_numpy
 from corridorkey.stages.preprocessor.contracts import FrameMeta, PreprocessedFrame
 from corridorkey.stages.preprocessor.normalise import normalise_image
@@ -181,7 +181,7 @@ def _resolve_paths(
     image_files: list[Path] | None,
     alpha_files: list[Path] | None,
 ) -> tuple[Path, Path]:
-    imgs = image_files if image_files is not None else list_clip_frames(manifest.frames_dir)
-    alps = alpha_files if alpha_files is not None else list_clip_frames(manifest.alpha_frames_dir)  # type: ignore[arg-type]
+    imgs = image_files if image_files is not None else list_frames(manifest.frames_dir)
+    alps = alpha_files if alpha_files is not None else list_frames(manifest.alpha_frames_dir)  # type: ignore[arg-type]
     offset = manifest.frame_range[0]
     return imgs[i - offset], alps[i - offset]

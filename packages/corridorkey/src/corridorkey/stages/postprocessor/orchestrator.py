@@ -25,7 +25,7 @@ import numpy as np
 from corridorkey.stages.inference.contracts import InferenceResult
 from corridorkey.stages.postprocessor.composite import apply_source_passthrough, make_preview, make_processed
 from corridorkey.stages.postprocessor.config import PostprocessConfig
-from corridorkey.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey.stages.postprocessor.contracts import ProcessedFrame
 from corridorkey.stages.postprocessor.despeckle import despeckle_alpha
 from corridorkey.stages.postprocessor.despill import remove_spill
 from corridorkey.stages.postprocessor.hint_sharpen import sharpen_with_hint
@@ -39,7 +39,7 @@ def postprocess_frame(
     config: PostprocessConfig,
     stem: str = "",
     output_dir: Path | None = None,
-) -> PostprocessedFrame:
+) -> ProcessedFrame:
     """Postprocess a single inference result into output-ready numpy arrays.
 
     Args:
@@ -126,7 +126,7 @@ def postprocess_frame(
     )
 
     # Step 6 — return
-    return PostprocessedFrame(
+    return ProcessedFrame(
         alpha=alpha_np,
         fg=fg_np,
         processed=processed_np,

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from corridorkey.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey.stages.postprocessor.contracts import ProcessedFrame
 
 
-def _make_frame(h: int = 32, w: int = 32) -> PostprocessedFrame:
-    return PostprocessedFrame(
+def _make_frame(h: int = 32, w: int = 32) -> ProcessedFrame:
+    return ProcessedFrame(
         alpha=np.zeros((h, w, 1), dtype=np.float32),
         fg=np.zeros((h, w, 3), dtype=np.float32),
         processed=np.zeros((h, w, 4), dtype=np.float32),
@@ -34,7 +34,7 @@ class TestPostprocessedFrame:
         assert f.comp.shape == (32, 32, 3)
 
     def test_stem_default(self):
-        f = PostprocessedFrame(
+        f = ProcessedFrame(
             alpha=np.zeros((4, 4, 1), dtype=np.float32),
             fg=np.zeros((4, 4, 3), dtype=np.float32),
             processed=np.zeros((4, 4, 4), dtype=np.float32),

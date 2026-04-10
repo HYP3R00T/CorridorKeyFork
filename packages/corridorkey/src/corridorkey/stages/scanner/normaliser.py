@@ -13,7 +13,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from corridorkey.infra.utils import VIDEO_EXTENSIONS
-from corridorkey.stages.scanner.contracts import Clip, SkippedPath
+from corridorkey.stages.scanner.contracts import Clip, SkippedClip
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ def normalise_video(video_path: Path) -> Clip:
         raise OSError(f"Clip validation failed after reorganising '{video_path}': {e}") from e
 
 
-def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedPath | None]:
+def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedClip | None]:
     """Attempt to build a Clip from a directory.
 
     Returns:
@@ -80,7 +80,7 @@ def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedPath | None]:
     except PermissionError as e:
         reason = f"cannot read directory: {e}"
         logger.warning("Skipping '%s': %s", clip_dir, reason)
-        return None, SkippedPath(path=clip_dir, reason=reason)
+        return None, SkippedClip(path=clip_dir, reason=reason)
 
     if input_path is None:
         if input_skip is not None:
@@ -99,10 +99,10 @@ def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedPath | None]:
     except ValidationError as e:
         reason = f"validation failed: {e}"
         logger.warning("Skipping '%s': %s", clip_dir, reason)
-        return None, SkippedPath(path=clip_dir, reason=reason)
+        return None, SkippedClip(path=clip_dir, reason=reason)
 
 
-def find_input(clip_dir: Path) -> tuple[Path | None, SkippedPath | None]:
+def find_input(clip_dir: Path) -> tuple[Path | None, SkippedClip | None]:
     """Locate the input asset inside a clip folder (case-insensitive).
 
     Returns:
@@ -128,10 +128,10 @@ def find_input(clip_dir: Path) -> tuple[Path | None, SkippedPath | None]:
     names = ", ".join(v.name for v in videos)
     reason = f"Input/ contains multiple video files ({names}) — keep exactly one"
     logger.warning("Skipping '%s': %s", clip_dir, reason)
-    return None, SkippedPath(path=clip_dir, reason=reason)
+    return None, SkippedClip(path=clip_dir, reason=reason)
 
 
-def find_alpha(clip_dir: Path) -> tuple[Path | None, SkippedPath | None]:
+def find_alpha(clip_dir: Path) -> tuple[Path | None, SkippedClip | None]:
     """Locate the AlphaHint asset inside a clip folder (case-insensitive).
 
     Returns:
@@ -152,7 +152,7 @@ def find_alpha(clip_dir: Path) -> tuple[Path | None, SkippedPath | None]:
 
     names = ", ".join(v.name for v in videos)
     reason = f"AlphaHint/ contains multiple video files ({names}) — keep exactly one"
-    return None, SkippedPath(path=clip_dir, reason=reason)
+    return None, SkippedClip(path=clip_dir, reason=reason)
 
 
 def _find_videos_in(directory: Path) -> list[Path]:

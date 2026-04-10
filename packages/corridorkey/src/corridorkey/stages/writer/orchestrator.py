@@ -19,7 +19,7 @@ import cv2
 import numpy as np
 
 from corridorkey.errors import WriteFailureError
-from corridorkey.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey.stages.postprocessor.contracts import ProcessedFrame
 from corridorkey.stages.writer.contracts import WriteConfig
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ _EXR_COMPRESSION_IDS: dict[str, int] = {
 }
 
 
-def write_frame(frame: PostprocessedFrame, config: WriteConfig) -> None:
+def write_frame(frame: ProcessedFrame, config: WriteConfig) -> None:
     """Write all enabled outputs for one postprocessed frame to disk.
 
     Args:

@@ -37,7 +37,7 @@ from enum import Enum
 from pathlib import Path
 
 from corridorkey.errors import InvalidStateTransitionError
-from corridorkey.stages.loader.validator import count_frames, list_clip_frames
+from corridorkey.stages.loader.validator import count_frames, list_frames
 from corridorkey.stages.scanner.contracts import Clip
 
 logger = logging.getLogger(__name__)
@@ -73,7 +73,7 @@ _TRANSITIONS: dict[ClipState, set[ClipState]] = {
 
 
 @dataclass
-class InOutRange:
+class FrameRange:
     """Inclusive in/out frame range for sub-clip processing.
 
     Both indices are zero-based and inclusive.
@@ -101,7 +101,7 @@ class InOutRange:
 
 
 @dataclass
-class ClipEntry:
+class ClipRecord:
     """A single clip with its processing state.
 
     Construct via :func:`from_clip` (preferred) or directly for testing.
@@ -119,7 +119,7 @@ class ClipEntry:
     clip: Clip
     state: ClipState = ClipState.RAW
     manifest: object | None = None  # ClipManifest — avoid circular import at module level
-    in_out_range: InOutRange | None = None
+    in_out_range: FrameRange | None = None
     warnings: list[str] = field(default_factory=list)
     error_message: str | None = None
     _processing: bool = field(default=False, repr=False)
@@ -129,7 +129,7 @@ class ClipEntry:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_clip(cls, clip: Clip) -> ClipEntry:
+    def from_clip(cls, clip: Clip) -> ClipRecord:
         """Create a ClipEntry from a scanner Clip and resolve its initial state.
 
         Args:
@@ -241,7 +241,7 @@ class ClipEntry:
         for subdir in ("alpha", "fg", "comp", "processed"):
             d = self.output_dir / subdir
             if d.is_dir():
-                stems = {p.stem for p in list_clip_frames(d)}
+                stems = {p.stem for p in list_frames(d)}
                 if stems:
                     stem_sets.append(stems)
 
@@ -301,7 +301,7 @@ def _resolve_state(clip: Clip) -> ClipState:
     return ClipState.RAW
 
 
-def resolve_clip_state(clip: Clip) -> ClipState:
+def get_clip_state(clip: Clip) -> ClipState:
     """Resolve the current :class:`ClipState` for a clip from what is on disk.
 
     Convenience wrapper around the internal ``_resolve_state`` function,

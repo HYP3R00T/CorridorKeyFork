@@ -61,7 +61,7 @@ def scan_frames(path: Path) -> FrameScan:
     return FrameScan(files=tuple(files), is_linear=is_linear)
 
 
-def list_clip_frames(path: Path) -> list[Path]:
+def list_frames(path: Path) -> list[Path]:
     """Return naturally sorted image files in a clip frame directory.
 
     Convenience wrapper around :func:`scan_frames` for callers that only need

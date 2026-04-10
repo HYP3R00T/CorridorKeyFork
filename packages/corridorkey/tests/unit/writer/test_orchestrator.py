@@ -7,13 +7,13 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from corridorkey.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey.stages.postprocessor.contracts import ProcessedFrame
 from corridorkey.stages.writer.contracts import WriteConfig
 from corridorkey.stages.writer.orchestrator import _alpha_to_bgr, _exr_flags, write_frame
 
 
-def _make_frame(h: int = 16, w: int = 16, stem: str = "frame_000000") -> PostprocessedFrame:
-    return PostprocessedFrame(
+def _make_frame(h: int = 16, w: int = 16, stem: str = "frame_000000") -> ProcessedFrame:
+    return ProcessedFrame(
         alpha=np.full((h, w, 1), 0.5, dtype=np.float32),
         fg=np.full((h, w, 3), 0.4, dtype=np.float32),
         processed=np.full((h, w, 4), 0.2, dtype=np.float32),
@@ -158,13 +158,13 @@ class TestProcessedPngColourSpace:
     (dark). After correct linear-to-sRGB conversion it should be ~0.735.
     """
 
-    def _make_frame(self, rgb_linear: float, alpha: float = 1.0) -> PostprocessedFrame:
+    def _make_frame(self, rgb_linear: float, alpha: float = 1.0) -> ProcessedFrame:
         h, w = 8, 8
         # processed is premultiplied linear RGBA
         processed = np.full((h, w, 4), 0.0, dtype=np.float32)
         processed[:, :, :3] = rgb_linear * alpha  # premultiplied
         processed[:, :, 3] = alpha
-        return PostprocessedFrame(
+        return ProcessedFrame(
             alpha=np.full((h, w, 1), alpha, dtype=np.float32),
             fg=np.full((h, w, 3), rgb_linear, dtype=np.float32),
             processed=processed,

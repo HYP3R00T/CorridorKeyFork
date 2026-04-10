@@ -43,7 +43,7 @@ _DEFAULT_MLX_TILE_SIZE = 512
 _DEFAULT_MLX_TILE_OVERLAP = 64
 
 
-def load_backend(config: InferenceConfig) -> ModelBackend:  # pragma: no cover
+def load_model_backend(config: InferenceConfig) -> ModelBackend:  # pragma: no cover
     """Construct and return the appropriate inference backend.
 
     Resolves the backend (torch or mlx), resolves "auto" refiner_mode to a

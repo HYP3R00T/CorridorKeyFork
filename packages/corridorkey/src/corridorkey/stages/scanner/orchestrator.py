@@ -17,7 +17,7 @@ from pathlib import Path
 from corridorkey.errors import ClipScanError
 from corridorkey.events import PipelineEvents
 from corridorkey.infra.utils import VIDEO_EXTENSIONS
-from corridorkey.stages.scanner.contracts import Clip, ScanResult, SkippedPath
+from corridorkey.stages.scanner.contracts import Clip, ScanResult, SkippedClip
 from corridorkey.stages.scanner.normaliser import normalise_video, try_build_clip
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def scan(
         raise ClipScanError(f"Path does not exist: {path}")
 
     clips: list[Clip] = []
-    skipped: list[SkippedPath] = []
+    skipped: list[SkippedClip] = []
 
     # --- Single video file ---
     if path.is_file():
@@ -72,7 +72,7 @@ def scan(
         else:
             reason = "reorganise=False — loose video files are not processed without reorganisation"
             logger.warning("Skipping '%s': %s", path, reason)
-            skipped.append(SkippedPath(path=path, reason=reason))
+            skipped.append(SkippedClip(path=path, reason=reason))
             if events:
                 events.clip_skipped(reason, path)
         return ScanResult(clips=tuple(clips), skipped=tuple(skipped))
@@ -108,7 +108,7 @@ def scan(
             else:
                 reason = "reorganise=False — loose video files are not processed without reorganisation"
                 logger.debug("Skipping loose video '%s': %s", item, reason)
-                skipped.append(SkippedPath(path=item, reason=reason))
+                skipped.append(SkippedClip(path=item, reason=reason))
                 if events:
                     events.clip_skipped(reason, item)
             continue

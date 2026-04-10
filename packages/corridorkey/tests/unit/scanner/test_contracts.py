@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from corridorkey.stages.scanner.contracts import Clip, ScanResult, SkippedPath
+from corridorkey.stages.scanner.contracts import Clip, ScanResult, SkippedClip
 from pydantic import ValidationError
 
 
@@ -57,16 +57,16 @@ class TestClip:
 
 class TestSkippedPath:
     def test_basic_construction(self, tmp_path: Path):
-        s = SkippedPath(path=tmp_path, reason="test reason")
+        s = SkippedClip(path=tmp_path, reason="test reason")
         assert s.path == tmp_path
         assert s.reason == "test reason"
 
     def test_repr_contains_reason(self, tmp_path: Path):
-        s = SkippedPath(path=tmp_path, reason="multiple videos")
+        s = SkippedClip(path=tmp_path, reason="multiple videos")
         assert "multiple videos" in repr(s)
 
     def test_is_frozen(self, tmp_path: Path):
-        s = SkippedPath(path=tmp_path, reason="x")
+        s = SkippedClip(path=tmp_path, reason="x")
         with pytest.raises(ValidationError):
             s.reason = "y"
 
@@ -88,8 +88,8 @@ class TestScanResult:
 
     def test_skipped_count(self, tmp_path: Path):
         skipped = (
-            SkippedPath(path=tmp_path / "a", reason="x"),
-            SkippedPath(path=tmp_path / "b", reason="y"),
+            SkippedClip(path=tmp_path / "a", reason="x"),
+            SkippedClip(path=tmp_path / "b", reason="y"),
         )
         result = ScanResult(clips=(), skipped=skipped)
         assert result.skipped_count == 2

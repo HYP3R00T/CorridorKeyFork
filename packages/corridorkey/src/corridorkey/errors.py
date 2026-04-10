@@ -6,6 +6,8 @@ base class when they don't need to distinguish between subtypes.
 Hierarchy
 ---------
 CorridorKeyError
+├── EngineError                 — engine: contract violations before processing starts
+├── AlphaGeneratorError         — engine: alpha slot unfilled when clip needs alpha
 ├── ClipScanError               — scanner: path/structure problems
 ├── ExtractionError             — loader: video extraction failures
 ├── FrameMismatchError          — loader: input/alpha count mismatch
@@ -99,3 +101,21 @@ class JobCancelledError(CorridorKeyError):
         if frame_index is not None:
             msg += f" at frame {frame_index}"
         super().__init__(msg)
+
+
+class EngineError(CorridorKeyError):
+    """Raised when the Engine detects a contract violation before processing starts.
+
+    Examples: required slot unfilled, plugin type mismatch, plugin config invalid.
+    """
+
+
+class AlphaGeneratorError(CorridorKeyError):
+    """Raised when a clip needs alpha but no AlphaGenerator is registered."""
+
+    def __init__(self, clip_name: str) -> None:
+        self.clip_name = clip_name
+        super().__init__(
+            f"Clip '{clip_name}' requires alpha frames but no AlphaGenerator is registered. "
+            "Register one via engine.set_alpha_generator() before calling engine.run()."
+        )

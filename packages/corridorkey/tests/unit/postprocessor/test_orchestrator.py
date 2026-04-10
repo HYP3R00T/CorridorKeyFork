@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from corridorkey.stages.inference.contracts import InferenceResult
 from corridorkey.stages.postprocessor.config import PostprocessConfig
-from corridorkey.stages.postprocessor.contracts import PostprocessedFrame
+from corridorkey.stages.postprocessor.contracts import ProcessedFrame
 from corridorkey.stages.postprocessor.orchestrator import postprocess_frame
 from corridorkey.stages.preprocessor.contracts import FrameMeta
 
@@ -25,7 +25,7 @@ def _make_result(h: int = 32, w: int = 32, frame_index: int = 0) -> InferenceRes
 class TestPostprocessFrame:
     def test_returns_postprocessed_frame(self):
         result = postprocess_frame(_make_result(), PostprocessConfig())
-        assert isinstance(result, PostprocessedFrame)
+        assert isinstance(result, ProcessedFrame)
 
     def test_alpha_shape_at_source_resolution(self):
         result = postprocess_frame(_make_result(h=48, w=64), PostprocessConfig())

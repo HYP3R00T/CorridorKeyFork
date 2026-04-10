@@ -64,8 +64,7 @@ from corridorkey.infra.config import (
     load_config_with_metadata,
 )
 from corridorkey.infra.device_utils import GPUInfo, clear_device_cache, detect_gpu, resolve_device, resolve_devices
-from corridorkey.infra.logging import setup_logging
-from corridorkey.infra.model_hub import default_checkpoint_path, ensure_model
+from corridorkey.infra.model_hub import default_checkpoint_path
 
 __all__ = [
     # Config loading
@@ -76,8 +75,6 @@ __all__ = [
     "write_config",
     "ensure_config_file",
     "get_config_path",
-    # Logging
-    "setup_logging",
     # Device
     "resolve_device",
     "resolve_devices",
@@ -93,6 +90,5 @@ __all__ = [
     # GPU info
     "GPUInfo",
     # Model hub
-    "ensure_model",
     "default_checkpoint_path",
 ]

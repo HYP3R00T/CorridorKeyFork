@@ -7,7 +7,7 @@ from unittest.mock import patch
 
 import pytest
 from corridorkey.errors import InvalidStateTransitionError
-from corridorkey.runtime.clip_state import ClipEntry, ClipState, InOutRange
+from corridorkey.runtime.clip_state import ClipRecord, ClipState, FrameRange
 from corridorkey.stages.scanner.contracts import Clip
 
 # Helpers
@@ -22,9 +22,9 @@ def _make_clip(tmp_path: Path, has_alpha: bool = False) -> Clip:
     return Clip(name="TestClip", root=tmp_path, input_path=input_dir, alpha_path=alpha_dir)
 
 
-def _make_entry(tmp_path: Path, state: ClipState = ClipState.RAW) -> ClipEntry:
+def _make_entry(tmp_path: Path, state: ClipState = ClipState.RAW) -> ClipRecord:
     clip = _make_clip(tmp_path)
-    entry = ClipEntry(clip=clip, state=state)
+    entry = ClipRecord(clip=clip, state=state)
     return entry
 
 
@@ -33,22 +33,22 @@ def _make_entry(tmp_path: Path, state: ClipState = ClipState.RAW) -> ClipEntry:
 
 class TestInOutRange:
     def test_frame_count(self):
-        r = InOutRange(in_point=0, out_point=9)
+        r = FrameRange(in_point=0, out_point=9)
         assert r.frame_count == 10
 
     def test_contains_in_range(self):
-        r = InOutRange(in_point=5, out_point=10)
+        r = FrameRange(in_point=5, out_point=10)
         assert r.contains(5)
         assert r.contains(7)
         assert r.contains(10)
 
     def test_contains_out_of_range(self):
-        r = InOutRange(in_point=5, out_point=10)
+        r = FrameRange(in_point=5, out_point=10)
         assert not r.contains(4)
         assert not r.contains(11)
 
     def test_to_frame_range(self):
-        r = InOutRange(in_point=2, out_point=7)
+        r = FrameRange(in_point=2, out_point=7)
         assert r.to_frame_range() == (2, 8)
 
 
@@ -226,7 +226,7 @@ class TestFromClip:
 
         cv2.imwrite(str(input_dir / "frame_000001.png"), np.zeros((8, 8, 3), dtype=np.uint8))
         clip = Clip(name="c", root=tmp_path, input_path=input_dir, alpha_path=None)
-        entry = ClipEntry.from_clip(clip)
+        entry = ClipRecord.from_clip(clip)
         assert entry.state == ClipState.RAW
 
     def test_from_clip_resolves_extracting_for_video(self, tmp_path):
@@ -234,7 +234,7 @@ class TestFromClip:
         video_path.write_bytes(b"")
         clip = Clip(name="c", root=tmp_path, input_path=video_path, alpha_path=None)
         with patch("corridorkey.stages.loader.extractor.is_video", return_value=True):
-            entry = ClipEntry.from_clip(clip)
+            entry = ClipRecord.from_clip(clip)
         assert entry.state == ClipState.EXTRACTING
 
 
