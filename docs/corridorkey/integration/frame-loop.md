@@ -36,7 +36,7 @@ After loading, `backend.resolved_config` returns a flat dictionary of strings de
 
 `preprocess_frame()` accepts optional pre-built file lists for the image and alpha directories. When these are provided, the function uses them directly instead of scanning the directory on every call. For a clip with hundreds of frames, scanning the directory on every frame call adds significant overhead. The interface should build these lists once when the clip is loaded and pass them on every frame call.
 
-`scan_frames()` performs a single directory scan and returns a `FrameScan` containing the sorted file list and a flag indicating whether the frames are in linear colour space. `get_frame_files()` is a convenience wrapper that returns just the file list.
+`scan_frames()` performs a single directory scan and returns a `FrameScan` containing the sorted file list and a flag indicating whether the frames are in linear colour space. `list_clip_frames()` is a convenience wrapper that returns just the file list.
 
 ## Memory Management
 
@@ -52,7 +52,7 @@ The frame loop is the right choice when:
 - The interface needs to inspect or modify the result of each stage before passing it to the next.
 - The interface needs to interleave pipeline calls with other work on the same thread.
 
-It is not the right choice for a CLI or GUI that processes whole clips. For those cases, `PipelineRunner` is simpler and handles threading automatically.
+It is not the right choice for a CLI or GUI that processes whole clips. For those cases, `Runner` is simpler and handles threading automatically.
 
 ## Related
 

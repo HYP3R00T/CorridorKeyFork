@@ -38,8 +38,6 @@ The interface should pass an `on_progress` callback to receive `(bytes_downloade
 
 `default_checkpoint_path()` returns the expected local path without triggering a download. Use this to check whether the model is present before deciding whether to show a download prompt.
 
-`MODEL_URL` and `MODEL_FILENAME` are constants that expose the download source and filename. A GUI can display these to the user before starting a download.
-
 ## Key Concepts
 
 Configuration, logging, device, and model are all initialised once per session, not once per clip. The resolved device string and the loaded model are passed into the pipeline for every clip that runs in that session.

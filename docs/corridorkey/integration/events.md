@@ -10,7 +10,7 @@ The pipeline runs on worker threads. The interface needs a way to receive notifi
 
 ## How It Works
 
-A `PipelineEvents` instance is created by the interface and passed into `PipelineConfig` or `MultiGPUConfig` before the runner starts. The same instance is shared across all three workers, so the interface gets a unified view of the whole pipeline from a single object.
+A `PipelineEvents` instance is created by the interface and passed into `PipelineConfig` before the runner starts. The same instance is shared across all three workers, so the interface gets a unified view of the whole pipeline from a single object.
 
 The callbacks are plain Python callables. They can be functions, methods, or lambdas. The only constraint is that they must return quickly. The worker thread that fires a callback blocks until it returns. A slow callback stalls the pipeline.
 
@@ -48,6 +48,12 @@ If a callback needs to do something slow (write to a database, send a network re
 
 `on_clip_skipped(reason, path)` fires when a path is encountered during scanning but cannot be used. The `reason` string is human-readable and suitable for display.
 
+### Clip lifecycle
+
+`on_clip_complete(clip_name, frames_written)` fires after all frames for a clip have been written and all worker threads have exited cleanly. `frames_written` is the manifest frame count. Use this to update a batch progress list in a GUI.
+
+`on_clip_error(clip_name, error)` fires when a clip does not complete -- either because it was cancelled (`JobCancelledError`) or because an unhandled exception occurred. It fires before the exception propagates to the caller, so the interface can update the clip's status before handling the error itself.
+
 ## Passing Events to the Scanner
 
 `scan()` also accepts a `PipelineEvents` instance. When provided, `on_clip_found` and `on_clip_skipped` fire as the scan progresses. This is useful for interfaces that want to show clips appearing in the UI in real time rather than all at once after the scan finishes.
@@ -55,5 +61,4 @@ If a callback needs to do something slow (write to a database, send a network re
 ## Related
 
 - [Runner](runner.md) - How events are attached to the runner.
-- [MultiGPURunner](multi-gpu-runner.md) - Events work identically for multi-GPU runs.
 - [Reference - events](../reference/events.md) - Full symbol reference.

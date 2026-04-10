@@ -9,7 +9,7 @@ This package implements the full inference pipeline as a set of composable stage
 - **scan** — discover clips from a directory
 - **load** — validate a clip and extract video frames
 - **preprocess_frame** — resize, normalise, and tensorise a frame
-- **run_inference** — run the neural network
+- **run_inference** — run the neural network (via `backend.run()`)
 - **postprocess_frame** — despill, despeckle, upsample, composite
 - **write_frame** — write alpha, foreground, and composite outputs
 
@@ -33,7 +33,7 @@ from corridorkey import (
     load_config, setup_logging, resolve_device,
     scan, load, resolve_alpha,
     preprocess_frame, postprocess_frame, write_frame,
-    InferenceConfig, load_backend, get_frame_files,
+    InferenceConfig, load_backend, list_clip_frames,
 )
 
 config = load_config()
@@ -41,9 +41,9 @@ setup_logging(config)
 device = resolve_device(config.device)
 
 # Discover clips
-clips = scan("/path/to/clips")
+result = scan("/path/to/clips")
 
-for clip in clips.clips:
+for clip in result.clips:
     manifest = load(clip)
 
     # If no alpha hint exists, generate one externally then:
@@ -60,8 +60,8 @@ for clip in clips.clips:
 
     backend = load_backend(inference_config)
 
-    imgs = get_frame_files(manifest.frames_dir)
-    alps = get_frame_files(manifest.alpha_frames_dir)
+    imgs = list_clip_frames(manifest.frames_dir)
+    alps = list_clip_frames(manifest.alpha_frames_dir)
 
     for i in range(*manifest.frame_range):
         preprocessed = preprocess_frame(manifest, i, preprocess_config,
@@ -123,7 +123,7 @@ preprocessed = preprocess_frame(manifest, i, config, image_files=imgs, alpha_fil
 ### run_inference
 
 ```python
-result = run_inference(preprocessed, model, config)
+result = backend.run(preprocessed)
 # result.alpha: torch.Tensor [1, 1, img_size, img_size]
 # result.fg: torch.Tensor [1, 3, img_size, img_size]
 ```
@@ -170,4 +170,3 @@ Config is resolved from (lowest → highest priority):
 | `mps` | Apple Silicon |
 | `cpu` | CPU fallback |
 | `all` | All CUDA GPUs in parallel |
-

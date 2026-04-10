@@ -28,7 +28,7 @@ Calling `transition_to()` with an invalid target raises `InvalidStateTransitionE
 
 ## ClipEntry
 
-`ClipEntry` wraps a `Clip` (scanner output) and optionally a `LoadResult` (loader output). It does not re-scan the filesystem - that is the scanner's job.
+`ClipEntry` wraps a `Clip` (scanner output) and optionally a `ClipManifest` (loader output). It does not re-scan the filesystem - that is the scanner's job.
 
 State is resolved from disk at construction time via `from_clip()`. The resolution priority is:
 
@@ -43,10 +43,9 @@ State is resolved from disk at construction time via `from_clip()`. The resoluti
 
 ## InOutRange
 
-`InOutRange` represents an inclusive in/out frame range for sub-clip processing. Both indices are zero-based and inclusive. Use `to_frame_range()` to convert to a half-open `(start, end)` tuple for `LoadResult.frame_range`.
+`InOutRange` represents an inclusive in/out frame range for sub-clip processing. Both indices are zero-based and inclusive. Use `to_frame_range()` to convert to a half-open `(start, end)` tuple for `ClipManifest.frame_range`.
 
 ## Related
 
 - [Job Queue](job-queue.md) - How the queue interacts with the processing lock.
 - [Reference - clip-state](reference/clip-state.md) - Full symbol reference.
-

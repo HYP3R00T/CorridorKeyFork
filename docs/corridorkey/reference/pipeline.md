@@ -10,8 +10,6 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 
 ::: corridorkey.resolve_alpha
 
-::: corridorkey.load_video_metadata
-
 ::: corridorkey.preprocess_frame
 
 ::: corridorkey.load_backend
@@ -42,11 +40,9 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 
 ### Loader
 
-::: corridorkey.LoadResult
+::: corridorkey.ClipManifest
 
-::: corridorkey.VideoMetadata
-
-::: corridorkey.stages.loader.validator.get_frame_files
+::: corridorkey.list_clip_frames
 
 ### Preprocessor
 
@@ -75,4 +71,3 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 ### Writer
 
 ::: corridorkey.WriteConfig
-

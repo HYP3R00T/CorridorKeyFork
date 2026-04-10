@@ -14,8 +14,8 @@ This stage is the boundary between filesystem I/O (NumPy, CPU) and device comput
 from corridorkey import preprocess_frame
 
 # Build file lists once per clip, pass on every frame call
-imgs = get_frame_files(manifest.frames_dir)
-alps = get_frame_files(manifest.alpha_frames_dir)
+imgs = list_clip_frames(manifest.frames_dir)
+alps = list_clip_frames(manifest.alpha_frames_dir)
 
 for i in range(*manifest.frame_range):
     frame = preprocess_frame(manifest, i, config, image_files=imgs, alpha_files=alps)
@@ -124,6 +124,5 @@ class FrameMeta:
 
 ## Related
 
-- [Loader Stage](loader.md) - Produces the `LoadResult` consumed here.
+- [Loader Stage](loader.md) - Produces the `ClipManifest` consumed here.
 - [Inference Stage](inference.md) - Consumes `PreprocessedFrame`.
-

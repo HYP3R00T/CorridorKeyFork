@@ -26,7 +26,7 @@ Raised during startup when the requested compute device is unavailable. This hap
 
 ### ModelError
 
-Raised when the model checkpoint cannot be downloaded or fails checksum verification. The interface should offer to retry the download. The `MODEL_URL` constant provides the download source for display.
+Raised when the model checkpoint cannot be downloaded or fails checksum verification. The interface should offer to retry the download.
 
 ### ClipScanError
 
@@ -68,7 +68,7 @@ The recommended approach is to catch specific subclasses first, in order of how 
 
 `FrameMismatchError` and `ExtractionError` are clip-level failures. The interface should mark the affected clip as errored, display the details, and continue processing other clips.
 
-`FrameReadError` and `WriteFailureError` are frame-level failures. In `PipelineRunner` they are handled internally and reported through `on_frame_error`. In the frame loop, the interface decides whether to skip the frame or abort the clip.
+`FrameReadError` and `WriteFailureError` are frame-level failures. In `Runner` they are handled internally and reported through `on_frame_error`. In the frame loop, the interface decides whether to skip the frame or abort the clip.
 
 `CorridorKeyError` as a catch-all should log the full exception and display a generic error message. It should never be silently swallowed.
 
