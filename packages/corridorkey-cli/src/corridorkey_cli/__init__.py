@@ -180,11 +180,6 @@ def main() -> None:
         sys.exit(130)
 
 
-# ---------------------------------------------------------------------------
-# UI helpers
-# ---------------------------------------------------------------------------
-
-
 def _print_clip_table(clips, clips_dir: Path) -> None:
     table = Table(title=f"Clips in {clips_dir}", show_header=True, header_style="bold")
     table.add_column("Clip")

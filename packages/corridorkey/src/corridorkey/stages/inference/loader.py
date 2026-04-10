@@ -142,11 +142,6 @@ def load_model(config: InferenceConfig, resolved_refiner_mode: str | None = None
     return model
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _strip_compiled_prefix(state_dict: dict) -> dict:
     """Remove the ``_orig_mod.`` prefix added by ``torch.compile``."""
     return {(k[10:] if k.startswith("_orig_mod.") else k): v for k, v in state_dict.items()}

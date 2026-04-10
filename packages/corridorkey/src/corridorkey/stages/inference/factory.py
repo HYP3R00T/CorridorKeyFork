@@ -43,11 +43,6 @@ _DEFAULT_MLX_TILE_SIZE = 512
 _DEFAULT_MLX_TILE_OVERLAP = 64
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
 def load_backend(config: InferenceConfig) -> ModelBackend:  # pragma: no cover
     """Construct and return the appropriate inference backend.
 
@@ -126,11 +121,6 @@ def discover_checkpoint(checkpoint_dir: str | Path, backend: str = "torch") -> P
     return matches[0]
 
 
-# ---------------------------------------------------------------------------
-# Backend resolution
-# ---------------------------------------------------------------------------
-
-
 def _resolve_backend(requested: str) -> str:
     """Resolve the backend string to ``"torch"`` or ``"mlx"``.
 
@@ -177,11 +167,6 @@ def _assert_mlx_available() -> None:  # pragma: no cover
             "MLX backend requested but corridorkey_mlx is not installed. "
             "Install with: uv pip install 'corridorkey[mlx]'"
         )
-
-
-# ---------------------------------------------------------------------------
-# Backend loaders
-# ---------------------------------------------------------------------------
 
 
 def _load_mlx_backend(config: InferenceConfig) -> ModelBackend:  # pragma: no cover

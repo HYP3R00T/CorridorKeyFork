@@ -17,9 +17,7 @@ from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.preprocessor import FrameReadError, PreprocessConfig, PreprocessedFrame
 from corridorkey.stages.preprocessor.contracts import FrameMeta
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _write_png(path: Path, h: int = 32, w: int = 32, channels: int = 3) -> None:
@@ -52,9 +50,7 @@ def _make_manifest(tmp_path: Path, frame_count: int = 2) -> ClipManifest:
     )
 
 
-# ---------------------------------------------------------------------------
 # PreprocessWorker
-# ---------------------------------------------------------------------------
 
 
 class TestPreprocessWorker:
@@ -190,9 +186,7 @@ class TestPreprocessWorker:
         assert frame.tensor.shape == (1, 4, 32, 32)
 
 
-# ---------------------------------------------------------------------------
 # InferenceWorker (stub — pass-through behaviour)
-# ---------------------------------------------------------------------------
 
 
 class TestInferenceWorker:
@@ -309,9 +303,7 @@ class TestInferenceWorker:
         assert out_q.get() is STOP
 
 
-# ---------------------------------------------------------------------------
 # PostWriteWorker — mocks postprocess_frame and write_frame
-# ---------------------------------------------------------------------------
 
 
 class TestPostWriteWorker:
@@ -395,9 +387,7 @@ class TestPostWriteWorker:
         assert not t.is_alive()
 
 
-# ---------------------------------------------------------------------------
 # Worker event callbacks
-# ---------------------------------------------------------------------------
 
 
 class TestPreprocessWorkerEvents:
@@ -658,9 +648,7 @@ class TestPostWriteWorkerEvents:
         assert errors == [("postwrite", 4)]
 
 
-# ---------------------------------------------------------------------------
 # Cancellation — PreprocessWorker
-# ---------------------------------------------------------------------------
 
 
 class TestPreprocessWorkerCancellation:
@@ -768,9 +756,7 @@ class TestPreprocessWorkerCancellation:
         assert len(items) == 3
 
 
-# ---------------------------------------------------------------------------
 # Cancellation — PostWriteWorker
-# ---------------------------------------------------------------------------
 
 
 class TestPostWriteWorkerCancellation:

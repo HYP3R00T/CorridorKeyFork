@@ -10,9 +10,7 @@ from corridorkey.errors import InvalidStateTransitionError
 from corridorkey.runtime.clip_state import ClipEntry, ClipState, InOutRange
 from corridorkey.stages.scanner.contracts import Clip
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_clip(tmp_path: Path, has_alpha: bool = False) -> Clip:
@@ -30,9 +28,7 @@ def _make_entry(tmp_path: Path, state: ClipState = ClipState.RAW) -> ClipEntry:
     return entry
 
 
-# ---------------------------------------------------------------------------
 # InOutRange
-# ---------------------------------------------------------------------------
 
 
 class TestInOutRange:
@@ -56,9 +52,7 @@ class TestInOutRange:
         assert r.to_frame_range() == (2, 8)
 
 
-# ---------------------------------------------------------------------------
 # ClipEntry properties
-# ---------------------------------------------------------------------------
 
 
 class TestClipEntryProperties:
@@ -86,9 +80,7 @@ class TestClipEntryProperties:
         assert entry.is_processing is False
 
 
-# ---------------------------------------------------------------------------
 # State transitions
-# ---------------------------------------------------------------------------
 
 
 class TestTransitions:
@@ -161,9 +153,7 @@ class TestTransitions:
         assert entry.error_message == "boom"
 
 
-# ---------------------------------------------------------------------------
 # has_outputs / completed_stems
-# ---------------------------------------------------------------------------
 
 
 class TestOutputInspection:
@@ -205,9 +195,7 @@ class TestOutputInspection:
         assert entry.completed_frame_count() == 3
 
 
-# ---------------------------------------------------------------------------
 # refresh_state
-# ---------------------------------------------------------------------------
 
 
 class TestRefreshState:
@@ -226,9 +214,7 @@ class TestRefreshState:
         assert entry.state == ClipState.RAW
 
 
-# ---------------------------------------------------------------------------
 # from_clip
-# ---------------------------------------------------------------------------
 
 
 class TestFromClip:

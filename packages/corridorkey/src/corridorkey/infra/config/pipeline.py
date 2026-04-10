@@ -113,10 +113,6 @@ class CorridorKeyConfig(BaseModel):
         Field(default_factory=WriterSettings, description="Writer stage settings."),
     ] = Field(default_factory=WriterSettings)
 
-    # ------------------------------------------------------------------
-    # Bridge methods — build stage runtime configs from this config
-    # ------------------------------------------------------------------
-
     def to_pipeline_config(
         self,
         device: str | None = None,

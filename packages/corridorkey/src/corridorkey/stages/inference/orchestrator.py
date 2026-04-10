@@ -136,9 +136,7 @@ def _free_vram_if_needed(device: str) -> None:
         pass
 
 
-# ---------------------------------------------------------------------------
 # Refiner mode resolution
-# ---------------------------------------------------------------------------
 
 
 def _should_tile_refiner(config: InferenceConfig, resolved_refiner_mode: str | None = None) -> bool:
@@ -210,9 +208,7 @@ def _probe_vram_gb(device: str) -> float:
     return 0.0
 
 
-# ---------------------------------------------------------------------------
 # Tiled refiner hook
-# ---------------------------------------------------------------------------
 
 
 class _TiledRefinerState:

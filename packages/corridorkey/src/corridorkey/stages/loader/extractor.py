@@ -243,11 +243,6 @@ def load_video_metadata(clip_root: Path) -> VideoMetadata | None:
     return VideoMetadata.model_validate_json(meta_path.read_text(encoding="utf-8"))
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 def _extract_metadata(container: av.container.InputContainer, video_path: Path) -> VideoMetadata:
     """Pull metadata from an open PyAV container."""
     stream = container.streams.video[0]

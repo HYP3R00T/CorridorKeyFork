@@ -16,9 +16,7 @@ from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.preprocessor import PreprocessConfig, PreprocessedFrame
 from corridorkey.stages.preprocessor.contracts import FrameMeta
 
-# ---------------------------------------------------------------------------
 # Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_manifest(tmp_path: Path, frame_count: int = 2) -> ClipManifest:
@@ -67,9 +65,7 @@ def _make_pipeline_config(tmp_path: Path, devices: list[str] | None = None) -> P
     )
 
 
-# ---------------------------------------------------------------------------
 # _AtomicCounter
-# ---------------------------------------------------------------------------
 
 
 class TestAtomicCounter:
@@ -101,9 +97,7 @@ class TestAtomicCounter:
         assert sorted(results) == list(range(0, n))
 
 
-# ---------------------------------------------------------------------------
 # _override_device
-# ---------------------------------------------------------------------------
 
 
 class TestOverrideDevice:
@@ -123,9 +117,7 @@ class TestOverrideDevice:
         assert cfg.device == "cpu"
 
 
-# ---------------------------------------------------------------------------
 # _InferenceWorker
-# ---------------------------------------------------------------------------
 
 
 class TestInferenceWorker:
@@ -222,9 +214,7 @@ class TestInferenceWorker:
         assert {r.meta.frame_index for r in received} == set(range(n_frames))
 
 
-# ---------------------------------------------------------------------------
 # Runner — missing inference config
-# ---------------------------------------------------------------------------
 
 
 class TestRunnerValidation:
@@ -238,9 +228,7 @@ class TestRunnerValidation:
             Runner(manifest, cfg).run()
 
 
-# ---------------------------------------------------------------------------
 # Runner — events override
-# ---------------------------------------------------------------------------
 
 
 class TestRunnerEventsOverride:
@@ -296,9 +284,7 @@ class TestRunnerEventsOverride:
         assert all(e is config_events for e in seen)
 
 
-# ---------------------------------------------------------------------------
 # Runner — end-to-end (mocked model + inference)
-# ---------------------------------------------------------------------------
 
 
 class TestRunnerEndToEnd:
@@ -341,9 +327,7 @@ class TestRunnerEndToEnd:
             Runner(manifest, cfg).run()
 
 
-# ---------------------------------------------------------------------------
 # Runner — pre-loaded model (cfg.model) device validation
-# ---------------------------------------------------------------------------
 
 
 class TestRunnerPreloadedModel:
@@ -417,9 +401,7 @@ class TestRunnerPreloadedModel:
             Runner(manifest, cfg).run()
 
 
-# ---------------------------------------------------------------------------
 # PipelineConfig defaults
-# ---------------------------------------------------------------------------
 
 
 class TestPipelineConfigDefaults:
@@ -439,9 +421,7 @@ class TestPipelineConfigDefaults:
         assert cfg.devices == ["cuda:0", "cuda:1"]
 
 
-# ---------------------------------------------------------------------------
 # Runner — cancellation
-# ---------------------------------------------------------------------------
 
 
 class TestRunnerCancellation:
@@ -559,9 +539,7 @@ class TestRunnerCancellation:
         runner.cancel()
 
 
-# ---------------------------------------------------------------------------
 # Runner — clip-level events
-# ---------------------------------------------------------------------------
 
 
 class TestRunnerClipEvents:

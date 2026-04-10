@@ -85,11 +85,6 @@ def _read_frame_pair(
     return image, alpha, bgr
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 def _read_image(path: Path, channels: int) -> tuple[np.ndarray, bool]:
     """Read an image file and return a float32 array normalised to 0.0–1.0.
 

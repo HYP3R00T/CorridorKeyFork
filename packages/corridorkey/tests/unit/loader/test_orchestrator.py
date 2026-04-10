@@ -14,10 +14,6 @@ from corridorkey.stages.loader.orchestrator import load, resolve_alpha
 from corridorkey.stages.scanner.contracts import Clip
 from pydantic import ValidationError
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _make_frames(directory: Path, count: int = 3, ext: str = ".png") -> None:
     directory.mkdir(parents=True, exist_ok=True)
@@ -61,11 +57,6 @@ def _patch_extract(output_dir_ref: list[Path], frame_count: int = 5):
         return _fake_meta(frame_count=frame_count)
 
     return _fake
-
-
-# ---------------------------------------------------------------------------
-# load() — image sequence inputs
-# ---------------------------------------------------------------------------
 
 
 class TestLoadImageSequence:
@@ -127,11 +118,6 @@ class TestLoadImageSequence:
         manifest = load(clip)
         with pytest.raises(ValidationError):
             manifest.frame_count = 99
-
-
-# ---------------------------------------------------------------------------
-# load() — video inputs
-# ---------------------------------------------------------------------------
 
 
 class TestLoadVideoInput:
@@ -328,11 +314,6 @@ class TestLoadEvents:
             load(clip, events=events)
 
         assert totals[0] == 10  # accurate total, not 0
-
-
-# ---------------------------------------------------------------------------
-# resolve_alpha()
-# ---------------------------------------------------------------------------
 
 
 class TestResolveAlpha:

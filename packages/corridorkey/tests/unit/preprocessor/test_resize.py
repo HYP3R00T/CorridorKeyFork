@@ -21,11 +21,6 @@ def _make_alpha(h: int, w: int, fill: float | None = None) -> torch.Tensor:
     return torch.rand(1, 1, h, w, dtype=torch.float32)
 
 
-# ---------------------------------------------------------------------------
-# resize_frame output shape
-# ---------------------------------------------------------------------------
-
-
 class TestResizeFrameShape:
     def test_landscape_output_square(self):
         img, alp = resize_frame(_make_image(1080, 1920), _make_alpha(1080, 1920), 512)
@@ -62,11 +57,6 @@ class TestResizeFrameShape:
         assert alp_out.shape == (1, 1, 512, 512)
 
 
-# ---------------------------------------------------------------------------
-# Alpha clamp after resize
-# ---------------------------------------------------------------------------
-
-
 class TestAlphaClamp:
     def test_alpha_clamped_after_upscale(self):
         src = _make_image(16, 16)
@@ -80,11 +70,6 @@ class TestAlphaClamp:
         _, alpha_out = resize_frame(_make_image(512, 512), _make_alpha(512, 512), 128)
         assert alpha_out.min().item() >= 0.0
         assert alpha_out.max().item() <= 1.0
-
-
-# ---------------------------------------------------------------------------
-# Bilinear resize — reference-matching behaviour
-# ---------------------------------------------------------------------------
 
 
 class TestBilinearResize:
@@ -114,11 +99,6 @@ class TestBilinearResize:
         img, _ = resize_frame(src, alp, 128)
         assert img.min().item() >= 0.0
         assert img.max().item() <= 1.0
-
-
-# ---------------------------------------------------------------------------
-# Half precision
-# ---------------------------------------------------------------------------
 
 
 class TestHalfPrecision:

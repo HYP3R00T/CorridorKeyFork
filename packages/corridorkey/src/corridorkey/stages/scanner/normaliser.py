@@ -155,11 +155,6 @@ def find_alpha(clip_dir: Path) -> tuple[Path | None, SkippedPath | None]:
     return None, SkippedPath(path=clip_dir, reason=reason)
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 def _find_videos_in(directory: Path) -> list[Path]:
     """Return all video files found in a directory, sorted by name."""
     try:

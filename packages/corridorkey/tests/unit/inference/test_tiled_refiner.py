@@ -19,10 +19,6 @@ import torch
 import torch.nn as nn
 from corridorkey.stages.inference.orchestrator import _run_refiner_tiled, _TiledRefinerState
 
-# ---------------------------------------------------------------------------
-# Minimal refiner stubs
-# ---------------------------------------------------------------------------
-
 
 class _ZeroRefiner(nn.Module):
     """Always returns all-zeros delta — output should be all zeros."""
@@ -71,11 +67,6 @@ def _coarse(h: int, w: int) -> torch.Tensor:
     return torch.rand(1, 4, h, w)
 
 
-# ---------------------------------------------------------------------------
-# Output shape
-# ---------------------------------------------------------------------------
-
-
 class TestTiledRefinerOutputShape:
     @pytest.mark.parametrize(
         "h,w",
@@ -98,11 +89,6 @@ class TestTiledRefinerOutputShape:
         coarse = torch.rand(2, 4, 512, 512)
         result = _run_refiner_tiled(refiner, rgb, coarse, _state(), tile_size=512, overlap=128)
         assert result.shape == (2, 4, 512, 512)
-
-
-# ---------------------------------------------------------------------------
-# Zero refiner — output must be all zeros
-# ---------------------------------------------------------------------------
 
 
 class TestZeroRefiner:
@@ -129,11 +115,6 @@ class TestZeroRefiner:
         assert torch.allclose(result, torch.zeros_like(result))
 
 
-# ---------------------------------------------------------------------------
-# Ones refiner — blend normalisation must produce all ones
-# ---------------------------------------------------------------------------
-
-
 class TestOnesRefiner:
     def test_single_tile_all_ones(self):
         refiner = _OnesRefiner()
@@ -158,11 +139,6 @@ class TestOnesRefiner:
         assert torch.allclose(result, torch.ones_like(result), atol=1e-5)
 
 
-# ---------------------------------------------------------------------------
-# dtype preservation
-# ---------------------------------------------------------------------------
-
-
 class TestDtypePreservation:
     def test_float32_in_float32_out(self):
         refiner = _ZeroRefiner()
@@ -180,11 +156,6 @@ class TestDtypePreservation:
         assert result.dtype == torch.float16
 
 
-# ---------------------------------------------------------------------------
-# Bypass flag safety
-# ---------------------------------------------------------------------------
-
-
 class TestBypassFlag:
     def test_bypass_false_after_normal_run(self):
         state = _state()
@@ -199,11 +170,6 @@ class TestBypassFlag:
         with pytest.raises(RuntimeError, match="deliberate test error"):
             _run_refiner_tiled(refiner, _rgb(1024, 512), _coarse(1024, 512), state, tile_size=512, overlap=128)
         assert state.bypass is False
-
-
-# ---------------------------------------------------------------------------
-# Edge cases
-# ---------------------------------------------------------------------------
 
 
 class TestEdgeCases:
@@ -226,11 +192,6 @@ class TestEdgeCases:
         result = _run_refiner_tiled(refiner, _rgb(100, 150), _coarse(100, 150), _state(), tile_size=512, overlap=128)
         assert result.shape == (1, 4, 100, 150)
         assert torch.allclose(result, torch.ones_like(result), atol=1e-5)
-
-
-# ---------------------------------------------------------------------------
-# refiner_scale
-# ---------------------------------------------------------------------------
 
 
 class TestRefinerScale:

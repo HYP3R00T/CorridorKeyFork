@@ -18,10 +18,6 @@ from corridorkey.stages.inference.orchestrator import (
 )
 from corridorkey.stages.preprocessor.contracts import FrameMeta, PreprocessedFrame
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _make_config(tmp_path: Path, **kwargs) -> InferenceConfig:
     return InferenceConfig(checkpoint_path=tmp_path / "m.pth", device="cpu", **kwargs)
@@ -38,11 +34,6 @@ def _make_model_output(h: int = 32, w: int = 32) -> dict:
         "alpha": torch.zeros(1, 1, h, w),
         "fg": torch.zeros(1, 3, h, w),
     }
-
-
-# ---------------------------------------------------------------------------
-# _should_tile_refiner
-# ---------------------------------------------------------------------------
 
 
 class TestShouldTileRefiner:
@@ -75,11 +66,6 @@ class TestShouldTileRefiner:
             assert _should_tile_refiner(cfg) is False
 
 
-# ---------------------------------------------------------------------------
-# _probe_vram_gb
-# ---------------------------------------------------------------------------
-
-
 class TestProbeVramGb:
     def test_returns_float(self):
         result = _probe_vram_gb("cpu")
@@ -89,11 +75,6 @@ class TestProbeVramGb:
         # On CPU with no NVIDIA GPU, pynvml and torch.cuda both fail → 0.0
         result = _probe_vram_gb("cpu")
         assert result >= 0.0
-
-
-# ---------------------------------------------------------------------------
-# run_inference
-# ---------------------------------------------------------------------------
 
 
 class TestRunInference:

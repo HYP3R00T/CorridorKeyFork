@@ -98,11 +98,6 @@ def write_frame(frame: PostprocessedFrame, config: WriteConfig) -> None:
     logger.debug("write_frame: stem=%s", frame.stem)
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 def _exr_flags(compression: str, half: bool = True) -> list[int]:
     codec = _EXR_COMPRESSION_IDS.get(compression.lower(), _EXR_COMPRESSION_IDS["dwaa"])
     exr_type = cv2.IMWRITE_EXR_TYPE_HALF if half else cv2.IMWRITE_EXR_TYPE_FLOAT

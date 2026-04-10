@@ -43,11 +43,6 @@ from corridorkey.stages.scanner.contracts import Clip
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# State enum
-# ---------------------------------------------------------------------------
-
-
 class ClipState(Enum):
     """Processing lifecycle state of a single clip."""
 
@@ -77,11 +72,6 @@ _TRANSITIONS: dict[ClipState, set[ClipState]] = {
 }
 
 
-# ---------------------------------------------------------------------------
-# InOutRange
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class InOutRange:
     """Inclusive in/out frame range for sub-clip processing.
@@ -108,11 +98,6 @@ class InOutRange:
     def to_frame_range(self) -> tuple[int, int]:
         """Convert to a half-open ``(start, end)`` tuple for ``ClipManifest.frame_range``."""
         return self.in_point, self.out_point + 1
-
-
-# ---------------------------------------------------------------------------
-# ClipEntry
-# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -157,10 +142,6 @@ class ClipEntry:
         entry.state = _resolve_state(clip)
         return entry
 
-    # ------------------------------------------------------------------
-    # Identity
-    # ------------------------------------------------------------------
-
     @property
     def name(self) -> str:
         """Human-readable clip name."""
@@ -175,10 +156,6 @@ class ClipEntry:
     def output_dir(self) -> Path:
         """Absolute path to the Output subdirectory."""
         return self.root / "Output"
-
-    # ------------------------------------------------------------------
-    # State machine
-    # ------------------------------------------------------------------
 
     @property
     def is_processing(self) -> bool:
@@ -235,10 +212,6 @@ class ClipEntry:
             return
         self.state = _resolve_state(self.clip)
 
-    # ------------------------------------------------------------------
-    # Output inspection
-    # ------------------------------------------------------------------
-
     @property
     def has_outputs(self) -> bool:
         """True if the Output directory contains at least one written frame."""
@@ -279,11 +252,6 @@ class ClipEntry:
         for s in stem_sets[1:]:
             result &= s
         return result
-
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
 
 
 def _resolve_state(clip: Clip) -> ClipState:

@@ -351,11 +351,6 @@ class Runner:
         return models, resolved_refiner_mode or cfg.inference.refiner_mode  # type: ignore[return-value]
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 class _AtomicCounter:
     """Thread-safe decrement counter."""
 

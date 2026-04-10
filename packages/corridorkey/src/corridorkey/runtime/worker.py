@@ -31,11 +31,6 @@ from corridorkey.stages.writer import WriteConfig, write_frame
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# Preprocess worker
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class PreprocessWorker:
     """Reads and preprocesses frames, pushing PreprocessedFrame onto the queue.
@@ -111,11 +106,6 @@ class PreprocessWorker:
         t = threading.Thread(target=self.run, name="preprocess-worker", daemon=True)
         t.start()
         return t
-
-
-# ---------------------------------------------------------------------------
-# Postprocess + write worker
-# ---------------------------------------------------------------------------
 
 
 @dataclass
