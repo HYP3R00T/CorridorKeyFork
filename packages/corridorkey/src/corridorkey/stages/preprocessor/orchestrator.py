@@ -99,7 +99,7 @@ def preprocess_frame(
     """
     # Step 1 — validate
     if manifest.needs_alpha:
-        raise ValueError(f"Clip '{manifest.clip_name}' still needs alpha — call resolve_alpha() before preprocessing.")
+        raise ValueError(f"Clip '{manifest.clip_name}' still needs alpha — call attach_alpha() before preprocessing.")
     start, end = manifest.frame_range
     if not (start <= i < end):
         raise ValueError(f"Frame index {i} is out of range [{start}, {end}) for clip '{manifest.clip_name}'.")

@@ -1,4 +1,4 @@
-"""Unit tests for corridorkey.stages.loader.orchestrator — load(), resolve_alpha()."""
+"""Unit tests for corridorkey.stages.loader.orchestrator — load(), attach_alpha()."""
 
 from __future__ import annotations
 

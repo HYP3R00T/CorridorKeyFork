@@ -23,7 +23,7 @@ class Clip(BaseModel):
             pre-structured clips) or a video file inside Input/ (for normalised
             videos).
         alpha_path: Path to the alpha hint asset. None if absent — the interface
-            must generate alpha externally and call resolve_alpha() before
+            must generate alpha externally and call attach_alpha() before
             proceeding.
     """
 

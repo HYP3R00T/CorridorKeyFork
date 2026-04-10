@@ -19,6 +19,7 @@ try:
 except PackageNotFoundError:
     __version__ = "0.0.0.dev0"
 
+from corridorkey.engine import Engine
 from corridorkey.errors import (
     AlphaGeneratorError,
     ClipScanError,
@@ -57,6 +58,7 @@ from corridorkey.infra import (
 )
 from corridorkey.protocols import AlphaGenerator
 from corridorkey.runtime.clip_state import ClipRecord, ClipState, FrameRange, get_clip_state
+from corridorkey.runtime.job_stats import JobStats
 from corridorkey.stages.inference import (
     InferenceConfig,
     InferenceResult,
@@ -115,6 +117,9 @@ __all__ = [
     "ClipState",
     "FrameRange",
     "get_clip_state",
+    # Engine
+    "Engine",
+    "JobStats",
     # Protocols
     "AlphaGenerator",
     "ModelBackend",

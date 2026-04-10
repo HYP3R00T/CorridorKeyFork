@@ -48,7 +48,7 @@ def load(
 
     Returns:
         ClipManifest ready for preprocessing, or for the interface to generate
-        alpha externally via resolve_alpha() if needs_alpha is True.
+        alpha externally via attach_alpha() if needs_alpha is True.
 
     Raises:
         FrameMismatchError: If validation fails.
@@ -206,7 +206,7 @@ def attach_alpha(manifest: ClipManifest, alpha_frames_dir: Path) -> ClipManifest
         FrameMismatchError: If the alpha frame count doesn't match manifest.frame_count.
     """
     if not manifest.needs_alpha:
-        raise ValueError(f"Clip '{manifest.clip_name}' already has alpha — resolve_alpha should not be called.")
+        raise ValueError(f"Clip '{manifest.clip_name}' already has alpha — attach_alpha should not be called.")
 
     if not alpha_frames_dir.exists():
         raise ValueError(f"Clip '{manifest.clip_name}': alpha_frames_dir does not exist: {alpha_frames_dir}")

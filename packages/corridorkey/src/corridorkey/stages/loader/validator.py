@@ -110,7 +110,7 @@ def validate(
         frames_dir: Resolved input frames directory.
         alpha_frames_dir: Resolved alpha frames directory, or None.
         expected_frame_count: If provided, validate that frames_dir contains
-            exactly this many frames (used by resolve_alpha to avoid re-scanning
+            exactly this many frames (used by attach_alpha to avoid re-scanning
             the input directory).
 
     Returns:

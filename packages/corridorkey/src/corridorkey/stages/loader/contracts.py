@@ -13,7 +13,7 @@ class ClipManifest(BaseModel):
     """Output contract of stage 1. Input to all downstream stages.
 
     Frozen — all fields are immutable after construction. Use model_copy()
-    to produce an updated manifest (e.g. in resolve_alpha).
+    to produce an updated manifest (e.g. in attach_alpha).
 
     Downstream stages only receive what they need — resolved frame paths,
     output destination, and clip metadata. All discovery, validation, and
@@ -30,11 +30,11 @@ class ClipManifest(BaseModel):
             Points to ``AlphaHint/`` for image sequence inputs, or
             ``AlphaFrames/`` for video inputs. None if absent — the interface
             layer is responsible for generating alpha externally and calling
-            ``resolve_alpha()`` to update the manifest before proceeding.
+            ``attach_alpha()`` to update the manifest before proceeding.
         output_dir: Directory where stage 6 writes all output images.
             Created by stage 1 at ``clip/Output/``.
         needs_alpha: True if alpha is absent. The interface layer must generate
-            alpha externally and call ``resolve_alpha()`` before proceeding.
+            alpha externally and call ``attach_alpha()`` before proceeding.
         frame_count: Total number of input frames.
         frame_range: Half-open range ``(start, end)`` of frames to process.
             Defaults to ``(0, frame_count)`` — the full sequence.

@@ -66,13 +66,9 @@ def wizard(
     ] = False,
 ) -> None:
     """Scan, configure, and process clips. The default command."""
-    from corridorkey import attach_alpha, load, resolve_device, resolve_devices, scan
-    from corridorkey.infra import APP_NAME, ensure_config_file, load_config_with_metadata
+    from corridorkey import Engine, load_config_with_metadata, scan
+    from corridorkey.infra import APP_NAME, ensure_config_file
     from corridorkey.infra.config import CorridorKeyConfig
-    from corridorkey.infra.logging import setup_logging
-    from corridorkey.infra.model_hub import ensure_model
-    from corridorkey.runtime.runner import Runner
-    from corridorkey.stages.inference.loader import load_model as _load_model
 
     from corridorkey_cli._config_table import print_config_table
 
@@ -80,7 +76,6 @@ def wizard(
 
     ensure_config_file(CorridorKeyConfig(), APP_NAME, format="yaml")
     config_obj, metadata = load_config_with_metadata()
-    setup_logging(config_obj)
     print_config_table(config_obj, metadata)
     console.print()
 
@@ -109,15 +104,6 @@ def wizard(
     else:
         opt_mode, precision, img_size = _prompt_engine_settings(config_obj)
 
-    # Support multi-GPU selection: 'all' should be resolved to a devices list
-    devices: list[str] = []
-    if config_obj.device == "all":
-        devices = resolve_devices("all")
-        # use the first device as the representative for VRAM/precision probing
-        device = devices[0]
-    else:
-        device = resolve_device(config_obj.device)
-
     run_config = CorridorKeyConfig.model_validate({
         **config_obj.model_dump(),
         "inference": {
@@ -131,38 +117,14 @@ def wizard(
         },
     })
 
-    inference_config, resolved_refiner_mode = run_config.to_inference_config(
-        device=device, _return_resolved_refiner_mode=True
-    )
-    ensure_model(dest_dir=inference_config.checkpoint_path.parent)
+    printer = RichPrinter(0)
 
-    console.print(f"\nLoading model from [cyan]{inference_config.checkpoint_path}[/cyan] ...")
-    console.print(
-        f"  img_size=[cyan]{inference_config.img_size}[/cyan]  "
-        f"precision=[cyan]{inference_config.model_precision}[/cyan]  "
-        f"refiner_mode=[cyan]{resolved_refiner_mode}[/cyan]"
-    )
+    engine = Engine(run_config)
+    engine.on("clip_loading", lambda clip: console.print(f"Processing '[bold]{clip.name}[/bold]'..."))
+    engine.on("clip_complete", lambda m: console.print(f"[green]Done.[/green] Output: [cyan]{m.output_dir}[/cyan]\n"))
 
-    model = _load_model(inference_config, resolved_refiner_mode=resolved_refiner_mode)
-    console.print("[green]Model loaded.[/green]\n")
-
-    for clip in clips.clips:
-        manifest = load(clip)
-
-        if manifest.needs_alpha:
-            console.print(f"  Alpha required for '[cyan]{manifest.clip_name}[/cyan]'.")
-            raw = Prompt.ask("  Enter path to generated alpha frames directory")
-            manifest = attach_alpha(manifest, Path(raw))
-
-        printer = RichPrinter(manifest.frame_count)
-        pipeline_config = run_config.to_pipeline_config(device=device, model=model, devices=(devices or None))
-        pipeline_config.events = printer.as_events()
-
-        console.print(f"Processing '[bold]{manifest.clip_name}[/bold]' ({manifest.frame_count} frames)...\n")
-        with printer:
-            Runner(manifest, pipeline_config).run()
-
-        console.print(f"[green]Done.[/green] Output: [cyan]{manifest.output_dir}[/cyan]\n")
+    with printer:
+        engine.run([clips_dir])
 
     console.print("[bold green]All clips complete.[/bold green]")
 

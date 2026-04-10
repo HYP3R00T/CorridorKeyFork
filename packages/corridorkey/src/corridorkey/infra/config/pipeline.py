@@ -141,26 +141,19 @@ class CorridorKeyConfig(BaseModel):
     ) -> PipelineConfig:
         """Build a :class:`~corridorkey.runtime.runner.PipelineConfig` from this config.
 
-        **Layer 1 entry point.** Pass the result directly to
-        :class:`~corridorkey.Runner`. All "auto" values (device, img_size,
-        precision, refiner_mode) are resolved here in a single VRAM probe —
-        do not call the individual ``to_*_config()`` methods separately when
-        using Layer 1.
+        **Layer 1 entry point.** The Engine calls this internally during
+        ``engine.run()``. All "auto" values (device, img_size, precision,
+        refiner_mode) are resolved here in a single VRAM probe.
 
         Args:
-            device: Resolved device string (from ``resolve_device(config.device)``).
-                If None, uses ``self.device`` as-is.
-            model: Pre-loaded model (``nn.Module``). If None, the runner loads
-                it from the checkpoint path at run time.
+            device: Resolved device string. If None, uses ``self.device``.
+            model: Pre-loaded model (``nn.Module``). If None, the frame loop
+                loads it from the checkpoint path at run time.
             devices: Explicit list of device strings for multi-GPU dispatch.
-                When provided, the returned config's ``devices`` field is set
-                and :class:`~corridorkey.Runner` dispatches automatically to
-                multiple inference workers.
-                Use ``resolve_devices("all")`` to populate this from all
-                available CUDA GPUs.
+                Use ``resolve_devices("all")`` to populate from all CUDA GPUs.
 
         Returns:
-            PipelineConfig ready to pass to ``Runner``.
+            PipelineConfig ready for the internal frame loop.
         """
         from corridorkey.runtime.runner import PipelineConfig
 
