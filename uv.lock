@@ -174,7 +174,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'cuda'", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "corridorkey", extra = "cuda" } },
     { name = "torchvision", specifier = "==0.25.0" },
     { name = "torchvision", marker = "extra == 'cuda'", specifier = "==0.25.0", index = "https://download.pytorch.org/whl/cu128", conflict = { package = "corridorkey", extra = "cuda" } },
-    { name = "utilityhub-config", specifier = ">=0.2.6" },
+    { name = "utilityhub-config", specifier = ">=0.2.7" },
 ]
 provides-extras = ["cuda", "rocm", "mlx"]
 
@@ -399,6 +399,7 @@ wheels = [
 name = "griffelib"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ad/06/eccbd311c9e2b3ca45dbc063b93134c57a1ccc7607c5e545264ad092c4a9/griffelib-2.0.0.tar.gz", hash = "sha256:e504d637a089f5cab9b5daf18f7645970509bf4f53eda8d79ed71cce8bd97934", size = 166312, upload-time = "2026-03-23T21:06:55.954Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4d/51/c936033e16d12b627ea334aaaaf42229c37620d0f15593456ab69ab48161/griffelib-2.0.0-py3-none-any.whl", hash = "sha256:01284878c966508b6d6f1dbff9b6fa607bc062d8261c5c7253cb285b06422a7f", size = 142004, upload-time = "2026-02-09T19:09:40.561Z" },
 ]
@@ -1412,12 +1413,12 @@ dependencies = [
     { name = "typing-extensions", marker = "extra == 'extra-11-corridorkey-cuda' or (extra == 'extra-11-corridorkey-mlx' and extra == 'extra-11-corridorkey-rocm') or (extra == 'extra-21-corridorkey-workspace-cuda' and extra == 'extra-21-corridorkey-workspace-mlx') or (extra == 'extra-21-corridorkey-workspace-cuda' and extra == 'extra-21-corridorkey-workspace-rocm') or (extra == 'extra-21-corridorkey-workspace-mlx' and extra == 'extra-21-corridorkey-workspace-rocm')" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:bdbcc703382f948e951c063448c9406bf38ce66c41dd698d9e2733fcf96c037a" },
-    { url = "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:7b4bd23ed63de97456fcc81c26fea9f02ee02ce1112111c4dac0d8cfe574b23e" },
-    { url = "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313-win_amd64.whl", hash = "sha256:4d1b0b49c54223c7c04050b49eac141d77b6edbc34aea1dfc74a6fdb661baa8c" },
-    { url = "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:f1f8b840c64b645a4bc61a393db48effb9c92b2dc26c8373873911f0750d1ea7" },
-    { url = "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:23f58258012bcf1c349cb22af387e33aadca7f83ea617b080e774eb41e4fe8ff" },
-    { url = "https://download.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313t-win_amd64.whl", hash = "sha256:01b216e097b17a5277cfb47c383cdcacf06abeadcb0daca0c76b59e72854c3b6" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:bdbcc703382f948e951c063448c9406bf38ce66c41dd698d9e2733fcf96c037a" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:7b4bd23ed63de97456fcc81c26fea9f02ee02ce1112111c4dac0d8cfe574b23e" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313-win_amd64.whl", hash = "sha256:4d1b0b49c54223c7c04050b49eac141d77b6edbc34aea1dfc74a6fdb661baa8c" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313t-manylinux_2_28_aarch64.whl", hash = "sha256:f1f8b840c64b645a4bc61a393db48effb9c92b2dc26c8373873911f0750d1ea7" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313t-manylinux_2_28_x86_64.whl", hash = "sha256:23f58258012bcf1c349cb22af387e33aadca7f83ea617b080e774eb41e4fe8ff" },
+    { url = "https://download-r2.pytorch.org/whl/cu128/torch-2.10.0%2Bcu128-cp313-cp313t-win_amd64.whl", hash = "sha256:01b216e097b17a5277cfb47c383cdcacf06abeadcb0daca0c76b59e72854c3b6" },
 ]
 
 [[package]]
@@ -1552,7 +1553,7 @@ wheels = [
 
 [[package]]
 name = "utilityhub-config"
-version = "0.2.6"
+version = "0.2.7"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
@@ -1560,9 +1561,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "tomli-w" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7f/91/cd18b3054e7730a9078ad951d252e5caf0b8045e51851910da90fea854f2/utilityhub_config-0.2.6.tar.gz", hash = "sha256:a0e7dffc8db87c69f9d173f041f7bc7035997c45b5d254e75945e175f8130f59", size = 14944, upload-time = "2026-03-23T05:19:41.882Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/56/f2eb288aa2f862974e7c6aecfe0578e46a97dd95d79d24728da0e348630a/utilityhub_config-0.2.7.tar.gz", hash = "sha256:a128f36aea6b5ce2fff8025af0e439001491b48a1ee0f98c16b3231e75620574", size = 12190, upload-time = "2026-04-10T13:17:54.589Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1e/b5/0716f1016617e955b866251cf5f1614e696d95938452a83cfc0aeef8434b/utilityhub_config-0.2.6-py3-none-any.whl", hash = "sha256:24a4531b50496088b514d8042b9dcf977bda40152e2ab757dc3203b5f515ff3d", size = 20341, upload-time = "2026-03-23T05:19:40.574Z" },
+    { url = "https://files.pythonhosted.org/packages/c0/ca/85134645f593e1ad995fadc289a3835fdcc8411931cabfad533c2ab428b8/utilityhub_config-0.2.7-py3-none-any.whl", hash = "sha256:044dbd2d413668cc265263991d1f9a654114ffdcab4330f1b7a1cd9548352bd7", size = 17604, upload-time = "2026-04-10T13:17:53.704Z" },
 ]
 
 [[package]]
