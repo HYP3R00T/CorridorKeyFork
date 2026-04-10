@@ -25,7 +25,7 @@ Build stage runtime configs from a loaded ``CorridorKeyConfig``::
     postprocess_config = config.to_postprocess_config()
     write_config = config.to_writer_config(output_dir)
 
-    # Or build everything at once for the high-level Runner:
+    # Or build everything at once for the Engine:
     pipeline_config = config.to_pipeline_config(device=device)
 
 Config file structure (``corridorkey.toml``)::

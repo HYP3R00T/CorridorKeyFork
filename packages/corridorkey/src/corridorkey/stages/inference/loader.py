@@ -68,7 +68,7 @@ def load_model(config: InferenceConfig, resolved_refiner_mode: str | None = None
         )
 
     # Use the pre-resolved mode so compile decisions are made on the concrete
-    # value, not "auto". Callers (factory.load_backend) resolve this before
+    # value, not "auto". Callers (factory.load_model_backend) resolve this before
     # calling load_model.
     effective_mode = resolved_refiner_mode or config.refiner_mode
 

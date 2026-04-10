@@ -14,7 +14,7 @@ Auto-detect:
 Usage::
 
     config = load_config().to_inference_config(device="cuda")
-    backend = load_backend(config)
+    backend = load_model_backend(config)
     result = backend.run(preprocessed_frame)
     print(backend.resolved_config)
 """
@@ -176,7 +176,7 @@ def _load_mlx_backend(config: InferenceConfig) -> ModelBackend:  # pragma: no co
     if config.img_size == 0:
         raise ValueError(
             "InferenceConfig.img_size is 0 (auto-select). "
-            "Resolve img_size to a concrete value before calling load_backend. "
+            "Resolve img_size to a concrete value before calling load_model_backend. "
             "Use pipeline.to_inference_config() which resolves img_size automatically."
         )
 

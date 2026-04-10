@@ -6,7 +6,7 @@ plus the two concrete implementations:
   - ``TorchBackend``  — wraps the existing GreenFormer loader + orchestrator.
   - ``MLXBackend``    — wraps ``corridorkey-mlx`` (Apple Silicon only, optional).
 
-Callers should use ``factory.load_backend()`` rather than instantiating these
+Callers should use ``factory.load_model_backend()`` rather than instantiating these
 directly. The protocol ensures both backends are interchangeable.
 """
 
@@ -126,7 +126,7 @@ class MLXBackend:  # pragma: no cover
     package. Converts the MLX uint8 output to the same ``InferenceResult``
     contract as ``TorchBackend`` so the rest of the pipeline is unaffected.
 
-    This class is only instantiated by ``factory.load_backend()`` when the
+    This class is only instantiated by ``factory.load_model_backend()`` when the
     resolved backend is ``"mlx"``. It should never be imported directly on
     non-Apple-Silicon platforms.
 
