@@ -25,6 +25,7 @@ select = [
 ignore = [
   "E501", # line too long
   "C901", # too complex
+  "N812", # Lowercase imported as non-lowercase
 ]
 
 [lint.isort]
