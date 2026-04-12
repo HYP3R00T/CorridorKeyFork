@@ -6,10 +6,9 @@ import platform
 import sys
 
 import typer
-from corridorkey import detect_gpu
+from corridorkey import Engine, default_checkpoint_path, detect_gpu
 from corridorkey.infra import APP_NAME, get_config_path, load_config_with_metadata
 from corridorkey.infra.config import CorridorKeyConfig
-from corridorkey.infra.model_hub import MODEL_FILENAME, MODEL_URL, default_checkpoint_path, ensure_model
 from rich.progress import BarColumn, DownloadColumn, Progress, SpinnerColumn, TextColumn, TransferSpeedColumn
 from rich.prompt import Confirm
 from rich.table import Table
@@ -46,18 +45,17 @@ def init() -> None:
         console.print("\n[bold green]Init complete. Run `ck <clips_dir>` to get started.[/bold green]")
         return
 
-    console.print(f"[yellow]Inference model not found:[/yellow] {model_path}")
-    console.print(f"URL: [dim]{MODEL_URL}[/dim]\n")
+    console.print(f"[yellow]Inference model not found:[/yellow] {model_path}\n")
 
     if not Confirm.ask("Download inference model now?", default=True):
         console.print(
-            f"\nTo download manually, place [bold]{MODEL_FILENAME}[/bold] in:\n"
+            f"\nTo download manually, place the model file in:\n"
             f"  {model_path.parent}\n"
             "Then run [bold]ck init[/bold] to verify."
         )
         return
 
-    _download_with_progress(model_path)
+    _download_with_progress(config_obj)
     console.print("\n[bold green]Init complete. Run `ck <clips_dir>` to get started.[/bold green]")
 
 
@@ -94,7 +92,7 @@ def _run_health_check() -> None:
     rows.append((
         "inference model",
         _PASS if model_ok else _WARN,
-        str(model_path) if model_ok else f"{MODEL_FILENAME} not found — will offer download",
+        str(model_path) if model_ok else "model file not found — will offer download",
     ))
 
     # Platform
@@ -112,7 +110,7 @@ def _run_health_check() -> None:
         console.print("[green]All checks passed.[/green]")
 
 
-def _download_with_progress(dest_path) -> None:
+def _download_with_progress(config_obj) -> None:
     progress = Progress(
         SpinnerColumn(),
         TextColumn("[cyan]{task.description}[/cyan]"),
@@ -129,11 +127,14 @@ def _download_with_progress(dest_path) -> None:
         def on_progress(downloaded: int, total: int) -> None:
             progress.update(task, completed=downloaded, total=total or None)
 
+        engine = Engine(config_obj)
+        engine.on("download_progress", on_progress)
+
         try:
-            dest = ensure_model(dest_dir=dest_path.parent, on_progress=on_progress)
+            engine.run([])
             progress.update(task, completed=1, total=1)
-        except RuntimeError as e:
+        except Exception as e:
             err_console.print(f"\n[red]Download failed:[/red] {e}")
             raise typer.Exit(1) from e
 
-    console.print(f"[green]Model saved:[/green] {dest}")
+    console.print("[green]Model downloaded & verified successfully.[/green]")

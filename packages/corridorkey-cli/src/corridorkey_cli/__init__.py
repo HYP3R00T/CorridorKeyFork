@@ -13,7 +13,6 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from corridorkey_cli._console import console, err_console
-from corridorkey_cli._printer import RichPrinter
 from corridorkey_cli.commands.config import config
 from corridorkey_cli.commands.init import init
 from corridorkey_cli.commands.reset import reset
@@ -66,7 +65,7 @@ def wizard(
     ] = False,
 ) -> None:
     """Scan, configure, and process clips. The default command."""
-    from corridorkey import Engine, load_config_with_metadata, scan
+    from corridorkey import Engine, load_config_with_metadata
     from corridorkey.infra import APP_NAME, ensure_config_file
     from corridorkey.infra.config import CorridorKeyConfig
 
@@ -90,13 +89,6 @@ def wizard(
         err_console.print(f"[red]Error:[/red] Path does not exist: {clips_dir}")
         raise typer.Exit(1)
 
-    clips = scan(clips_dir)
-    if not clips.clip_count:
-        console.print("[yellow]No clips found.[/yellow]")
-        raise typer.Exit()
-
-    _print_clip_table(clips, clips_dir)
-
     if yes:
         opt_mode = config_obj.inference.refiner_mode
         precision = config_obj.inference.model_precision
@@ -117,11 +109,16 @@ def wizard(
         },
     })
 
-    printer = RichPrinter(0)
-
     engine = Engine(run_config)
-    engine.on("clip_loading", lambda clip: console.print(f"Processing '[bold]{clip.name}[/bold]'..."))
-    engine.on("clip_complete", lambda m: console.print(f"[green]Done.[/green] Output: [cyan]{m.output_dir}[/cyan]\n"))
+    engine.on("clip_found", lambda clip: console.print(f"[dim]Found[/dim] '[bold]{clip.name}[/bold]'"))
+    engine.on(
+        "clip_skipped",
+        lambda skipped, reason: console.print(f"[yellow]Skipped[/yellow] '[bold]{skipped.path.name}[/bold]': {reason}"),
+    )
+    from corridorkey_cli._printer import RichPrinter
+
+    printer = RichPrinter(total_frames=0)
+    printer.attach(engine)
 
     with printer:
         engine.run([clips_dir])
@@ -141,17 +138,6 @@ def main() -> None:
     except KeyboardInterrupt:
         console.print("\n[yellow]Interrupted.[/yellow]")
         sys.exit(130)
-
-
-def _print_clip_table(clips, clips_dir: Path) -> None:
-    table = Table(title=f"Clips in {clips_dir}", show_header=True, header_style="bold")
-    table.add_column("Clip")
-    table.add_column("Input")
-    table.add_column("Alpha")
-    for clip in clips.clips:
-        has_alpha = "[green]yes[/green]" if clip.alpha_path else "[dim]none[/dim]"
-        table.add_row(clip.name, str(clip.input_path), has_alpha)
-    console.print(table)
 
 
 def _prompt_engine_settings(config_obj) -> tuple[str, str, int]:

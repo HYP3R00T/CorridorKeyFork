@@ -20,9 +20,7 @@ def config(
     config_path = get_config_path(APP_NAME, format="yaml")
 
     print_config_table(cfg, metadata)
-    console.print(
-        f"[dim]Sources (lowest → highest): defaults → {config_path} → ./corridorkey.yaml → CK_* env vars[/dim]"
-    )
+    console.print(f"[dim]Sources (lowest → highest): defaults → {config_path} → ./corridorkey.yaml → overrides[/dim]")
 
     if write:
         from corridorkey.infra import write_config
