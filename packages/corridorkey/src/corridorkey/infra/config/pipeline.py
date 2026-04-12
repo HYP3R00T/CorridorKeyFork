@@ -364,6 +364,7 @@ class CorridorKeyConfig(BaseModel):
             model_precision=model_dtype,
             refiner_mode=self.inference.refiner_mode,
             refiner_scale=self.inference.refiner_scale,
+            flash_attention=self.inference.flash_attention,
         )
 
         if _return_resolved_refiner_mode:

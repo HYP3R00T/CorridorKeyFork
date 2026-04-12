@@ -107,3 +107,19 @@ class InferenceSettings(BaseModel):
             ),
         ),
     ] = 1.0
+
+    flash_attention: Annotated[
+        Literal["auto", "on", "off"],
+        Field(
+            default="auto",
+            description=(
+                "Controls the Hiera global-attention FlashAttention patch. "
+                "The patch fixes a PyTorch issue where Hiera produces 5-D non-contiguous "
+                "Q/K/V tensors that prevent FlashAttention from activating, causing the "
+                "full N×N attention matrix to be materialised and OOM on low-VRAM GPUs. "
+                "'auto' enables the patch on CUDA and disables it on CPU/MPS. "
+                "'on' forces the patch on (useful on ROCm once SDPA support matures). "
+                "'off' disables the patch (for debugging or regression isolation)."
+            ),
+        ),
+    ] = "auto"

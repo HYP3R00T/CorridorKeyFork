@@ -73,10 +73,15 @@ def load_model(config: InferenceConfig, resolved_refiner_mode: str | None = None
     effective_mode = resolved_refiner_mode or config.refiner_mode
 
     logger.info("Building GreenFormer (img_size=%d, refiner=%s)", config.img_size, config.use_refiner)
+    # Resolve flash_attention mode: "auto" enables on CUDA, "on" forces it,
+    # "off" disables it regardless of device.
+    _device_type = torch.device(config.device).type
+    flash_attention = config.flash_attention == "on" or (config.flash_attention == "auto" and _device_type == "cuda")
     model = GreenFormer(
         encoder_name="hiera_base_plus_224.mae_in1k_ft_in1k",
         img_size=config.img_size,
         use_refiner=config.use_refiner,
+        flash_attention=flash_attention,
     )
     model = model.to(config.device)
     model = model.to(config.model_precision)
