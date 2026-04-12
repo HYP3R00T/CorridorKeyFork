@@ -6,10 +6,21 @@ returns float32 numpy arrays at the original source resolution.
 Since the preprocessor squishes the frame to a square (no padding), the
 postprocessor simply resizes directly back to source resolution — no crop step.
 
+Two resize paths are provided:
+  - ``resize_to_source``        — CPU path (always available). Converts tensors
+                                  to numpy immediately, then resizes with OpenCV.
+  - ``resize_to_source_gpu``    — GPU path (CUDA). Keeps tensors on device using
+                                  ``F.interpolate``, returns BCHW tensors.
+                                  Caller is responsible for the final .cpu().numpy()
+                                  conversion after any subsequent GPU ops.
+
 Resize strategy:
-  - Downscaling: always INTER_AREA (anti-aliased, no ringing).
+  - Downscaling: always area/bilinear (anti-aliased, no ringing).
   - FG upscaling: configurable — "lanczos4" (default), "bicubic", or "bilinear".
   - Alpha upscaling: configurable — "lanczos4" (default) or "bilinear".
+
+Note: ``F.interpolate`` does not support Lanczos. When the GPU path is used,
+"lanczos4" is mapped to "bicubic" (visually equivalent at inference resolutions).
 """
 
 from __future__ import annotations
@@ -19,6 +30,7 @@ from typing import Literal
 import cv2
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 FgUpsampleMode = Literal["bilinear", "bicubic", "lanczos4"]
 AlphaUpsampleMode = Literal["bilinear", "lanczos4"]
@@ -31,6 +43,18 @@ _FG_INTERP_MAP: dict[str, int] = {
 _ALPHA_INTERP_MAP: dict[str, int] = {
     "bilinear": cv2.INTER_LINEAR,
     "lanczos4": cv2.INTER_LANCZOS4,
+}
+
+# F.interpolate mode mapping — Lanczos is not supported, bicubic is the
+# closest equivalent at inference resolutions.
+_FG_TORCH_MODE: dict[str, str] = {
+    "bilinear": "bilinear",
+    "bicubic": "bicubic",
+    "lanczos4": "bicubic",
+}
+_ALPHA_TORCH_MODE: dict[str, str] = {
+    "bilinear": "bilinear",
+    "lanczos4": "bicubic",
 }
 
 
@@ -49,7 +73,8 @@ def resize_to_source(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Resize alpha and fg tensors back to source resolution and convert to numpy.
 
-    Downscaling always uses INTER_AREA. Upscaling uses the configured modes.
+    CPU path — always available. Downscaling uses INTER_AREA. Upscaling uses
+    the configured modes.
 
     Args:
         alpha: [1, 1, H, W] tensor, range 0-1.
@@ -81,3 +106,57 @@ def resize_to_source(
     fg_out = cv2.resize(fg_np, target, interpolation=fg_interp).astype(np.float32)
 
     return alpha_out, fg_out
+
+
+def resize_to_source_gpu(
+    alpha: torch.Tensor,
+    fg: torch.Tensor,
+    source_h: int,
+    source_w: int,
+    fg_upsample_mode: FgUpsampleMode = "lanczos4",
+    alpha_upsample_mode: AlphaUpsampleMode = "lanczos4",
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Resize alpha and fg tensors back to source resolution, keeping data on GPU.
+
+    GPU path — uses ``F.interpolate`` so tensors stay on device throughout.
+    Returns BCHW float32 tensors; the caller converts to numpy after any
+    subsequent GPU ops (despeckle, despill).
+
+    Lanczos is not supported by ``F.interpolate`` — "lanczos4" is mapped to
+    "bicubic", which is visually equivalent at inference resolutions.
+
+    Downscaling uses ``F.interpolate`` with ``mode="area"`` (equivalent to
+    INTER_AREA). Upscaling uses the configured mode.
+
+    Args:
+        alpha: [1, 1, H, W] tensor on CUDA, range 0-1.
+        fg: [1, 3, H, W] tensor on CUDA, range 0-1.
+        source_h: Target height in pixels.
+        source_w: Target width in pixels.
+        fg_upsample_mode: Interpolation for upscaling FG. Default "lanczos4".
+        alpha_upsample_mode: Interpolation for upscaling alpha. Default "lanczos4".
+
+    Returns:
+        Tuple of (alpha [1, 1, H, W], fg [1, 3, H, W]), both float32 on device.
+    """
+    alpha = alpha.float().clamp(0.0, 1.0)
+    fg = fg.float().clamp(0.0, 1.0)
+
+    model_h, model_w = alpha.shape[2], alpha.shape[3]
+
+    if source_h == model_h and source_w == model_w:
+        return alpha, fg
+
+    upscaling = source_h * source_w > model_h * model_w
+    size = (source_h, source_w)
+
+    if upscaling:
+        alpha_mode = _ALPHA_TORCH_MODE[alpha_upsample_mode]
+        fg_mode = _FG_TORCH_MODE[fg_upsample_mode]
+        alpha_out = F.interpolate(alpha, size=size, mode=alpha_mode, align_corners=False)
+        fg_out = F.interpolate(fg, size=size, mode=fg_mode, align_corners=False)
+    else:
+        alpha_out = F.interpolate(alpha, size=size, mode="area")
+        fg_out = F.interpolate(fg, size=size, mode="area")
+
+    return alpha_out.clamp(0.0, 1.0), fg_out.clamp(0.0, 1.0)
