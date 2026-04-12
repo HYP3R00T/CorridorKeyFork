@@ -47,13 +47,13 @@ on_frame_error(stage, frame_index, error)
 
 on_clip_complete(clip_name, frames_written)
     The clip finished successfully. ``frames_written`` is the total number of
-    frames that were written to disk. Fired by ``Runner.run()`` after all
+    frames that were written to disk. Fired by ``run_clip()`` after all
     worker threads have joined cleanly.
 
 on_clip_error(clip_name, error)
     The clip did not complete. ``error`` is the exception that caused the
     failure (e.g. ``JobCancelledError``, ``RuntimeError``). Fired by
-    ``Runner.run()`` before the exception propagates to the caller.
+    ``run_clip()`` before the exception propagates to the caller.
 """
 
 from __future__ import annotations
@@ -74,7 +74,9 @@ class PipelineEvents:
         events = PipelineEvents(
             on_frame_written=lambda idx, total: print(f"  frame {idx + 1}/{total}"),
         )
-        Runner(manifest, config, events=events).run()
+        from corridorkey.runtime.runner import run_clip
+
+        run_clip(manifest, config, events=events)
     """
 
     # Stage-level events
@@ -99,7 +101,7 @@ class PipelineEvents:
     # Error events
     on_frame_error: Callable[[str, int, Exception], None] | None = field(default=None)
 
-    # Clip-level events — fired by Runner.run() once per clip
+    # Clip-level events — fired by run_clip() once per clip
     on_clip_complete: Callable[[str, int], None] | None = field(default=None)
     """on_clip_complete(clip_name, frames_written)
 

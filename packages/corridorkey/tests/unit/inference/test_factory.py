@@ -85,9 +85,9 @@ class TestResolveBackend:
         with patch("sys.platform", "win32"):
             assert _resolve_backend("auto") == "torch"
 
-    def test_env_var_overrides_auto(self):
+    def test_env_var_does_not_override_auto(self):
         with (
-            patch.dict(os.environ, {"CORRIDORKEY_BACKEND": "torch"}),
+            patch.dict(os.environ, {"CORRIDORKEY_BACKEND": "mlx"}),
             patch("sys.platform", "linux"),
         ):
             assert _resolve_backend("auto") == "torch"

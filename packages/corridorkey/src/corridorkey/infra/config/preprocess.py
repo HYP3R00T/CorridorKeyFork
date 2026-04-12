@@ -11,7 +11,7 @@ class PreprocessSettings(BaseModel):
     """User-facing preprocessing settings.
 
     Mirrors :class:`~corridorkey.stages.preprocessor.PreprocessConfig` but
-    lives in the config layer so it can be loaded from TOML / env vars.
+    lives in the config layer so it can be loaded from TOML.
 
     In ``corridorkey.toml``::
 

@@ -70,8 +70,8 @@ def list_frames(path: Path) -> list[Path]:
 
     Typical use in the frame loop (Path 2)::
 
-        imgs = list_clip_frames(manifest.frames_dir)
-        alps = list_clip_frames(manifest.alpha_frames_dir)
+        imgs = list_frames(manifest.frames_dir)
+        alps = list_frames(manifest.alpha_frames_dir)
         for i in range(*manifest.frame_range):
             preprocessed = preprocess_frame(manifest, i, config, image_files=imgs, alpha_files=alps)
 

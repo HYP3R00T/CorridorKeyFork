@@ -89,7 +89,7 @@ class InferenceConfig:
                       else → torch.
             "torch" — always use PyTorch (CUDA / ROCm / MPS / CPU).
             "mlx"   — always use MLX (Apple Silicon only, optional package).
-            Can also be overridden via the CORRIDORKEY_BACKEND env var.
+            Resolved from the TOML config, with auto-detection as the fallback.
     """
 
     checkpoint_path: Path

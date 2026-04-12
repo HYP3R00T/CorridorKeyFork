@@ -65,7 +65,7 @@ class SkippedClip(BaseModel):
     reason: str
 
     def __repr__(self) -> str:
-        return f"SkippedPath(path={self.path}, reason={self.reason!r})"
+        return f"SkippedClip(path={self.path}, reason={self.reason!r})"
 
 
 class ScanResult(BaseModel):

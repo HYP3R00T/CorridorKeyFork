@@ -41,7 +41,7 @@ def write_frame(frame: ProcessedFrame, config: WriteConfig) -> None:
     """Write all enabled outputs for one postprocessed frame to disk.
 
     Args:
-        frame: PostprocessedFrame from the postprocessor stage.
+        frame: ProcessedFrame from the postprocessor stage.
         config: WriteConfig controlling which outputs to write and where.
 
     Raises:

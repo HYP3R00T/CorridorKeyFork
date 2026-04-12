@@ -225,10 +225,16 @@ class Engine:
         self._wire_plugin_configs()
 
         # Resolve device early so it's available for model loading
-        from corridorkey.infra.device_utils import resolve_device
+        from corridorkey.infra.device_utils import resolve_device, resolve_devices
 
-        self._resolved_device = resolve_device(self._config.device)
-        logger.info("engine: device resolved to %s", self._resolved_device)
+        devices: list[str] = []
+        if self._config.device == "all":
+            devices = resolve_devices("all")
+            self._resolved_device = devices[0]
+            logger.info("engine: device resolved to %s (%d devices)", self._resolved_device, len(devices))
+        else:
+            self._resolved_device = resolve_device(self._config.device)
+            logger.info("engine: device resolved to %s", self._resolved_device)
 
         # Verify / download model
         checkpoint = self._config.inference.checkpoint_path
@@ -250,12 +256,6 @@ class Engine:
         logger.info("engine: model ready")
 
         # Build and cache pipeline config (resolves VRAM, precision, img_size once)
-        from corridorkey.infra.device_utils import resolve_devices
-
-        devices: list[str] = []
-        if self._config.device == "all":
-            devices = resolve_devices("all")
-
         self._pipeline_config = self._config.to_pipeline_config(
             device=self._resolved_device,
             devices=devices or None,

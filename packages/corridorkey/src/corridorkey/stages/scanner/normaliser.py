@@ -71,7 +71,7 @@ def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedClip | None]:
 
     Returns:
         (Clip, None) on success.
-        (None, SkippedPath) if the directory was a recognisable clip structure
+        (None, SkippedClip) if the directory was a recognisable clip structure
             that failed validation.
         (None, None) if the directory is simply not a clip (no Input/ folder).
     """
@@ -108,7 +108,7 @@ def find_input(clip_dir: Path) -> tuple[Path | None, SkippedClip | None]:
     Returns:
         (video_path, None) if Input/ contains exactly one video.
         (input_dir, None) if Input/ contains no video (image sequence).
-        (None, SkippedPath) if Input/ contains multiple videos (ambiguous).
+        (None, SkippedClip) if Input/ contains multiple videos (ambiguous).
         (None, None) if no Input/ folder exists.
 
     Raises:
@@ -137,7 +137,7 @@ def find_alpha(clip_dir: Path) -> tuple[Path | None, SkippedClip | None]:
     Returns:
         (video_path, None) if AlphaHint/ contains exactly one video.
         (alpha_dir, None) if AlphaHint/ contains no video (image sequence).
-        (None, SkippedPath) if AlphaHint/ contains multiple videos (ambiguous).
+        (None, SkippedClip) if AlphaHint/ contains multiple videos (ambiguous).
         (None, None) if no AlphaHint/ folder exists.
     """
     alpha_dir = _find_icase(clip_dir, "AlphaHint")

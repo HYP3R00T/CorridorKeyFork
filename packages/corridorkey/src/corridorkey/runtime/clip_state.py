@@ -19,7 +19,7 @@ State machine transitions
 
 Design notes
 ------------
-- ``ClipEntry`` wraps a ``Clip`` (scanner output) and optionally a
+- ``ClipRecord`` wraps a ``Clip`` (scanner output) and optionally a
   ``ClipManifest`` (loader output). It does not re-scan the filesystem —
   that is the scanner's job.
 - State is resolved from disk at construction time via ``resolve_state()``.
@@ -59,7 +59,7 @@ class ClipState(Enum):
     """Inference has run and all output frames are written."""
 
     ERROR = "ERROR"
-    """A stage failed. ``ClipEntry.error_message`` contains the detail."""
+    """A stage failed. ``ClipRecord.error_message`` contains the detail."""
 
 
 # Valid transitions: from_state -> allowed to_states.
@@ -130,13 +130,13 @@ class ClipRecord:
 
     @classmethod
     def from_clip(cls, clip: Clip) -> ClipRecord:
-        """Create a ClipEntry from a scanner Clip and resolve its initial state.
+        """Create a ClipRecord from a scanner Clip and resolve its initial state.
 
         Args:
             clip: Clip produced by the scanner stage.
 
         Returns:
-            ClipEntry with state resolved from what is present on disk.
+            ClipRecord with state resolved from what is present on disk.
         """
         entry = cls(clip=clip)
         entry.state = _resolve_state(clip)

@@ -5,7 +5,7 @@ Single entry point for constructing an inference backend. Callers receive a
 of whether PyTorch or MLX is running underneath.
 
 Backend resolution order:
-    ``InferenceConfig.backend`` field > ``CORRIDORKEY_BACKEND`` env var > auto-detect
+    ``InferenceConfig.backend`` field > auto-detect
 
 Auto-detect:
     Apple Silicon + ``corridorkey_mlx`` importable + ``.safetensors`` present → mlx
@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import importlib.util
 import logging
-import os
 import platform
 import sys
 from pathlib import Path
@@ -36,7 +35,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_BACKEND_ENV_VAR = "CORRIDORKEY_BACKEND"
 _TORCH_EXT = ".pth"
 _MLX_EXT = ".safetensors"
 _DEFAULT_MLX_TILE_SIZE = 512
@@ -124,13 +122,8 @@ def discover_checkpoint(checkpoint_dir: str | Path, backend: str = "torch") -> P
 def _resolve_backend(requested: str) -> str:
     """Resolve the backend string to ``"torch"`` or ``"mlx"``.
 
-    Priority: ``config.backend`` field > ``CORRIDORKEY_BACKEND`` env var > auto-detect.
+    Priority: ``config.backend`` field > auto-detect.
     """
-    if requested == "auto":
-        env = os.environ.get(_BACKEND_ENV_VAR, "auto").lower()
-        if env != "auto":
-            requested = env
-
     if requested == "auto":
         return _auto_detect()
 

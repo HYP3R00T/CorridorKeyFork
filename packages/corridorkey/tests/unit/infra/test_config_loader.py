@@ -74,11 +74,11 @@ class TestLoadConfigWithMetadata:
         assert cfg.device == "cpu"
 
 
-class TestLoadConfigFromYaml:
-    def test_yaml_file_overrides_defaults(self, tmp_path: Path):
-        yaml_content = "device: cpu\n"
-        config_file = tmp_path / "corridorkey.yaml"
-        config_file.write_text(yaml_content, encoding="utf-8")
+class TestLoadConfigFromToml:
+    def test_toml_file_overrides_defaults(self, tmp_path: Path):
+        toml_content = 'device = "cpu"\n'
+        config_file = tmp_path / "corridorkey.toml"
+        config_file.write_text(toml_content, encoding="utf-8")
 
         original_cwd = Path.cwd()
         try:
@@ -88,10 +88,10 @@ class TestLoadConfigFromYaml:
         finally:
             os.chdir(original_cwd)
 
-    def test_yaml_nested_settings_loaded(self, tmp_path: Path):
-        yaml_content = "preprocess:\n  img_size: 1024\n"
-        config_file = tmp_path / "corridorkey.yaml"
-        config_file.write_text(yaml_content, encoding="utf-8")
+    def test_toml_nested_settings_loaded(self, tmp_path: Path):
+        toml_content = "[preprocess]\nimg_size = 1024\n"
+        config_file = tmp_path / "corridorkey.toml"
+        config_file.write_text(toml_content, encoding="utf-8")
 
         original_cwd = Path.cwd()
         try:

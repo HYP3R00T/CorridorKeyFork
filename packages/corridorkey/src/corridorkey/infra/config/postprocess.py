@@ -11,7 +11,7 @@ class PostprocessSettings(BaseModel):
     """User-facing postprocessing settings.
 
     Mirrors :class:`~corridorkey.stages.postprocessor.PostprocessConfig` but
-    lives in the config layer so it can be loaded from TOML / env vars.
+    lives in the config layer so it can be loaded from TOML.
 
     In ``corridorkey.toml``::
 

@@ -9,7 +9,7 @@ is delegated to its own module.
     Step 3   — alpha matte cleanup (despeckle)           → despeckle.py
     Step 4   — green spill removal                       → despill.py
     Step 5   — build processed RGBA + checkerboard comp  → composite.py
-    Step 6   — return PostprocessedFrame                 (here)
+    Step 6   — return ProcessedFrame                 (here)
 
 Public entry point: postprocess_frame(result, config, stem="")
 """
@@ -50,7 +50,7 @@ def postprocess_frame(
         output_dir: Root output directory. Required when config.debug_dump=True.
 
     Returns:
-        PostprocessedFrame with all arrays at source resolution, float32.
+        ProcessedFrame with all arrays at source resolution, float32.
     """
     meta = result.meta
     output_stem = stem or f"frame_{meta.frame_index:06d}"

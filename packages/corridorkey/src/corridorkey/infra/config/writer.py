@@ -13,7 +13,7 @@ class WriterSettings(BaseModel):
     """User-facing writer settings.
 
     Mirrors :class:`~corridorkey.stages.writer.WriteConfig` but lives in
-    the config layer so it can be loaded from TOML / env vars.
+    the config layer so it can be loaded from TOML.
 
     In ``corridorkey.toml``::
 
