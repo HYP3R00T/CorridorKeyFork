@@ -16,7 +16,7 @@ This boundary is enforced by the import direction. The interface imports from `c
 
 Regardless of the integration pattern chosen, every interface has the same set of responsibilities before processing can begin.
 
-1. Load and validate configuration from the user's config file and environment.
+1. Load and validate configuration from the user's config file and runtime overrides.
 2. Set up file logging for the session.
 3. Resolve and validate the compute device.
 4. Detect the available GPU and present that information to the user.
@@ -34,7 +34,7 @@ Two patterns are available. The right choice depends on how much control the int
 
 | Pattern | Document | Best for |
 |---|---|---|
-| Runner | [runner.md](runner.md) | CLI, GUI, batch tools, plugins — any number of GPUs |
+| Engine | [runner.md](runner.md) | CLI, GUI, batch tools — whole-clip orchestration |
 | Frame loop | [frame-loop.md](frame-loop.md) | Host-managed threading (Fusion node, Premiere extension) |
 
 ## Cross-Cutting Concerns

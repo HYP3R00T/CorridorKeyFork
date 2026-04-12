@@ -2,7 +2,7 @@
 
 Every interface runs a fixed startup sequence before any clip can be processed. This sequence initialises the four infrastructure concerns the package exposes: configuration, logging, device, and model.
 
-Source: [`corridorkey/infra/`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/infra/)
+Source: [`corridorkey/infra/`](https://github.com/hyp3r00t/CorridorKeyFork/blob/main/packages/corridorkey/src/corridorkey/infra/)
 
 ## Purpose
 
@@ -14,7 +14,7 @@ The four steps are independent and run in a fixed order. Each step produces a va
 
 ### Step 1 - Configuration
 
-`load_config()` reads the user's config file, applies any environment variable overrides, and returns a validated `CorridorKeyConfig` object. If the file does not exist, built-in defaults are used. If a value fails validation (for example, an unrecognised device string), an error is raised immediately.
+`load_config()` reads the user's TOML config file, applies any runtime overrides, and returns a validated `CorridorKeyConfig` object. If the file does not exist, built-in defaults are used. If a value fails validation (for example, an unrecognised device string), an error is raised immediately.
 
 The config object is the single source of truth for all pipeline settings. Every stage config is derived from it via the bridge methods (`to_preprocess_config`, `to_inference_config`, and so on). The interface should never construct stage configs manually.
 
@@ -46,7 +46,7 @@ The config object is immutable after loading. If the user changes settings mid-s
 
 ## Related
 
-- [Runner](runner.md) - How the startup outputs feed into the pipeline.
+- [Engine](runner.md) - How the startup outputs feed into the pipeline.
 - [Configuration](../configuration.md) - All configuration fields and their defaults.
 - [Reference - device-utils](../reference/device-utils.md) - `detect_gpu`, `resolve_device`, `GPUInfo`.
 - [Reference - model-hub](../reference/model-hub.md) - `ensure_model`, `default_checkpoint_path`.

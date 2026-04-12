@@ -2,7 +2,7 @@
 
 All errors raised by the `corridorkey` package are typed exceptions that inherit from `CorridorKeyError`. The interface catches them and presents them to the user.
 
-Source: [`corridorkey/errors.py`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/errors.py)
+Source: [`corridorkey/errors.py`](https://github.com/hyp3r00t/CorridorKeyFork/blob/main/packages/corridorkey/src/corridorkey/errors.py)
 
 ## Purpose
 
@@ -42,7 +42,7 @@ Raised by `load()` or `resolve_alpha()` when the number of alpha frames does not
 
 ### FrameReadError
 
-Raised by `preprocess_frame()` when a frame file cannot be read or decoded. In the context of `PipelineRunner`, the worker catches this per-frame and fires `on_frame_error` rather than aborting the clip. In the frame loop pattern, the interface receives it directly and decides whether to skip the frame or abort.
+Raised by `preprocess_frame()` when a frame file cannot be read or decoded. In the context of the internal frame loop, the worker catches this per-frame and fires `on_frame_error` rather than aborting the clip. In the frame loop pattern, the interface receives it directly and decides whether to skip the frame or abort.
 
 ### WriteFailureError
 
@@ -68,12 +68,12 @@ The recommended approach is to catch specific subclasses first, in order of how 
 
 `FrameMismatchError` and `ExtractionError` are clip-level failures. The interface should mark the affected clip as errored, display the details, and continue processing other clips.
 
-`FrameReadError` and `WriteFailureError` are frame-level failures. In `Runner` they are handled internally and reported through `on_frame_error`. In the frame loop, the interface decides whether to skip the frame or abort the clip.
+`FrameReadError` and `WriteFailureError` are frame-level failures. In `Engine.run()` they are handled internally and reported through the lower-level frame-loop callbacks. In the frame loop, the interface decides whether to skip the frame or abort the clip.
 
 `CorridorKeyError` as a catch-all should log the full exception and display a generic error message. It should never be silently swallowed.
 
 ## Related
 
 - [Startup](startup.md) - Where `DeviceError` and `ModelError` are most likely to surface.
-- [Runner](runner.md) - How frame-level errors are reported through events.
+- [Engine](runner.md) - How frame-level errors are reported through events.
 - [Reference - errors](../reference/errors.md) - Full exception hierarchy reference.

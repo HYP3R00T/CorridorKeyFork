@@ -52,4 +52,4 @@ The default format for all outputs is PNG. Switch to EXR for production work whe
 
 ## Full Parameter Reference
 
-The complete list of parameters with their defaults and valid values is in the [Developer Configuration reference](../../dev/packages/corridorkey/configuration.md).
+The complete list of parameters with their defaults and valid values is in the [Configuration reference](../../corridorkey/configuration.md).

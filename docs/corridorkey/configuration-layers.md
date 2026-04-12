@@ -7,8 +7,8 @@ building.
 ## The Two Layers
 
 **Settings** (`InferenceSettings`, `PreprocessSettings`, etc.) are what end
-users touch. They live in `corridorkey.toml`, can be overridden by environment
-variables, and use human-readable types like `"auto"`, `"float16"`, `"bicubic"`.
+users touch. They live in `corridorkey.toml`, can be overridden by runtime
+overrides, and use human-readable types like `"auto"`, `"float16"`, `"bicubic"`.
 Every field has a description written for a non-developer audience.
 
 **Runtime configs** (`InferenceConfig`, `PreprocessConfig`, etc.) are what the
@@ -48,9 +48,9 @@ result to `to_pipeline_config()`.
 ```python
 from corridorkey.infra import load_config
 
-config = load_config()          # reads corridorkey.toml + env vars
+config = load_config()          # reads corridorkey.toml + runtime overrides
 pipeline_config = config.to_pipeline_config(device=resolved_device)
-Runner(manifest, pipeline_config).run()
+Engine(config).run([clips_dir])
 ```
 
 ## If You Are Building an Interface
@@ -70,9 +70,9 @@ The typical interface flow is:
 2. Let the user adjust settings (device, quality preset, etc.).
 3. Call `config.to_pipeline_config()` once to get a `PipelineConfig`.
 4. Reuse that `PipelineConfig` across all clips in the session -- it holds the
-   pre-loaded model and resolved values so they are not recomputed per clip.
-5. For each clip, create a new `Runner(manifest, pipeline_config)` and call
-   `run()`.
+    pre-loaded model and resolved values so they are not recomputed per clip.
+5. For whole-clip workflows, hand the config to `Engine` and let it own the
+    clip lifecycle.
 
 ???+ warning "Do not reload the model per clip"
     `to_pipeline_config()` accepts an optional `model` argument. Load the model

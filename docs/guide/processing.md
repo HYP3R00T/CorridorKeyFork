@@ -5,7 +5,7 @@ The wizard is the main way to process footage. It guides you through scanning, r
 ## Starting the Wizard
 
 ```shell
-corridorkey wizard /path/to/clips
+ck /path/to/clips
 ```
 
 If you omit the path, the wizard will prompt for it.
@@ -128,17 +128,17 @@ After all clips finish, the wizard returns to the main loop so you can re-scan o
 
 ## Batch Processing (Non-Interactive)
 
-For scripted or automated use, `corridorkey process` runs without any prompts:
+For scripted or automated use, run `ck /path/to/clips --yes` so the wizard uses the saved config without prompting:
 
 ```shell
-corridorkey process /path/to/clips --despill 0.9 --fg-format exr
+ck /path/to/clips --yes
 ```
 
-See [Processing commands](../dev/packages/corridorkey-cli/processing-commands.md) for all available flags.
+Set persistent options in `corridorkey.toml`, or use `ck config --write` to write out the resolved config and edit it from there.
 
 ## Related
 
 - [Outputs](outputs.md)
 - [Preparing clips](preparing-clips.md)
 - [Troubleshooting](troubleshooting.md)
-- [Processing commands](../dev/packages/corridorkey-cli/processing-commands.md)
+- [Commands](../corridorkey-cli/commands.md)

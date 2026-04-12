@@ -9,16 +9,16 @@ my_shot/
     frame_0001.png          (original input, untouched)
     ...
     Output/
-        FG/
-            frame_0001.exr  foreground frames
+        fg/
+            frame_0001.png  foreground frames
             ...
-        Matte/
-            frame_0001.exr  alpha matte frames
+        alpha/
+            frame_0001.png  alpha matte frames
             ...
-        Comp/
+        comp/
             frame_0001.png  preview composite frames
             ...
-        Processed/
+        processed/
             frame_0001.png  processed RGBA frames
             ...
         .corridorkey_manifest.json
@@ -26,53 +26,53 @@ my_shot/
 
 ## The Four Outputs
 
-### FG (Foreground)
+### fg (Foreground)
 
-The foreground frames contain the subject extracted from the green screen as an RGB image in sRGB colour space, straight (unpremultiplied) alpha. Default format is EXR.
+The foreground frames contain the subject extracted from the green screen as an RGB image in sRGB colour space, straight (unpremultiplied) alpha. Default format is PNG.
 
-Use FG when you want to composite the subject yourself in a DCC tool using your own background and lighting. Import with straight alpha mode.
+Use fg when you want to composite the subject yourself in a DCC tool using your own background and lighting. Import with straight alpha mode.
 
-### Matte
+### alpha
 
-The matte frames contain the raw alpha prediction as a greyscale image. White is fully opaque, black is fully transparent. Default format is EXR.
+The alpha frames contain the raw alpha prediction as a greyscale image. White is fully opaque, black is fully transparent. Default format is PNG.
 
-Use Matte when you need the alpha channel separately, for example to apply additional matte cleanup in a compositing application before combining with the foreground.
+Use alpha when you need the alpha channel separately, for example to apply additional matte cleanup in a compositing application before combining with the foreground.
 
-### Comp
+### comp
 
 The comp frames are a ready-to-view preview composite. The subject is placed over a grey checkerboard in sRGB. Default format is PNG.
 
-Use Comp to quickly review the keying result without opening a compositing application. These frames are not intended for final delivery.
+Use comp to quickly review the keying result without opening a compositing application. These frames are not intended for final delivery.
 
-### Processed
+### processed
 
 The processed frames contain the final RGBA output in linear light, premultiplied. Default format is PNG (configurable to EXR).
 
-Use Processed when you want a single RGBA file ready for import into a compositing application. Import with premultiplied (associated) alpha mode.
+Use processed when you want a single RGBA file ready for import into a compositing application. Import with premultiplied (associated) alpha mode.
 
 ## Choosing Output Formats
 
-The default formats (EXR for FG and Matte, PNG for Comp and Processed) suit most workflows. Change them with flags on `corridorkey process`:
+The default formats (PNG for fg, alpha, comp, and processed) suit most workflows. Set them in `~/.config/corridorkey/corridorkey.toml` under `[writer]`:
 
-```shell
-corridorkey process /path/to/clips --fg-format png --matte-format png
+```toml
+[writer]
+alpha_format = "png"
+fg_format = "png"
+processed_format = "png"
+comp_enabled = true
+processed_enabled = true
 ```
 
-Or set persistent defaults in `~/.config/corridorkey/corridorkey.yaml`:
-
-```yaml
-fg_format: exr
-matte_format: exr
-comp_format: png
-processed_format: exr
-```
+If you want to start from the resolved settings and then edit them, run `ck config --write` and adjust the generated TOML file.
 
 ## Skipping Outputs
 
-If you do not need the composite preview or processed RGBA, skip them to save disk space and speed up processing:
+If you do not need the composite preview or processed RGBA, disable them in the same `[writer]` section to save disk space and speed up processing:
 
-```shell
-corridorkey process /path/to/clips --no-comp --no-processed
+```toml
+[writer]
+comp_enabled = false
+processed_enabled = false
 ```
 
 ## Importing into Compositing Applications
@@ -96,5 +96,5 @@ Read the FG and Matte as separate Read nodes, or read the Processed EXR. Set the
 ## Related
 
 - [Processing clips](processing.md)
-- [Configuration](../dev/packages/corridorkey/configuration.md)
-- [Project layout](../dev/packages/corridorkey/project-layout.md)
+- [Configuration](../corridorkey/configuration.md)
+- [Preparing clips](preparing-clips.md)

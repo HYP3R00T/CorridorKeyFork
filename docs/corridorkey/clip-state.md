@@ -12,7 +12,7 @@ A clip moves through five states:
 | `RAW` | Frame sequence present, no alpha hint. |
 | `READY` | Alpha hint present - clip can be submitted for inference. |
 | `COMPLETE` | Inference has run and all output frames are written. |
-| `ERROR` | A stage failed. `ClipEntry.error_message` contains the detail. |
+| `ERROR` | A stage failed. `ClipRecord.error_message` contains the detail. |
 
 ## Valid Transitions
 
@@ -26,9 +26,9 @@ A clip moves through five states:
 
 Calling `transition_to()` with an invalid target raises `InvalidStateTransitionError`.
 
-## ClipEntry
+## ClipRecord
 
-`ClipEntry` wraps a `Clip` (scanner output) and optionally a `ClipManifest` (loader output). It does not re-scan the filesystem - that is the scanner's job.
+`ClipRecord` wraps a `Clip` (scanner output) and optionally a `ClipManifest` (loader output). It does not re-scan the filesystem - that is the scanner's job.
 
 State is resolved from disk at construction time via `from_clip()`. The resolution priority is:
 
@@ -41,9 +41,9 @@ State is resolved from disk at construction time via `from_clip()`. The resoluti
 
 `_processing` is a soft lock set by the job queue while a GPU job is active. Filesystem watchers should skip reclassification while `is_processing` is `True`.
 
-## InOutRange
+## FrameRange
 
-`InOutRange` represents an inclusive in/out frame range for sub-clip processing. Both indices are zero-based and inclusive. Use `to_frame_range()` to convert to a half-open `(start, end)` tuple for `ClipManifest.frame_range`.
+`FrameRange` represents an inclusive in/out frame range for sub-clip processing. Both indices are zero-based and inclusive. Use `to_frame_range()` to convert to a half-open `(start, end)` tuple for `ClipManifest.frame_range`.
 
 ## Related
 

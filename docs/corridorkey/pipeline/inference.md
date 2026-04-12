@@ -40,7 +40,7 @@ result = run_inference(frame, model, config)
 
 ### Steps
 
-1. Resolve refiner mode. If `resolved_refiner_mode` is provided (pre-resolved by `PipelineRunner` to avoid a per-frame VRAM probe), use it directly. Otherwise probe VRAM to decide between `full_frame` and `tiled`.
+1. Resolve refiner mode. If `resolved_refiner_mode` is provided (pre-resolved by `Engine` to avoid a per-frame VRAM probe), use it directly. Otherwise probe VRAM to decide between `full_frame` and `tiled`.
 
 2. Install a forward hook on the refiner module if needed:
    - In `tiled` mode: the hook intercepts the refiner's forward call and replaces it with `_run_refiner_tiled()`.

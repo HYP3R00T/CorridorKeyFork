@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Run `corridorkey doctor` first. It checks the most common failure points and tells you exactly what is wrong.
+Run `ck init` first. It checks the most common failure points and tells you exactly what is wrong.
 
 ## Inference model not found
 
@@ -8,7 +8,7 @@ Run `corridorkey doctor` first. It checks the most common failure points and tel
 FAIL  inference model  not found in ~/.config/corridorkey/models
 ```
 
-The model was not downloaded. Run `corridorkey init` and choose to download when prompted. If the download fails, see the manual download instructions printed by init.
+The model was not downloaded. Run `ck init` and choose to download when prompted. If the download fails, see the manual download instructions printed by init.
 
 ## FFmpeg not found
 
@@ -32,9 +32,9 @@ On Ubuntu/Debian:
 sudo apt install ffmpeg
 ```
 
-After installing, run `corridorkey doctor` to confirm.
+After installing, run `ck init` to confirm.
 
-## corridorkey: command not found
+## ck: command not found
 
 The tool installed but the install location is not on PATH. Close and reopen your terminal. If that does not help, find where `uv` installed the tool:
 
@@ -75,7 +75,7 @@ If you expected the clip to be READY, check that the `AlphaHint/` folder exists 
 
 EXTRACTING means a source video was detected but frames have not been extracted yet. This happens automatically when you choose [i] in the wizard. If the clip stays in EXTRACTING after processing:
 
-- Check that FFmpeg is installed (`corridorkey doctor`).
+- Check that FFmpeg is installed (`ck init`).
 - Check that the source video is not corrupted (try opening it in a media player).
 - Check the error column in the wizard table for a specific message.
 
@@ -91,11 +91,7 @@ The GPU does not have enough VRAM for the current settings. Try:
 2. Reduce `refiner_scale` to 0.5 or 0.0 in the wizard settings.
 3. Process one clip at a time rather than a large batch.
 
-If the error persists on a 4 GB GPU, the model may not fit. CPU processing is the fallback:
-
-```shell
-corridorkey process /path/to/clips --device cpu
-```
+If the error persists on a 4 GB GPU, the model may not fit. CPU processing is the fallback: set `device = "cpu"` in `corridorkey.toml`, then run `ck /path/to/clips --yes`.
 
 ## First frame takes very long (kernel compilation)
 
@@ -114,30 +110,29 @@ For persistent edge problems, try reducing `despill_strength` slightly (e.g. 0.8
 ## Config file not found warning
 
 ```text
-WARN  config file  not found - run `corridorkey init` to create it
+WARN  config file  not found - run `ck init` to create it
 ```
 
-This is a warning, not a failure. CorridorKey uses built-in defaults when no config file is present. Run `corridorkey init` or `corridorkey config init` to create the file.
+This is a warning, not a failure. CorridorKey uses built-in defaults when no config file is present. Run `ck init` or `ck config --write` to create the file.
 
 ## Corrupt config file
 
-If the config file contains invalid YAML, CorridorKey will automatically rename it to `corridorkey.yaml.bak` and continue with defaults. You will see a warning in the output:
+If the config file contains invalid TOML, CorridorKey cannot load it. Fix the syntax and rerun `ck init`, or regenerate a fresh file with `ck config --write`.
 
 ```text
-WARN  Corrupt config file moved to ~/.config/corridorkey/corridorkey.yaml.bak - using defaults.
-      Run `corridorkey config init` to regenerate.
+WARN  Corrupt config file - fix the TOML syntax and rerun `ck init`.
 ```
 
 To start completely fresh and remove all config, models, and cached data:
 
 ```shell
-corridorkey reset
+ck reset
 ```
 
-Then run `corridorkey init` to set up again.
+Then run `ck init` to set up again.
 
 ## Related
 
 - [First run](first-run.md)
-- [Setup commands](../dev/packages/corridorkey-cli/setup-commands.md)
-- [Configuration](../dev/packages/corridorkey/configuration.md)
+- [Commands](../corridorkey-cli/commands.md)
+- [Configuration](../corridorkey/configuration.md)

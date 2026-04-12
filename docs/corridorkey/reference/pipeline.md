@@ -1,6 +1,6 @@
 # pipeline
 
-Pipeline stage functions, runner classes, backend protocol, and all stage contracts exported from `corridorkey`.
+Pipeline stage functions, Engine, JobStats, backend protocol, and all stage contracts exported from `corridorkey`.
 
 ## Stage Functions
 
@@ -8,21 +8,21 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 
 ::: corridorkey.load
 
-::: corridorkey.resolve_alpha
+::: corridorkey.attach_alpha
 
 ::: corridorkey.preprocess_frame
 
-::: corridorkey.load_backend
+::: corridorkey.load_model_backend
 
 ::: corridorkey.postprocess_frame
 
 ::: corridorkey.write_frame
 
-## Runner Classes
+## Engine
 
-::: corridorkey.runtime.runner.Runner
+::: corridorkey.Engine
 
-::: corridorkey.runtime.runner.PipelineConfig
+::: corridorkey.JobStats
 
 ## Backend Protocol
 
@@ -36,13 +36,13 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 
 ::: corridorkey.ScanResult
 
-::: corridorkey.SkippedPath
+::: corridorkey.SkippedClip
 
 ### Loader
 
 ::: corridorkey.ClipManifest
 
-::: corridorkey.list_clip_frames
+::: corridorkey.list_frames
 
 ### Preprocessor
 
@@ -66,7 +66,7 @@ Pipeline stage functions, runner classes, backend protocol, and all stage contra
 
 ::: corridorkey.PostprocessConfig
 
-::: corridorkey.PostprocessedFrame
+::: corridorkey.ProcessedFrame
 
 ### Writer
 

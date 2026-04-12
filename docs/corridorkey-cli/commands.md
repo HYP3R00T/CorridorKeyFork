@@ -12,7 +12,7 @@ ck <clips_dir>
 ck <clips_dir> --yes
 ```
 
-Scans for clips, shows the resolved configuration, prompts for confirmation, then runs the full pipeline. Pass `--yes` to skip prompts and use config defaults.
+Loads the resolved configuration, prompts for confirmation, then runs the full pipeline. Pass `--yes` to skip prompts and use config defaults.
 
 Implemented in `corridorkey_cli.__init__`.
 
@@ -27,7 +27,7 @@ ck init
 Runs three steps in order:
 
 1. Health check - verifies Python version, compute device, config file, and inference model.
-2. Config file - creates `~/.config/corridorkey/corridorkey.yaml` if it does not exist.
+2. Config file - creates `~/.config/corridorkey/corridorkey.toml` if it does not exist.
 3. Model download - offers to download the inference model if not found.
 
 Implemented in `corridorkey_cli.commands.init`.
@@ -41,7 +41,7 @@ ck config
 ck config --write
 ```
 
-Displays a table of all configuration fields, their resolved values, and the source each value came from (defaults, global file, project file, or environment variable). Pass `--write` to save the resolved configuration to disk.
+Displays a table of all configuration fields, their resolved values, and the source each value came from (defaults, global file, project file, or runtime override). Pass `--write` to save the resolved configuration to disk.
 
 Implemented in `corridorkey_cli.commands.config`.
 

@@ -1,18 +1,18 @@
-# Runner
+# Engine
 
-`Runner` is the standard way to process a clip. It wires the pipeline workers together, manages the queues between them, and blocks until every frame has been written to disk. It works identically whether you have one GPU or twenty.
+`Engine` is the standard way to process clips. It wires the pipeline workers together, manages the queues between them, and blocks until every frame has been written to disk. It works identically whether you have one GPU or twenty.
 
-Source: [`corridorkey/runtime/runner.py`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/runtime/runner.py)
+Source: [`corridorkey/runtime/runner.py`](https://github.com/hyp3r00t/CorridorKeyFork/blob/main/packages/corridorkey/src/corridorkey/runtime/runner.py)
 
 ## Purpose
 
-`Runner` processes one clip per invocation. To process multiple clips, call it in a loop and create a new instance for each clip.
+`Engine` processes one clip at a time, but a single `Engine` instance can scan and process multiple clip paths in one `run()` call.
 
-Most interfaces do not need to think about individual frames. They need to hand a clip to the pipeline and be notified when it is done. `Runner` is that hand-off point. The interface provides a manifest and a config; the runner handles everything in between.
+Most interfaces do not need to think about individual frames. They need to hand a clip to the pipeline and be notified when it is done. `Engine` is that hand-off point. The interface provides a config; the engine handles scanning, loading, alpha generation, and frame processing.
 
 ## How It Works
 
-When `run()` is called, the runner starts one `PreprocessWorker`, one `PostWriteWorker`, and one `InferenceWorker` per device, then blocks until all threads finish.
+When `Engine.run()` is called, the engine scans the input paths, loads each clip, and then starts one `PreprocessWorker`, one `PostWriteWorker`, and one `InferenceWorker` per device for each clip. It blocks until all threads finish.
 
 The preprocessor reads frames from disk one at a time, converts them to tensors, and pushes them onto a bounded input queue. When it has processed every frame, it signals the queue that no more frames are coming.
 
@@ -30,40 +30,37 @@ When multiple GPUs are used, each gets its own model copy loaded in a parallel t
 
 ## Configuration
 
-`Runner` takes a `PipelineConfig`, built by calling `config.to_pipeline_config()` on the loaded `CorridorKeyConfig`.
+`Engine` is constructed from a loaded `CorridorKeyConfig`. Internally it builds a `PipelineConfig` by calling `config.to_pipeline_config()`.
 
 ```python
-# Single GPU
-pipeline_config = config.to_pipeline_config(device=device)
+from pathlib import Path
 
-# All available CUDA GPUs
-pipeline_config = config.to_pipeline_config(devices=resolve_devices("all"))
+from corridorkey import Engine, load_config
 
-# Specific GPUs
-pipeline_config = config.to_pipeline_config(devices=["cuda:0", "cuda:2"])
-
-Runner(manifest, pipeline_config).run()
+config = load_config()
+engine = Engine(config)
+engine.run([Path("/clips")])
 ```
 
-When `devices` is empty or contains a single entry, one inference worker runs. When it contains multiple entries, one worker per device runs. The code path is the same in both cases.
+When the config resolves to a single device, one inference worker runs. When it resolves to multiple devices, one worker per device runs. The code path is the same in both cases.
 
 For accepted device string values, see [Configuration — Device values](../configuration.md#device-values).
 
-`PipelineConfig` also accepts an optional `events` field for progress callbacks. The `events` kwarg on `Runner` overrides `config.events`, so the same config can be reused across clips with different progress handlers per clip. See [Events](events.md) for the full callback reference.
+`Engine.on()` provides the clip-level callback surface for interfaces. The lower-level `PipelineConfig.events` field is used internally by the frame loop for stage and frame progress. See [Events](events.md) for the full callback reference.
 
 The `input_queue_depth` and `output_queue_depth` fields control how many frames can be buffered between stages. Each buffered preprocessed frame occupies roughly 64 MB of GPU memory at 2048 resolution.
 
 ## Scanning and Loading
 
-Before the runner can be used, the interface must scan for clips and load each one.
+Before the engine can process a clip, it scans the input paths and loads each clip internally.
 
 `scan()` accepts a path to a clips directory, a single clip folder, or a single video file. It returns a `ScanResult` containing a tuple of valid `Clip` objects and a tuple of `SkippedPath` objects. The interface should present both to the user.
 
-`load()` accepts a `Clip` and returns a `ClipManifest`. When `needs_alpha` is `True`, the clip has no alpha hint frames. The interface is responsible for generating them externally. Once generated, `resolve_alpha()` returns an updated manifest with `needs_alpha` set to `False`. The runner cannot be started until `needs_alpha` is `False`.
+`load()` accepts a `Clip` and returns a `ClipManifest`. When `needs_alpha` is `True`, the clip has no alpha hint frames. The interface is responsible for generating them externally. Once generated, `attach_alpha()` returns an updated manifest with `needs_alpha` set to `False`. The engine cannot proceed until `needs_alpha` is `False`.
 
-## When to Use Runner
+## When to Use Engine
 
-`Runner` is the right choice when:
+`Engine` is the right choice when:
 
 - The interface does not need to inspect or modify individual frame results before they are written.
 - Progress reporting through callbacks is sufficient.

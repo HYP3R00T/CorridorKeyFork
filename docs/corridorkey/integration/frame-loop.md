@@ -2,11 +2,11 @@
 
 The frame loop is a direct integration pattern where the interface calls each pipeline stage function individually, one frame at a time. The interface controls the loop, the threading model, and the order of operations.
 
-Source: [`corridorkey/__init__.py`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/__init__.py)
+Source: [`corridorkey/__init__.py`](https://github.com/hyp3r00t/CorridorKeyFork/blob/main/packages/corridorkey/src/corridorkey/__init__.py)
 
 ## Purpose
 
-Host applications like DaVinci Resolve Fusion and Adobe Premiere Pro have their own rendering engines. They call into plugins one frame at a time, on their own threads, according to their own scheduling. `PipelineRunner` is not compatible with this model because it manages its own threads and blocks until the entire clip is done.
+Host applications like DaVinci Resolve Fusion and Adobe Premiere Pro have their own rendering engines. They call into plugins one frame at a time, on their own threads, according to their own scheduling. The whole-clip `Engine` is not compatible with this model because it manages its own threads and blocks until the entire clip is done.
 
 The frame loop pattern exposes each pipeline stage as a standalone function call. The interface calls them in sequence for each frame, in whatever threading context the host provides.
 
@@ -18,7 +18,7 @@ The pipeline is broken into four function calls per frame.
 
 `backend.run()` runs the model forward pass on the preprocessed frame and returns an `InferenceResult` containing the raw alpha and foreground predictions, still on the device.
 
-`postprocess_frame()` takes the inference result, resizes the predictions back to source resolution, applies despill and despeckle, and returns a `PostprocessedFrame` containing NumPy arrays ready to write.
+`postprocess_frame()` takes the inference result, resizes the predictions back to source resolution, applies despill and despeckle, and returns a `ProcessedFrame` containing NumPy arrays ready to write.
 
 `write_frame()` takes the postprocessed frame and writes all enabled output files to disk.
 
@@ -26,7 +26,7 @@ Each function is stateless. None of them hold references to previous frames or a
 
 ## The Backend
 
-The frame loop uses `load_backend()` rather than `load_model()`. `load_backend()` is the preferred entry point because it handles the backend selection decision automatically. On Apple Silicon with the optional MLX package installed, it returns an `MLXBackend`. On all other platforms, it returns a `TorchBackend`. Both satisfy the same `ModelBackend` protocol, so the interface does not need to know which one it received.
+The frame loop uses `load_model_backend()` rather than `load_model()`. `load_model_backend()` is the preferred entry point because it handles the backend selection decision automatically. On Apple Silicon with the optional MLX package installed, it returns an `MLXBackend`. On all other platforms, it returns a `TorchBackend`. Both satisfy the same `ModelBackend` protocol, so the interface does not need to know which one it received.
 
 The backend is loaded once per session, not once per frame. Loading involves reading the checkpoint from disk, moving weights to the device, and optionally compiling GPU kernels. This takes several seconds on first run. The interface should load the backend during startup and hold the reference for the lifetime of the session.
 
@@ -36,7 +36,7 @@ After loading, `backend.resolved_config` returns a flat dictionary of strings de
 
 `preprocess_frame()` accepts optional pre-built file lists for the image and alpha directories. When these are provided, the function uses them directly instead of scanning the directory on every call. For a clip with hundreds of frames, scanning the directory on every frame call adds significant overhead. The interface should build these lists once when the clip is loaded and pass them on every frame call.
 
-`scan_frames()` performs a single directory scan and returns a `FrameScan` containing the sorted file list and a flag indicating whether the frames are in linear colour space. `list_clip_frames()` is a convenience wrapper that returns just the file list.
+`scan_frames()` performs a single directory scan and returns a `FrameScan` containing the sorted file list and a flag indicating whether the frames are in linear colour space. `list_frames()` is a convenience wrapper that returns just the file list.
 
 ## Memory Management
 
@@ -52,10 +52,10 @@ The frame loop is the right choice when:
 - The interface needs to inspect or modify the result of each stage before passing it to the next.
 - The interface needs to interleave pipeline calls with other work on the same thread.
 
-It is not the right choice for a CLI or GUI that processes whole clips. For those cases, `Runner` is simpler and handles threading automatically.
+It is not the right choice for a CLI or GUI that processes whole clips. For those cases, `Engine` is simpler and handles threading automatically.
 
 ## Related
 
-- [Runner](runner.md) - Whole-clip processing with internal threading.
+- [Engine](runner.md) - Whole-clip processing with internal threading.
 - [Startup](startup.md) - How to load the backend and build stage configs before the loop begins.
 - [Reference - pipeline](../reference/pipeline.md) - Full signatures for all stage functions.

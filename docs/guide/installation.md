@@ -66,12 +66,12 @@ uv tool install corridorkey-cli --python 3.13
 
 `uv` must be installed first. See the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/).
 
-After manual installation, run `corridorkey init` to complete setup.
+After manual installation, run `ck init` to complete setup.
 
 ## Verifying the Installation
 
 ```shell
-corridorkey --help
+ck --help
 ```
 
 If the command is not found after installation, close and reopen your terminal to pick up the updated PATH.

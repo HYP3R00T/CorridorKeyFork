@@ -133,7 +133,7 @@ session/
 ```
 
 ```shell
-corridorkey wizard /path/to/session
+ck /path/to/session
 ```
 
 Video and sequence clips can be mixed in the same session.
@@ -167,10 +167,10 @@ The names in `Frames/` and `AlphaHint/` do not need to match each other. The pip
 
 ## Checking Clip State
 
-Run `corridorkey scan` to verify your clips before processing:
+Run `ck /path/to/session` to scan your clips and show the state table before you choose to process them:
 
 ```shell
-corridorkey scan /path/to/session
+ck /path/to/session
 ```
 
 | State | Meaning |
@@ -184,4 +184,4 @@ corridorkey scan /path/to/session
 
 - [Processing clips](processing.md)
 - [Outputs](outputs.md)
-- [Clip state machine](../dev/packages/corridorkey/clip-state.md)
+- [Clip state machine](../corridorkey/clip-state.md)

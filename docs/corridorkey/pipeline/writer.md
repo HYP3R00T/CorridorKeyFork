@@ -1,6 +1,6 @@
 # Writer Stage
 
-The writer is stage 5. It takes a `PostprocessedFrame` and writes all enabled output images to disk under the clip's `Output/` directory.
+The writer is stage 5. It takes a `ProcessedFrame` and writes all enabled output images to disk under the clip's `Output/` directory.
 
 Source: [`corridorkey/stages/writer/`](https://github.com/nikopueringer/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/stages/writer/)
 
@@ -82,9 +82,9 @@ If `cv2.imwrite` returns `False`, `WriteFailureError` is raised with the path. P
 
 ## Output Contract
 
-This stage produces no output contract. It writes files to disk and returns `None`. The `PostprocessedFrame.stem` field determines the filename for all outputs.
+This stage produces no output contract. It writes files to disk and returns `None`. The `ProcessedFrame.stem` field determines the filename for all outputs.
 
 ## Related
 
-- [Postprocessor Stage](postprocessor.md) - Produces `PostprocessedFrame` consumed here.
+- [Postprocessor Stage](postprocessor.md) - Produces `ProcessedFrame` consumed here.
 - [Configuration](../configuration.md) - `WriterSettings` reference.

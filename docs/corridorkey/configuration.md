@@ -4,9 +4,9 @@
 
 ## Config File
 
-The config file is a TOML file at `~/.config/corridorkey/corridorkey.toml` by default. A project-level `corridorkey.toml` in the working directory overrides the global file. Environment variables prefixed with `CK_` override both files.
+The config file is a TOML file at `~/.config/corridorkey/corridorkey.toml` by default. A project-level `corridorkey.toml` in the working directory overrides the global file.
 
-Source priority (lowest to highest): defaults, global file, project file, environment variables.
+Source priority (lowest to highest): defaults, global file, project file, runtime overrides.
 
 ## Top-Level Fields
 
@@ -26,7 +26,7 @@ Source priority (lowest to highest): defaults, global file, project file, enviro
 | `"mps"` | Apple Silicon (M1+, macOS 12.3+). |
 | `"cpu"` | CPU fallback. |
 
-`"auto"` always resolves to a single device — it does not expand to multiple GPUs. To use all available GPUs, pass `resolve_devices("all")` to `PipelineConfig.devices` at runtime.
+`"all"` is accepted by the config model and used by the Engine to enable multi-GPU dispatch. For Layer 2 callers, pass `resolve_devices("all")` to `PipelineConfig.devices`.
 
 ## Logging Settings
 

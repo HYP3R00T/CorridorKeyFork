@@ -1,17 +1,17 @@
 # First Run
 
-After installation, run `corridorkey init` once to complete setup. This command checks your environment, creates the config file, and downloads the inference model.
+After installation, run `ck init` once to complete setup. This command checks your environment, creates the config file, and downloads the inference model.
 
 ```shell
-corridorkey init
+ck init
 ```
 
 ## What Init Does
 
 Init runs three steps in order:
 
-1. Environment check - runs `corridorkey doctor` and prints a results table showing Python version, FFmpeg, GPU, and model status.
-2. Config file - creates `~/.config/corridorkey/corridorkey.yaml` with default settings if it does not already exist.
+1. Environment check - the `ck init` health check prints a results table showing Python version, FFmpeg, GPU, and model status.
+2. Config file - creates `~/.config/corridorkey/corridorkey.toml` with default settings if it does not already exist.
 3. Model download - checks whether the inference model is present and offers to download it if not.
 
 ## The Environment Check Table
@@ -43,7 +43,7 @@ If you decline the download, init prints the manual instructions:
 ```text
 To download manually, place greenformer_v2.pth in:
   ~/.config/corridorkey/models
-Then run corridorkey doctor to verify.
+Then run `ck init` to verify.
 ```
 
 ## After Init
@@ -51,13 +51,13 @@ Then run corridorkey doctor to verify.
 When init completes successfully it prints:
 
 ```text
-Init complete. Run `corridorkey wizard` to get started.
+Init complete. Run `ck` to get started.
 ```
 
-Run `corridorkey doctor` at any time to re-check the environment without modifying anything.
+Run `ck init` at any time to re-check the environment.
 
 ## Related
 
 - [Processing clips](processing.md)
 - [Troubleshooting](troubleshooting.md)
-- [Setup commands](../dev/packages/corridorkey-cli/setup-commands.md)
+- [Commands](../corridorkey-cli/commands.md)

@@ -2,7 +2,7 @@
 
 `PipelineEvents` is the package's progress reporting mechanism. It is a dataclass of optional callbacks that the pipeline fires as work progresses. The interface assigns only the callbacks it needs; unassigned callbacks are silently ignored.
 
-Source: [`corridorkey/events.py`](https://github.com/hyp3r00t/CorridorKey/blob/main/packages/corridorkey/src/corridorkey/events.py)
+Source: [`corridorkey/events.py`](https://github.com/hyp3r00t/CorridorKeyFork/blob/main/packages/corridorkey/src/corridorkey/events.py)
 
 ## Purpose
 
@@ -10,7 +10,7 @@ The pipeline runs on worker threads. The interface needs a way to receive notifi
 
 ## How It Works
 
-A `PipelineEvents` instance is created by the interface and passed into `PipelineConfig` before the runner starts. The same instance is shared across all three workers, so the interface gets a unified view of the whole pipeline from a single object.
+A `PipelineEvents` instance is created by the interface and passed into `PipelineConfig` before the internal frame loop starts. The same instance is shared across the preprocess, inference, and postwrite workers, so the interface gets a unified view of the whole pipeline from a single object.
 
 The callbacks are plain Python callables. They can be functions, methods, or lambdas. The only constraint is that they must return quickly. The worker thread that fires a callback blocks until it returns. A slow callback stalls the pipeline.
 
@@ -60,5 +60,5 @@ If a callback needs to do something slow (write to a database, send a network re
 
 ## Related
 
-- [Runner](runner.md) - How events are attached to the runner.
+- [Engine](runner.md) - How the whole-clip orchestrator uses these callbacks.
 - [Reference - events](../reference/events.md) - Full symbol reference.

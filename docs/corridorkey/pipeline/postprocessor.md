@@ -94,9 +94,9 @@ Two composite outputs are built:
 
 `make_preview()` builds a checkerboard preview composite for visual QC. FG and the checkerboard background are both converted to linear light, composited (`fg_linear * alpha + bg_linear * (1 - alpha)`), then converted back to sRGB. The checkerboard is cached per `(width, height, checker_size)` to avoid re-generating it on every frame.
 
-### Step 6 - Return PostprocessedFrame
+### Step 6 - Return ProcessedFrame
 
-All arrays are assembled into a `PostprocessedFrame` and returned.
+All arrays are assembled into a `ProcessedFrame` and returned.
 
 ## Debug Dump
 
@@ -106,7 +106,7 @@ When `config.debug_dump` is `True`, PNG snapshots of alpha and fg are written to
 
 ```python
 @dataclass
-class PostprocessedFrame:
+class ProcessedFrame:
     alpha: np.ndarray      # [H, W, 1] float32, linear, range 0-1
     fg: np.ndarray         # [H, W, 3] float32, sRGB straight, range 0-1
     processed: np.ndarray  # [H, W, 4] float32, premultiplied linear RGBA, range 0-1
@@ -120,5 +120,5 @@ class PostprocessedFrame:
 ## Related
 
 - [Inference Stage](inference.md) - Produces `InferenceResult` consumed here.
-- [Writer Stage](writer.md) - Consumes `PostprocessedFrame`.
+- [Writer Stage](writer.md) - Consumes `ProcessedFrame`.
 - [Configuration](../configuration.md) - `PostprocessSettings` reference.
