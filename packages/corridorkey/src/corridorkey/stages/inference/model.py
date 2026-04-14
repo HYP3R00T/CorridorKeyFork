@@ -1,13 +1,3 @@
-"""Neural network architecture for the CorridorKey chroma keying model.
-
-Defines GreenFormer, a hybrid transformer and CNN model built on a Hiera
-encoder with two SegFormer-style decoder heads (alpha and foreground) and
-an optional dilated CNN refiner stage.
-
-Migrated from corridorkey-core/model_transformer.py into corridorkey
-so that corridorkey is fully self-contained.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -343,14 +333,8 @@ class GreenFormer(nn.Module):
             logger.info("Refiner module DISABLED (backbone-only mode)")
 
     def _patch_input_layer(self, in_channels: int) -> None:
-        """Extend the patch embedding convolution to accept more than 3 input channels.
-
-        Copies the existing RGB weights into the first 3 input channels of the new
-        convolution and initializes any additional channels to zero.
-
-        Args:
-            in_channels: Total number of input channels after patching.
-        """
+        # Extend the patch embedding convolution to accept more than 3 input channels.
+        # Copies existing RGB weights into the first 3 channels; extra channels init to zero.
         model_obj = getattr(self.encoder, "model", None)
         patch_embed_obj = getattr(model_obj, "patch_embed", None) if model_obj is not None else None
         if patch_embed_obj is None:

@@ -1,18 +1,7 @@
-"""Inference stage — orchestrator.
-
-Public entry point: ``run_inference(frame, model, config) -> InferenceResult``.
-
-Owns:
-  - fp16 autocast
-  - tiled refiner (tiled refiner_mode)
-  - VRAM probing for "auto" refiner_mode
-  - converting raw model output to InferenceResult
-
-Does NOT own:
-  - model loading (loader.py)
-  - despeckle / despill / compositing (postprocessor stage)
-  - writing to disk (writer stage)
-"""
+# Inference orchestrator — public entry point: run_inference(frame, model, config).
+# Owns: fp16 autocast, tiled refiner hook, VRAM probing for "auto" mode,
+#       converting raw model output to InferenceResult.
+# Does NOT own: model loading, postprocessing, writing to disk.
 
 from __future__ import annotations
 
@@ -118,13 +107,8 @@ def run_inference(
 
 
 def _free_vram_if_needed(device: str) -> None:
-    """Release cached VRAM allocations on low-memory devices.
-
-    On GPUs with <6 GB VRAM, PyTorch's caching allocator can hold onto
-    freed blocks and cause OOM on the next frame. Calling empty_cache()
-    after each frame keeps peak usage flat at the cost of a small sync.
-    Only called when VRAM < 6 GB to avoid the sync overhead on larger GPUs.
-    """
+    # Release cached VRAM on low-memory GPUs (<6 GB) after each frame to prevent OOM.
+    # empty_cache() is skipped on larger GPUs to avoid the sync overhead.
     dev = torch.device(device)
     if dev.type != "cuda":
         return
@@ -140,15 +124,8 @@ def _free_vram_if_needed(device: str) -> None:
 
 
 def _should_tile_refiner(config: InferenceConfig, resolved_refiner_mode: str | None = None) -> bool:
-    """Return True if the refiner should run in tiled mode.
-
-    Args:
-        config: Inference configuration.
-        resolved_refiner_mode: Pre-resolved mode from a prior VRAM probe
-            ("full_frame" or "tiled"). When provided, takes priority over
-            everything else — avoids pynvml overhead on every frame when
-            called from ``run_inference`` via ``TorchBackend.run()``.
-    """
+    # Return True if the refiner should run in tiled mode.
+    # resolved_refiner_mode takes full priority when provided — avoids pynvml overhead per frame.
     if not config.use_refiner:
         return False
 
@@ -178,13 +155,8 @@ def _should_tile_refiner(config: InferenceConfig, resolved_refiner_mode: str | N
 
 
 def _probe_vram_gb(device: str) -> float:
-    """Return total VRAM in GB for the given device. Returns 0.0 on failure.
-
-    Short-circuits immediately for non-CUDA devices (CPU, MPS) to avoid
-    unnecessary pynvml import and init attempts. Correctly handles multi-GPU
-    setups by parsing the device index from the device string (e.g. "cuda:1"
-    → index 1). Falls back to index 0 for bare "cuda" strings.
-    """
+    # Return total VRAM in GB for the given CUDA device. Returns 0.0 on failure or non-CUDA.
+    # Tries pynvml first, falls back to torch.cuda.get_device_properties.
     dev = torch.device(device)
     if dev.type not in ("cuda", "rocm"):
         return 0.0
@@ -212,12 +184,8 @@ def _probe_vram_gb(device: str) -> float:
 
 
 class _TiledRefinerState:
-    """Mutable bypass flag shared between the hook and the tiled runner.
-
-    Using an object (rather than a closure list) matches the core engine's
-    ``self._bypass_tiled_refiner_hook`` pattern and avoids any closure
-    scoping surprises.
-    """
+    # Mutable bypass flag shared between the hook and the tiled runner.
+    # Using an object avoids closure scoping surprises with a plain list.
 
     __slots__ = ("bypass",)
 
@@ -226,18 +194,8 @@ class _TiledRefinerState:
 
 
 def _make_tiled_refiner_hook(refiner: nn.Module, refiner_scale: float = 1.0):
-    """Return a forward hook that replaces the refiner with a tiled pass.
-
-    The ``state.bypass`` flag is set to True before each tile call inside
-    ``_run_refiner_tiled`` and reset in a ``finally`` block, preventing the
-    hook from firing recursively for tile-level refiner calls.
-
-    Args:
-        refiner: The CNNRefinerModule (used only for type clarity; the hook
-            receives the module as its first argument at call time).
-        refiner_scale: Multiplier applied to the tiled delta output before
-            accumulation. 1.0 = full refinement, 0.0 = no refinement.
-    """
+    # Return a forward hook that replaces the refiner's full-frame pass with a tiled pass.
+    # state.bypass prevents recursive hook firing during tile-level refiner calls.
     state = _TiledRefinerState()
 
     def hook(module: nn.Module, inputs: tuple, output: torch.Tensor) -> torch.Tensor:
@@ -261,29 +219,9 @@ def _run_refiner_tiled(
     overlap: int = REFINER_TILE_OVERLAP,
     refiner_scale: float = 1.0,
 ) -> torch.Tensor:
-    """Run the CNN refiner in overlapping tiles to keep VRAM flat.
-
-    Splits the full-resolution tensor into overlapping tiles, runs the
-    refiner on each, and blends results back using linear ramp weights in
-    the overlap regions. Identical output to full-frame inference.
-
-    GroupNorm does not support bf16/fp16 on CUDA — the tiled pass always
-    upcasts to float32 and casts the result back to the original dtype.
-
-    Args:
-        refiner: The CNNRefinerModule.
-        rgb: [B, 3, H, W] float tensor.
-        coarse: [B, 4, H, W] float tensor.
-        state: Shared bypass flag — set to True around each tile call so the
-            hook does not fire recursively for tile-level refiner invocations.
-        tile_size: Spatial size of each tile (square).
-        overlap: Overlap in pixels between adjacent tiles.
-        refiner_scale: Multiplier applied to each tile's delta output before
-            accumulation. Mirrors the full-frame ``refiner_scale`` behaviour.
-
-    Returns:
-        [B, 4, H, W] delta logits tensor, same dtype as coarse.
-    """
+    # Run the CNN refiner in overlapping tiles to keep VRAM flat.
+    # Blends tile outputs with linear ramp weights in overlap regions.
+    # Always upcasts to float32 (GroupNorm doesn't support bf16/fp16).
     b, _, h, w = rgb.shape
     orig_dtype = rgb.dtype
 

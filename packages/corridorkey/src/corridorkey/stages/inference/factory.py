@@ -1,23 +1,6 @@
-"""Inference stage — backend factory.
-
-Single entry point for constructing an inference backend. Callers receive a
-``ModelBackend`` instance that always satisfies the same protocol regardless
-of whether PyTorch or MLX is running underneath.
-
-Backend resolution order:
-    ``InferenceConfig.backend`` field > auto-detect
-
-Auto-detect:
-    Apple Silicon + ``corridorkey_mlx`` importable + ``.safetensors`` present → mlx
-    Otherwise → torch
-
-Usage::
-
-    config = load_config().to_inference_config(device="cuda")
-    backend = load_model_backend(config)
-    result = backend.run(preprocessed_frame)
-    print(backend.resolved_config)
-"""
+# Backend factory — single entry point for constructing an inference backend.
+# Resolution order: InferenceConfig.backend field > auto-detect.
+# Auto-detect: Apple Silicon + corridorkey_mlx installed → mlx, else → torch.
 
 from __future__ import annotations
 
@@ -120,10 +103,8 @@ def discover_checkpoint(checkpoint_dir: str | Path, backend: str = "torch") -> P
 
 
 def _resolve_backend(requested: str) -> str:
-    """Resolve the backend string to ``"torch"`` or ``"mlx"``.
-
-    Priority: ``config.backend`` field > auto-detect.
-    """
+    # Resolve the backend string to "torch" or "mlx".
+    # Priority: config.backend field > auto-detect.
     if requested == "auto":
         return _auto_detect()
 
@@ -137,7 +118,7 @@ def _resolve_backend(requested: str) -> str:
 
 
 def _auto_detect() -> str:
-    """Try MLX on Apple Silicon, fall back to torch."""
+    # Try MLX on Apple Silicon, fall back to torch.
     if sys.platform != "darwin" or platform.machine() != "arm64":
         logger.info("Not Apple Silicon — using torch backend")
         return "torch"
@@ -163,7 +144,7 @@ def _assert_mlx_available() -> None:  # pragma: no cover
 
 
 def _load_mlx_backend(config: InferenceConfig) -> ModelBackend:  # pragma: no cover
-    """Load the MLX engine and wrap it in MLXBackend."""
+    # Load the MLX engine and wrap it in MLXBackend.
     from corridorkey.stages.inference.backend import MLXBackend
 
     if config.img_size == 0:

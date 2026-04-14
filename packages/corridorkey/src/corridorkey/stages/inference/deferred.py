@@ -1,29 +1,3 @@
-"""Deferred GPU→CPU DMA transfer for inference results.
-
-After the model forward pass, alpha and fg tensors sit on the GPU. The
-postprocessor needs them on CPU. Normally this transfer is synchronous —
-the inference thread blocks until the copy completes before starting the
-next frame's forward pass.
-
-``DeferredTransfer`` starts the copy on a dedicated CUDA copy stream
-immediately after inference and returns a handle. The inference thread
-can then start the next frame's forward pass on the compute stream while
-the DMA runs in parallel on the copy stream. The postwrite worker calls
-``resolve()`` when it needs the data, which blocks only on the specific
-CUDA event for that transfer.
-
-On CPU or MPS devices the deferred path is a no-op — ``resolve()``
-returns the tensors directly.
-
-Usage::
-
-    # In the inference worker (after model forward):
-    transfer = DeferredTransfer.start(alpha, fg, meta, copy_stream)
-
-    # In the postwrite worker (when ready to postprocess):
-    alpha_t, fg_t, meta = transfer.resolve()
-"""
-
 from __future__ import annotations
 
 import torch

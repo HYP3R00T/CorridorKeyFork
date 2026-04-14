@@ -1,15 +1,3 @@
-"""Inference stage — backend protocol and implementations.
-
-Defines the ``ModelBackend`` protocol that all inference backends must satisfy,
-plus the two concrete implementations:
-
-  - ``TorchBackend``  — wraps the existing GreenFormer loader + orchestrator.
-  - ``MLXBackend``    — wraps ``corridorkey-mlx`` (Apple Silicon only, optional).
-
-Callers should use ``factory.load_model_backend()`` rather than instantiating these
-directly. The protocol ensures both backends are interchangeable.
-"""
-
 from __future__ import annotations
 
 import logging

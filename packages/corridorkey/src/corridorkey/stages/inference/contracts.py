@@ -1,18 +1,3 @@
-"""Inference stage — output contract.
-
-InferenceResult is the single output type of the inference stage.
-It carries raw model predictions (still on device, still at model resolution)
-and the FrameMeta needed by postprocessing to resize back to source resolution.
-
-.. note::
-    **Pass-through type.** Downstream consumers (GUI, CLI, plugin) do not
-    construct or inspect ``InferenceResult`` directly. In the frame loop
-    (Path 2), it flows from ``backend.run(preprocessed)`` straight into
-    ``postprocess_frame(result, config)`` without the caller needing to
-    read any of its fields. It is exported so that the type annotation is
-    available to callers who store the return value in a typed variable.
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
