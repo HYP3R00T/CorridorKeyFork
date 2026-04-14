@@ -6,11 +6,9 @@ argument-hint: 'Name the stage or specific file to audit (e.g. "loader orchestra
 
 # Skill: audit
 
-Systematically read and examine a file or stage. The output is a findings report — not code changes.
-The user decides what to act on after seeing the report.
+Systematically read and examine a file or stage. The output is a findings report — not code changes. The user decides what to act on after seeing the report.
 
-The value of this skill is that it forces a complete read before any opinion is formed.
-Partial reads lead to partial understanding, which leads to wrong fixes. Read everything first.
+The value of this skill is that it forces a complete read before any opinion is formed. Partial reads lead to partial understanding, which leads to wrong fixes. Read everything first.
 
 ## What this skill does NOT do
 
@@ -36,9 +34,7 @@ If given a whole stage directory, read every file in it:
 - Any helpers (`normaliser.py`, `validator.py`, `extractor.py`, etc.)
 - The `__init__.py` and the engine call site
 
-If given a very large scope (many files), read the `__init__.py` files first to understand
-the public surface, then read the implementation files. Do not skip any file that is in scope.
-Form a complete picture before reporting anything.
+If given a very large scope (many files), read the `__init__.py` files first to understand the public surface, then read the implementation files. Do not skip any file that is in scope. Form a complete picture before reporting anything.
 
 ### 2. Examine — challenge every line
 
@@ -91,8 +87,6 @@ Structure the report as one section per file:
     - *Needs cleanup* — small targeted fixes: dead code, wrong docstrings, redundant parameters, minor naming
     - *Needs rethink* — structural issues: wrong abstraction, logic in the wrong layer, complexity that doesn't match the problem
 
-End with a **Summary** of the most important findings across all files, ranked by impact.
-Each item in the summary should name the file, the issue, and the suggested next skill to use
-(e.g. "→ fix-code", "→ update-docstrings", "→ write-tests").
+End with a **Summary** of the most important findings across all files, ranked by impact. Each item in the summary should name the file, the issue, and the suggested next skill to use (e.g. "→ fix-code", "→ update-docstrings", "→ write-tests").
 
 The user will decide what to act on next.
