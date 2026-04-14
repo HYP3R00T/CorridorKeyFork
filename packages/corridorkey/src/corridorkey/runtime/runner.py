@@ -272,9 +272,14 @@ class _InferenceWorker:
         self.resolved_refiner_mode = resolved_refiner_mode
         self.events = events
         self.cancel_event = cancel_event
+        # Dedicated copy stream for async GPU→CPU DMA (CUDA only).
+        self._copy_stream: torch.cuda.Stream | None = None
+        if torch.device(config.device).type == "cuda":
+            self._copy_stream = torch.cuda.Stream(device=config.device)
 
     def run(self) -> None:
         from corridorkey.runtime.queue import STOP
+        from corridorkey.stages.inference.deferred import DeferredTransfer
         from corridorkey.stages.inference.orchestrator import run_inference
         from corridorkey.stages.preprocessor import PreprocessedFrame
 
@@ -306,7 +311,10 @@ class _InferenceWorker:
                     result = run_inference(
                         item, self.model, self.config, resolved_refiner_mode=self.resolved_refiner_mode
                     )
-                    self.inference_queue.put(result)
+                    # Start async DMA immediately after inference so the copy
+                    # runs in parallel with the next frame's forward pass.
+                    transfer = DeferredTransfer.start(result.alpha, result.fg, result.meta, self._copy_stream)
+                    self.inference_queue.put(transfer)
                     if self.events:
                         self.events.inference_queued(item.meta.frame_index)
                         self.events.queue_depth(len(self.preprocess_queue), len(self.inference_queue))

@@ -95,7 +95,14 @@ class TestInferenceWorker:
             ).start()
             t.join(timeout=5)
 
-        assert out_q.get() is result
+        item = out_q.get()
+        from corridorkey.stages.inference.deferred import DeferredTransfer
+
+        if isinstance(item, DeferredTransfer):
+            alpha, fg, meta = item.resolve()
+            assert meta is result.meta
+        else:
+            assert item is result
         assert out_q.get() is STOP
 
     def test_non_last_worker_does_not_send_stop(self, tmp_path: Path):
@@ -155,10 +162,17 @@ class TestInferenceWorker:
             item = out_q.get()
             if item is STOP:
                 break
-            received.append(item)
+            from corridorkey.stages.inference.deferred import DeferredTransfer
+
+            if isinstance(item, DeferredTransfer):
+                _, _, meta = item.resolve()
+                received.append(meta)
+            else:
+                assert isinstance(item, InferenceResult)
+                received.append(item.meta)
 
         assert len(received) == n_frames
-        assert {r.meta.frame_index for r in received} == set(range(n_frames))
+        assert {m.frame_index for m in received} == set(range(n_frames))
 
 
 # run_clip — validation

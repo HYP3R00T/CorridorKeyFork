@@ -25,7 +25,6 @@ from pathlib import Path
 from corridorkey.errors import FrameReadError, PostprocessError, WriteFailureError
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import STOP, BoundedQueue
-from corridorkey.stages.inference import InferenceResult
 from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.validator import list_frames
 from corridorkey.stages.postprocessor import PostprocessConfig, postprocess_frame
@@ -229,7 +228,10 @@ class PostWriteWorker:
                 if item is STOP:
                     self.inference_queue.put_stop()
                     break
-                assert isinstance(item, InferenceResult)
+                from corridorkey.stages.inference.contracts import InferenceResult
+                from corridorkey.stages.inference.deferred import DeferredTransfer
+
+                assert isinstance(item, (DeferredTransfer, InferenceResult))
                 frame_index = item.meta.frame_index
                 future = pool.submit(self._process_one, item, write_cfg)
                 futures.append((frame_index, future))
@@ -243,11 +245,24 @@ class PostWriteWorker:
         if self.events:
             self.events.stage_done("postwrite")
 
-    def _process_one(self, item: InferenceResult, write_cfg: WriteConfig) -> int:
-        """Postprocess and write one frame. Returns frame_index on success."""
-        processed = postprocess_frame(item, self.postprocess_config, output_dir=self.output_dir)
+    def _process_one(self, item: object, write_cfg: WriteConfig) -> int:
+        """Resolve a DeferredTransfer (or plain InferenceResult), postprocess and write."""
+        from corridorkey.stages.inference.contracts import InferenceResult
+        from corridorkey.stages.inference.deferred import DeferredTransfer
+
+        if isinstance(item, DeferredTransfer):
+            # Resolve the async DMA — blocks only on this transfer's CUDA event.
+            alpha_cpu, fg_cpu, meta = item.resolve()
+            # Reconstruct InferenceResult with CPU tensors so postprocess_frame
+            # can work without any further GPU→CPU transfers.
+            result = InferenceResult(alpha=alpha_cpu, fg=fg_cpu, meta=meta)
+        else:
+            assert isinstance(item, InferenceResult)
+            result = item
+
+        processed = postprocess_frame(result, self.postprocess_config, output_dir=self.output_dir)
         write_frame(processed, write_cfg)
-        return item.meta.frame_index
+        return result.meta.frame_index
 
     def _collect(self, frame_index: int, future: object) -> None:
         """Handle a completed future — fire events or log errors."""

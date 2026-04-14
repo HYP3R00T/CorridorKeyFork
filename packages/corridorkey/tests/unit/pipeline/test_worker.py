@@ -233,7 +233,14 @@ class TestInferenceWorker:
             t = self._worker(tmp_path, in_q, out_q).start()
             t.join(timeout=5)
 
-        assert out_q.get() is result
+        item = out_q.get()
+        from corridorkey.stages.inference.deferred import DeferredTransfer
+
+        if isinstance(item, DeferredTransfer):
+            _, _, meta = item.resolve()
+            assert meta is result.meta
+        else:
+            assert item is result
         assert out_q.get() is STOP
 
     def test_stop_propagates_downstream(self, tmp_path: Path):
@@ -265,9 +272,17 @@ class TestInferenceWorker:
             item = out_q.get()
             if item is STOP:
                 break
-            received.append(item)
+            from corridorkey.stages.inference.deferred import DeferredTransfer
 
-        assert received == results
+            if isinstance(item, DeferredTransfer):
+                _, _, meta = item.resolve()
+                received.append(meta)
+            else:
+                assert isinstance(item, InferenceResult)
+                received.append(item.meta)
+
+        assert len(received) == len(results)
+        assert [m.frame_index for m in received] == [r.meta.frame_index for r in results]
 
     def test_inference_error_skips_frame(self, tmp_path: Path):
         in_q: BoundedQueue = BoundedQueue(10)
@@ -289,7 +304,14 @@ class TestInferenceWorker:
             t = self._worker(tmp_path, in_q, out_q).start()
             t.join(timeout=5)
 
-        assert out_q.get() is result2
+        item = out_q.get()
+        from corridorkey.stages.inference.deferred import DeferredTransfer
+
+        if isinstance(item, DeferredTransfer):
+            _, _, meta = item.resolve()
+            assert meta is result2.meta
+        else:
+            assert item is result2
         assert out_q.get() is STOP
 
     def test_stop_sent_even_on_all_errors(self, tmp_path: Path):
