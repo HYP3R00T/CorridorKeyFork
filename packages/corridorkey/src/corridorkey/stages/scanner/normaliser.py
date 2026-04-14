@@ -89,6 +89,9 @@ def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedClip | None]:
 
     alpha_path, alpha_skip = _find_asset(clip_dir, "AlphaHint")
     if alpha_skip is not None:
+        # AlphaHint ambiguity is recoverable — the clip can still be built without alpha
+        # and alpha will be generated externally. Input ambiguity is not recoverable
+        # (handled above) because there is no way to know which video is the source.
         logger.warning(
             "Clip '%s': AlphaHint skipped (%s) — clip will need alpha generated", clip_dir.name, alpha_skip.reason
         )
