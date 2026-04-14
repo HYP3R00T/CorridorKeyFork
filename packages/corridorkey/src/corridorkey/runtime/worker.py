@@ -7,15 +7,18 @@ or when the shared ``cancel_event`` is set.
 Workers:
     PreprocessWorker   — reads frames from disk, preprocesses, pushes tensors
     PostWriteWorker    — pulls InferenceResult, postprocesses, writes to disk
+                         Uses a ThreadPoolExecutor for parallel postprocess+write
+                         so multiple GPUs can drain at full throughput.
 
 The inference worker lives in runner.py as ``_InferenceWorker`` because it
-needs the shared ``_AtomicCounter`` for coordinated shutdown across N devices.
+needs the shared remaining counter for coordinated shutdown across N devices.
 """
 
 from __future__ import annotations
 
 import logging
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -113,6 +116,10 @@ class PreprocessWorker:
 class PostWriteWorker:
     """Pulls InferenceResult, postprocesses, and writes frames to disk.
 
+    Uses a ThreadPoolExecutor so multiple GPUs can drain at full throughput.
+    The pool size defaults to max(2, n_gpus * 2) — enough threads to keep
+    every GPU's output draining without unbounded memory growth.
+
     Attributes:
         inference_queue: Queue to pull InferenceResult objects from.
         output_dir: Directory to write output frames into.
@@ -120,10 +127,9 @@ class PostWriteWorker:
         write_config: Writer options (formats, enabled outputs).
             If None, a default WriteConfig pointing at output_dir is used.
         total_frames: Total frame count passed to frame_written events.
+        n_write_workers: Thread pool size. 0 = auto (max(2, cpu_count // 4)).
         events: Optional pipeline event callbacks.
         cancel_event: Optional event that signals the worker to stop early.
-            When set, the worker exits after the current frame and sends STOP
-            downstream so the rest of the pipeline drains cleanly.
     """
 
     inference_queue: BoundedQueue
@@ -131,48 +137,73 @@ class PostWriteWorker:
     postprocess_config: PostprocessConfig = field(default_factory=PostprocessConfig)
     write_config: WriteConfig | None = None
     total_frames: int = 0
+    n_write_workers: int = 0
     events: PipelineEvents | None = None
     cancel_event: threading.Event | None = None
 
     def run(self) -> None:
         """Entry point for the postprocess+write thread."""
+        import os
+
         if self.events:
             self.events.stage_start("postwrite", self.total_frames)
+
         write_cfg = self.write_config or WriteConfig(output_dir=self.output_dir)
-        while True:
-            if self.cancel_event and self.cancel_event.is_set():
-                logger.debug("postwrite_worker: cancelled, draining queue")
-                self.inference_queue.put_stop()
-                break
-            item = self.inference_queue.get()
-            if item is STOP:
-                self.inference_queue.put_stop()
-                break
-            assert isinstance(item, InferenceResult)
-            try:
-                processed = postprocess_frame(item, self.postprocess_config, output_dir=self.output_dir)
-                write_frame(processed, write_cfg)
-                logger.debug("postwrite_worker: wrote frame %d", item.meta.frame_index)
-                if self.events:
-                    self.events.frame_written(item.meta.frame_index, self.total_frames)
-            except WriteFailureError as e:
-                logger.error("postwrite_worker: write failed frame %d — %s", item.meta.frame_index, e)
-                if self.events:
-                    self.events.frame_error("postwrite", item.meta.frame_index, e)
-            except OSError as e:
-                typed = WriteFailureError(str(getattr(e, "filename", "unknown")), str(e))
-                logger.error("postwrite_worker: write failed frame %d — %s", item.meta.frame_index, typed)
-                if self.events:
-                    self.events.frame_error("postwrite", item.meta.frame_index, typed)
-            except Exception as e:
-                typed = PostprocessError(item.meta.frame_index, str(e))
-                logger.error("postwrite_worker: postprocess failed frame %d — %s", item.meta.frame_index, typed)
-                if self.events:
-                    self.events.frame_error("postwrite", item.meta.frame_index, typed)
+        n_workers = self.n_write_workers or max(2, (os.cpu_count() or 4) // 4)
+
+        futures: list = []
+
+        with ThreadPoolExecutor(max_workers=n_workers, thread_name_prefix="postwrite") as pool:
+            while True:
+                if self.cancel_event and self.cancel_event.is_set():
+                    logger.debug("postwrite_worker: cancelled, draining queue")
+                    self.inference_queue.put_stop()
+                    break
+                item = self.inference_queue.get()
+                if item is STOP:
+                    self.inference_queue.put_stop()
+                    break
+                assert isinstance(item, InferenceResult)
+                frame_index = item.meta.frame_index
+                future = pool.submit(self._process_one, item, write_cfg)
+                futures.append((frame_index, future))
+            # pool.__exit__ waits for all submitted futures to complete
+
+        # Collect results and fire events after all futures are done.
+        for frame_index, future in futures:
+            self._collect(frame_index, future)
 
         logger.debug("postwrite_worker: done")
         if self.events:
             self.events.stage_done("postwrite")
+
+    def _process_one(self, item: InferenceResult, write_cfg: WriteConfig) -> int:
+        """Postprocess and write one frame. Returns frame_index on success."""
+        processed = postprocess_frame(item, self.postprocess_config, output_dir=self.output_dir)
+        write_frame(processed, write_cfg)
+        return item.meta.frame_index
+
+    def _collect(self, frame_index: int, future: object) -> None:
+        """Handle a completed future — fire events or log errors."""
+        try:
+            future.result()  # type: ignore[union-attr]
+            logger.debug("postwrite_worker: wrote frame %d", frame_index)
+            if self.events:
+                self.events.frame_written(frame_index, self.total_frames)
+        except WriteFailureError as e:
+            logger.error("postwrite_worker: write failed frame %d — %s", frame_index, e)
+            if self.events:
+                self.events.frame_error("postwrite", frame_index, e)
+        except OSError as e:
+            typed = WriteFailureError(str(getattr(e, "filename", "unknown")), str(e))
+            logger.error("postwrite_worker: write failed frame %d — %s", frame_index, typed)
+            if self.events:
+                self.events.frame_error("postwrite", frame_index, typed)
+        except Exception as e:
+            typed = PostprocessError(frame_index, str(e))
+            logger.error("postwrite_worker: postprocess failed frame %d — %s", frame_index, typed)
+            if self.events:
+                self.events.frame_error("postwrite", frame_index, typed)
 
     def start(self) -> threading.Thread:
         t = threading.Thread(target=self.run, name="postwrite-worker", daemon=True)

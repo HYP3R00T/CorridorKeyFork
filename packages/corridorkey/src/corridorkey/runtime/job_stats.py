@@ -16,6 +16,9 @@ class JobStats:
         clips_cancelled: Clips interrupted by cancel().
         total_frames: Frames written across all completed clips.
         elapsed_seconds: Wall time from job_started to job_complete.
+        frames_per_second: Sustained throughput excluding the first-frame
+            Triton JIT warmup cost. 0.0 if not enough frames were processed
+            to compute a meaningful rate.
     """
 
     clips_processed: int = 0
@@ -24,3 +27,4 @@ class JobStats:
     clips_cancelled: int = 0
     total_frames: int = 0
     elapsed_seconds: float = 0.0
+    frames_per_second: float = 0.0

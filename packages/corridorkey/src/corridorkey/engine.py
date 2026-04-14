@@ -144,6 +144,7 @@ class Engine:
         self._cancel_event.clear()
         self._resolved_device: str | None = None
         self._pipeline_config: PipelineConfig | None = None
+        self._frame_times: list[float] = []  # timestamps of frame_done events
         start_time = time.monotonic()
         stats = JobStats()
 
@@ -173,6 +174,7 @@ class Engine:
             self._process_clip(clip, stats)
 
         stats.elapsed_seconds = time.monotonic() - start_time
+        stats.frames_per_second = self._compute_fps()
         self._emit("job_complete", stats)
         logger.info(
             "engine: job complete — processed=%d failed=%d skipped=%d cancelled=%d elapsed=%.1fs",
@@ -289,6 +291,29 @@ class Engine:
             self._emit("clip_error", stage, e)
             logger.error("engine: clip '%s' failed at stage '%s' — %s", clip.name, stage, e)
 
+    def _on_frame_done(self, index: int, total: int) -> None:
+        """Record frame completion time and emit frame_done event."""
+        self._frame_times.append(time.monotonic())
+        self._emit("frame_done", index, total)
+
+    def _compute_fps(self) -> float:
+        """Compute sustained fps excluding the first frame (JIT warmup cost).
+
+        Uses the timestamps of all frame_done events. Skips the first frame
+        so Triton compilation time doesn't drag down the displayed rate.
+        Returns 0.0 if fewer than 2 frames were processed after warmup.
+        """
+        times = self._frame_times
+        # Need at least 2 frames after warmup (index 0 = warmup, index 1+ = steady)
+        if len(times) < 2:
+            return 0.0
+        steady = times[1:]  # exclude first frame
+        elapsed = steady[-1] - steady[0]
+        if elapsed <= 0:
+            return 0.0
+        # frames / elapsed between first and last steady-state frame
+        return (len(steady) - 1) / elapsed
+
     def _run_alpha(self, manifest: ClipManifest) -> ClipManifest:
         """Stage 2 — call the registered alpha generator."""
         if self._alpha_generator is None:
@@ -316,7 +341,7 @@ class Engine:
         )
         total = manifest.frame_count
         events = PipelineEvents(
-            on_frame_written=lambda i, _t: self._emit("frame_done", i, total),
+            on_frame_written=lambda i, _t: self._on_frame_done(i, total),
             on_frame_error=lambda s, i, e: self._emit("frame_error", s, i, e),
             on_stage_start=lambda s, t: self._emit("stage_start", s, t),
             on_stage_done=lambda s: self._emit("stage_done", s),

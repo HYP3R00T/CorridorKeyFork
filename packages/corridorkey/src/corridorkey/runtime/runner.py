@@ -23,6 +23,7 @@ import torch.nn as nn
 
 from corridorkey.errors import JobCancelledError, ModelError
 from corridorkey.events import PipelineEvents
+from corridorkey.runtime.model_cache import get_default_cache
 from corridorkey.runtime.queue import BoundedQueue
 from corridorkey.runtime.worker import PostWriteWorker, PreprocessWorker
 from corridorkey.stages.inference import InferenceConfig
@@ -113,7 +114,6 @@ def run_clip(
     )
 
     models, resolved_refiner_mode = _load_models(devices, config)
-
     # Shared counter to detect when the last inference worker finishes
     # and should send STOP downstream. Protected by a lock.
     _remaining_lock = threading.Lock()
@@ -162,9 +162,12 @@ def _load_models(
     config: PipelineConfig,
     timeout: float = 300.0,
 ) -> tuple[list[nn.Module], str]:
-    """Load one model per device in parallel. Returns (models, resolved_refiner_mode)."""
-    from corridorkey.stages.inference.loader import load_model
+    """Load one model per device, using the process-level cache when possible.
 
+    For single-device runs the cache is consulted first — if the config
+    hash matches the cached model it is reused without reloading.
+    For multi-device runs each device loads independently (no sharing).
+    """
     assert config.inference is not None
 
     if config.resolved_refiner_mode is not None:
@@ -174,6 +177,7 @@ def _load_models(
     else:
         resolved_refiner_mode = config.inference.refiner_mode
 
+    # Pre-loaded model passed directly — skip cache.
     if config.model is not None:
         if len(devices) > 1:
             raise ValueError(
@@ -194,6 +198,20 @@ def _load_models(
                 f"{expected}. Move the model to the correct device before passing it."
             )
         return [config.model], resolved_refiner_mode or config.inference.refiner_mode
+
+    # Single device — use the process-level model cache.
+    if len(devices) == 1:
+        import dataclasses as _dc
+
+        single_config = _dc.replace(config.inference, device=devices[0])
+        try:
+            model, effective_mode = get_default_cache().get(single_config, resolved_refiner_mode)
+            return [model], effective_mode
+        except Exception as e:
+            raise ModelError(f"Failed to load model on {devices[0]}: {e}") from e
+
+    # Multi-device — load one model per device in parallel (no cache).
+    from corridorkey.stages.inference.loader import load_model
 
     models: list[nn.Module | None] = [None] * len(devices)
     errors: list[Exception | None] = [None] * len(devices)
@@ -262,6 +280,16 @@ class _InferenceWorker:
 
         if self.events:
             self.events.stage_start(f"inference[{self.config.device}]", 0)
+
+        # Defer torch.compile warmup to this thread so CUDA graph TLS is
+        # bound to the inference thread, not the calling thread.
+        warmup_fn = getattr(self.model, "warmup_on_current_thread", None)
+        if callable(warmup_fn):
+            try:
+                warmup_fn()
+            except Exception as e:
+                logger.warning("inference[%s]: warmup failed — %s", self.config.device, e)
+
         try:
             while True:
                 if self.cancel_event and self.cancel_event.is_set():
