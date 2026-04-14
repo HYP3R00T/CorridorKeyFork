@@ -113,8 +113,11 @@ class TestErrorsExported:
             "DeviceError",
             "ModelError",
             "ClipScanError",
+            "ClipLoadError",
             "ExtractionError",
             "FrameMismatchError",
+            "InferenceError",
+            "PostprocessError",
             "JobCancelledError",
             "FrameReadError",
             "WriteFailureError",
@@ -133,6 +136,7 @@ class TestErrorsExported:
     def test_all_errors_catchable_as_base(self):
         from corridorkey import (
             AlphaGeneratorError,
+            ClipLoadError,
             ClipScanError,
             CorridorKeyError,
             DeviceError,
@@ -140,8 +144,10 @@ class TestErrorsExported:
             ExtractionError,
             FrameMismatchError,
             FrameReadError,
+            InferenceError,
             JobCancelledError,
             ModelError,
+            PostprocessError,
             VRAMInsufficientError,
             WriteFailureError,
         )
@@ -150,14 +156,17 @@ class TestErrorsExported:
             EngineError("x"),
             AlphaGeneratorError("clip"),
             ClipScanError("x"),
+            ClipLoadError("clip", "detail"),
             ExtractionError("clip", "detail"),
             FrameMismatchError("clip", 3, 2),
             FrameReadError("x"),
+            InferenceError(0, "detail"),
+            PostprocessError(0, "detail"),
             JobCancelledError("clip"),
             DeviceError("x"),
             ModelError("x"),
             WriteFailureError("path"),
-            VRAMInsufficientError(10.0, 4.0),
+            VRAMInsufficientError("oom"),
         ]
         for err in errors:
             assert isinstance(err, CorridorKeyError)

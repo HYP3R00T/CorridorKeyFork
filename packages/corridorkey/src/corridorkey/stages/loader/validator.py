@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from corridorkey.errors import FrameMismatchError
+from corridorkey.errors import ClipLoadError, FrameMismatchError
 from corridorkey.infra.utils import natural_sort_key
 
 IMAGE_EXTENSIONS: frozenset[str] = frozenset({".exr", ".png", ".jpg", ".jpeg", ".tiff", ".tif"})
@@ -128,7 +128,7 @@ def validate(
         input_scan = scan_frames(frames_dir)
         input_count = input_scan.count
         if input_count == 0:
-            raise ValueError(f"Clip '{clip_name}': no image frames found in {frames_dir}")
+            raise ClipLoadError(clip_name, f"no image frames found in {frames_dir}")
 
     alpha_scan: FrameScan | None = None
     if alpha_frames_dir is not None:

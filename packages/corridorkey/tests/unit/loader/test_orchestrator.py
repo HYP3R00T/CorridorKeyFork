@@ -100,7 +100,9 @@ class TestLoadImageSequence:
         input_dir = clip_dir / "Input"
         input_dir.mkdir(parents=True)
         clip = Clip(name="my_clip", root=clip_dir, input_path=input_dir, alpha_path=None)
-        with pytest.raises(ValueError, match="no image frames"):
+        from corridorkey.errors import ClipLoadError
+
+        with pytest.raises(ClipLoadError, match="no image frames"):
             load(clip)
 
     def test_alpha_frame_count_mismatch_raises(self, tmp_path: Path):

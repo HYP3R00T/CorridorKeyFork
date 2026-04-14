@@ -7,15 +7,18 @@ Hierarchy
 ---------
 CorridorKeyError
 ├── EngineError                 — engine: contract violations before processing starts
-├── AlphaGeneratorError         — engine: alpha slot unfilled when clip needs alpha
-├── ClipScanError               — scanner: path/structure problems
+├── AlphaGeneratorError         — engine: alpha slot unfilled or bad return
+├── ClipScanError               — scanner: path/structure problems, permission errors
+├── ClipLoadError               — loader: empty input, output dir creation failure
 ├── ExtractionError             — loader: video extraction failures
 ├── FrameMismatchError          — loader: input/alpha count mismatch
 ├── FrameReadError              — preprocessor: frame file unreadable
-├── WriteFailureError           — writer: cv2.imwrite failure
-├── VRAMInsufficientError       — inference: not enough GPU memory
+├── InferenceError              — inference: model forward pass failure, OOM
+├── PostprocessError            — postprocessor: despill/despeckle/composite failure
+├── WriteFailureError           — writer: write failure (cv2 or OS)
+├── VRAMInsufficientError       — inference: not enough GPU memory (CUDA OOM)
 ├── DeviceError                 — infra: requested device unavailable
-├── ModelError                  — infra: model download or checksum failure
+├── ModelError                  — infra: model download, load, or checksum failure
 ├── InvalidStateTransitionError — clip state machine: illegal transition
 └── JobCancelledError           — pipeline: job cancelled by the caller
 """
@@ -28,7 +31,23 @@ class CorridorKeyError(Exception):
 
 
 class ClipScanError(CorridorKeyError):
-    """Raised when a clip path cannot be scanned or has an unrecognised structure."""
+    """Raised when a clip path cannot be scanned or has an unrecognised structure.
+
+    Also raised for permission errors and filesystem errors during scanning.
+    """
+
+
+class ClipLoadError(CorridorKeyError):
+    """Raised when a clip cannot be loaded into a manifest.
+
+    Examples: input directory has no frames, output directory cannot be
+    created, clip structure is invalid after extraction.
+    """
+
+    def __init__(self, clip_name: str, detail: str) -> None:
+        self.clip_name = clip_name
+        self.detail = detail
+        super().__init__(f"Clip '{clip_name}': load failed — {detail}")
 
 
 class ExtractionError(CorridorKeyError):
@@ -56,21 +75,62 @@ class FrameReadError(CorridorKeyError):
     """Raised when a frame file cannot be read or decoded."""
 
 
-class WriteFailureError(CorridorKeyError):
-    """Raised when a write operation fails."""
+class InferenceError(CorridorKeyError):
+    """Raised when the model forward pass fails for a frame.
 
-    def __init__(self, path: str) -> None:
+    Wraps RuntimeError from PyTorch (including CUDA errors). When the
+    failure is specifically an out-of-memory condition, VRAMInsufficientError
+    is raised instead.
+    """
+
+    def __init__(self, frame_index: int, detail: str) -> None:
+        self.frame_index = frame_index
+        self.detail = detail
+        super().__init__(f"Inference failed at frame {frame_index}: {detail}")
+
+
+class PostprocessError(CorridorKeyError):
+    """Raised when postprocessing fails for a frame.
+
+    Covers despill, despeckle, composite, and resize failures.
+    """
+
+    def __init__(self, frame_index: int, detail: str) -> None:
+        self.frame_index = frame_index
+        self.detail = detail
+        super().__init__(f"Postprocess failed at frame {frame_index}: {detail}")
+
+
+class WriteFailureError(CorridorKeyError):
+    """Raised when writing an output file fails.
+
+    Covers both cv2.imwrite returning False and OS-level write errors
+    (disk full, permission denied).
+    """
+
+    def __init__(self, path: str, detail: str = "") -> None:
         self.path = path
-        super().__init__(f"cv2.imwrite failed: {path}")
+        self.detail = detail
+        msg = f"Write failed: {path}"
+        if detail:
+            msg += f" — {detail}"
+        super().__init__(msg)
 
 
 class VRAMInsufficientError(CorridorKeyError):
-    """Raised when there is not enough GPU VRAM for the requested operation."""
+    """Raised when a CUDA out-of-memory error occurs during inference.
 
-    def __init__(self, required_gb: float, available_gb: float) -> None:
-        self.required_gb = required_gb
-        self.available_gb = available_gb
-        super().__init__(f"Insufficient VRAM: {required_gb:.1f} GB required, {available_gb:.1f} GB available")
+    Indicates the GPU does not have enough VRAM for the current configuration.
+    Try reducing img_size, enabling tiled refiner mode, or using a lower
+    model_precision.
+    """
+
+    def __init__(self, detail: str = "") -> None:
+        self.detail = detail
+        msg = "Insufficient VRAM for inference"
+        if detail:
+            msg += f": {detail}"
+        super().__init__(msg)
 
 
 class DeviceError(CorridorKeyError):
@@ -78,7 +138,7 @@ class DeviceError(CorridorKeyError):
 
 
 class ModelError(CorridorKeyError):
-    """Raised when a model cannot be downloaded or fails checksum verification."""
+    """Raised when a model cannot be downloaded, loaded, or fails verification."""
 
 
 class InvalidStateTransitionError(CorridorKeyError):
@@ -111,7 +171,8 @@ class EngineError(CorridorKeyError):
 
 
 class AlphaGeneratorError(CorridorKeyError):
-    """Raised when a clip needs alpha but no AlphaGenerator is registered."""
+    """Raised when a clip needs alpha but no AlphaGenerator is registered,
+    or when the registered generator returns an invalid manifest."""
 
     def __init__(self, clip_name: str) -> None:
         self.clip_name = clip_name

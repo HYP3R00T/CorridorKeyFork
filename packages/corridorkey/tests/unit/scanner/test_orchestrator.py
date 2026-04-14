@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from corridorkey.errors import ClipScanError
@@ -179,22 +180,14 @@ class TestScanEvents:
 
 class TestScanPermissionErrors:
     def test_permission_error_on_iterdir_raises(self, tmp_path: Path):
-        """PermissionError on top-level iterdir must propagate."""
-        from unittest.mock import patch
-
-        # We need to reach the `sorted(path.iterdir())` line in the orchestrator.
-        # That line is only reached after try_build_clip returns (None, None).
-        # Patch try_build_clip AND Path.iterdir together — but iterdir is also
-        # called inside _find_icase (via try_build_clip). Since we mock
-        # try_build_clip out entirely, the only remaining iterdir call is the
-        # orchestrator's own `sorted(path.iterdir())`.
+        """PermissionError on top-level iterdir must propagate as ClipScanError."""
         with (
             patch(
                 "corridorkey.stages.scanner.orchestrator.try_build_clip",
                 return_value=(None, None),
             ),
             patch.object(Path, "iterdir", side_effect=PermissionError("denied")),
-            pytest.raises(PermissionError, match="Cannot read directory"),
+            pytest.raises(ClipScanError, match="Cannot read directory"),
         ):
             scan(tmp_path)
 

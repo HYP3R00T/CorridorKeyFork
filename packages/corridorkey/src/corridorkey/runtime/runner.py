@@ -220,7 +220,9 @@ def _load_models(
                 del models[i]
         torch.cuda.empty_cache()
         i, err = failed[0]
-        raise RuntimeError(f"Failed to load model on {devices[i]}: {err}") from err
+        from corridorkey.errors import ModelError
+
+        raise ModelError(f"Failed to load model on {devices[i]}: {err}") from err
 
     return models, resolved_refiner_mode or config.inference.refiner_mode  # type: ignore[return-value]
 
@@ -279,9 +281,19 @@ class _InferenceWorker:
                         self.events.inference_queued(item.meta.frame_index)
                         self.events.queue_depth(len(self.preprocess_queue), len(self.inference_queue))
                 except Exception as e:
-                    logger.error("inference[%s]: skipping frame %d — %s", self.config.device, item.meta.frame_index, e)
+                    from corridorkey.errors import InferenceError, VRAMInsufficientError
+
+                    # Detect CUDA OOM and raise a typed error
+                    detail = str(e)
+                    if "out of memory" in detail.lower() or "cuda out of memory" in detail.lower():
+                        typed = VRAMInsufficientError(detail)
+                    else:
+                        typed = InferenceError(item.meta.frame_index, detail)
+                    logger.error(
+                        "inference[%s]: skipping frame %d — %s", self.config.device, item.meta.frame_index, typed
+                    )
                     if self.events:
-                        self.events.frame_error(f"inference[{self.config.device}]", item.meta.frame_index, e)
+                        self.events.frame_error(f"inference[{self.config.device}]", item.meta.frame_index, typed)
         finally:
             if self.active_workers.decrement() == 0:
                 self.inference_queue.put_stop()

@@ -121,7 +121,7 @@ def _scan_one(
     try:
         items = sorted(path.iterdir())
     except PermissionError as e:
-        raise PermissionError(f"Cannot read directory: {path}") from e
+        raise ClipScanError(f"Cannot read directory: {path}") from e
 
     for item in items:
         if item.is_file():

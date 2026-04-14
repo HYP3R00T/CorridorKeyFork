@@ -152,7 +152,9 @@ class TestValidate:
     def test_empty_input_raises(self, tmp_path: Path):
         input_dir = tmp_path / "Input"
         input_dir.mkdir()
-        with pytest.raises(ValueError, match="no image frames"):
+        from corridorkey.errors import ClipLoadError
+
+        with pytest.raises(ClipLoadError, match="no image frames"):
             validate("test_clip", input_dir, None)
 
     def test_frame_count_mismatch_raises(self, tmp_path: Path):

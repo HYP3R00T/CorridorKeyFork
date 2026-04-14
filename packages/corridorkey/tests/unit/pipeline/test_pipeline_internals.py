@@ -232,9 +232,11 @@ class TestRunClipEndToEnd:
         manifest = _make_manifest(tmp_path, frame_count=1)
         cfg = _make_pipeline_config(tmp_path, devices=["cpu", "cpu"])
 
+        from corridorkey.errors import ModelError
+
         with (
             patch("corridorkey.stages.inference.loader.load_model", side_effect=RuntimeError("no checkpoint")),
-            pytest.raises(RuntimeError, match="Failed to load model"),
+            pytest.raises(ModelError, match="Failed to load model"),
         ):
             run_clip(manifest, cfg)
 

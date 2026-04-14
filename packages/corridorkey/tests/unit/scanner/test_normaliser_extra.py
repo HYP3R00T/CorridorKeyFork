@@ -11,13 +11,15 @@ from corridorkey.stages.scanner.normaliser import _find_videos_in, normalise_vid
 
 class TestNormaliseVideoOsError:
     def test_mkdir_failure_raises_oserror(self, tmp_path: Path):
-        """If Input/ directory creation fails, OSError is raised."""
+        """If Input/ directory creation fails, ClipScanError is raised."""
+        from corridorkey.errors import ClipScanError
+
         video = tmp_path / "clip.mp4"
         video.touch()
 
         with (
             patch.object(Path, "mkdir", side_effect=OSError("permission denied")),
-            pytest.raises(OSError, match="Failed to create clip structure"),
+            pytest.raises(ClipScanError, match="Failed to create clip structure"),
         ):
             normalise_video(video)
 

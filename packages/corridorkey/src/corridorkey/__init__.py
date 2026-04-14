@@ -24,6 +24,7 @@ except PackageNotFoundError:
 from corridorkey.engine import Engine
 from corridorkey.errors import (
     AlphaGeneratorError,
+    ClipLoadError,
     ClipScanError,
     CorridorKeyError,
     DeviceError,
@@ -31,8 +32,10 @@ from corridorkey.errors import (
     ExtractionError,
     FrameMismatchError,
     FrameReadError,
+    InferenceError,
     JobCancelledError,
     ModelError,
+    PostprocessError,
     VRAMInsufficientError,
     WriteFailureError,
 )
@@ -101,8 +104,11 @@ __all__ = [
     "DeviceError",
     "ModelError",
     "ClipScanError",
+    "ClipLoadError",
     "ExtractionError",
     "FrameMismatchError",
+    "InferenceError",
+    "PostprocessError",
     "JobCancelledError",
     "FrameReadError",
     "WriteFailureError",

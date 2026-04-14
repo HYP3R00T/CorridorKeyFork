@@ -78,7 +78,10 @@ def load(
     input_scan, _ = validate(clip.name, frames_dir, alpha_frames_dir)
 
     output_dir = clip.root / "Output"
-    output_dir.mkdir(exist_ok=True)
+    try:
+        output_dir.mkdir(exist_ok=True)
+    except OSError as e:
+        raise ClipLoadError(clip.name, f"cannot create output directory '{output_dir}': {e}") from e
 
     video_meta_path: Path | None = None
     if is_video(clip.input_path):

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from corridorkey.errors import ClipScanError
 from corridorkey.infra.utils import VIDEO_EXTENSIONS
 from corridorkey.stages.scanner.contracts import Clip, SkippedClip
 
@@ -52,7 +53,7 @@ def normalise_video(video_path: Path) -> Clip:
         input_dir.mkdir(exist_ok=True)
         alpha_dir.mkdir(exist_ok=True)
     except OSError as e:
-        raise OSError(f"Failed to create clip structure in '{clip_root}': {e}") from e
+        raise ClipScanError(f"Failed to create clip structure in '{clip_root}': {e}") from e
 
     dest = input_dir / video_path.name
     if dest.exists() and dest.stat().st_size == video_path.stat().st_size:
@@ -63,7 +64,7 @@ def normalise_video(video_path: Path) -> Clip:
     try:
         return Clip(name=clip_root.name, root=clip_root, input_path=dest, alpha_path=None)
     except ValidationError as e:
-        raise OSError(f"Clip validation failed after reorganising '{video_path}': {e}") from e
+        raise ClipScanError(f"Clip validation failed after reorganising '{video_path}': {e}") from e
 
 
 def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedClip | None]:
@@ -195,12 +196,12 @@ def _safe_move(src: Path, dst: Path) -> None:
     try:
         shutil.copy2(str(src), str(dst))
     except OSError as e:
-        raise OSError(f"Failed to copy '{src}' to '{dst}': {e}") from e
+        raise ClipScanError(f"Failed to copy '{src}' to '{dst}': {e}") from e
 
     dst_size = dst.stat().st_size
     if dst_size != src_size:
         dst.unlink(missing_ok=True)
-        raise OSError(
+        raise ClipScanError(
             f"Copy verification failed for '{src}' -> '{dst}': source size {src_size} != destination size {dst_size}"
         )
 
@@ -208,4 +209,4 @@ def _safe_move(src: Path, dst: Path) -> None:
         src.unlink()
         logger.info("Moved video '%s' -> '%s'", src, dst)
     except OSError as e:
-        raise OSError(f"Copied '{src}' to '{dst}' but failed to delete source: {e}") from e
+        raise ClipScanError(f"Copied '{src}' to '{dst}' but failed to delete source: {e}") from e

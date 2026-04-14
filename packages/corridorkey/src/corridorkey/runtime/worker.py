@@ -155,9 +155,19 @@ class PostWriteWorker:
                 if self.events:
                     self.events.frame_written(item.meta.frame_index, self.total_frames)
             except Exception as e:
-                logger.error("postwrite_worker: skipping frame %d — %s", item.meta.frame_index, e)
+                from corridorkey.errors import PostprocessError, WriteFailureError
+
+                # Classify the error so the event carries a typed exception
+                detail = str(e)
+                if isinstance(e, (WriteFailureError, OSError)) and hasattr(e, "path"):
+                    typed: Exception = e  # already typed
+                elif isinstance(e, OSError):
+                    typed = WriteFailureError(str(getattr(e, "filename", "unknown")), detail)
+                else:
+                    typed = PostprocessError(item.meta.frame_index, detail)
+                logger.error("postwrite_worker: skipping frame %d — %s", item.meta.frame_index, typed)
                 if self.events:
-                    self.events.frame_error("postwrite", item.meta.frame_index, e)
+                    self.events.frame_error("postwrite", item.meta.frame_index, typed)
 
         logger.debug("postwrite_worker: done")
         if self.events:

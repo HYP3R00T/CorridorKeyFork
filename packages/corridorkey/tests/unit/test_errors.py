@@ -79,15 +79,18 @@ class TestWriteFailureError:
 
 
 class TestVRAMInsufficientError:
-    def test_message_contains_values(self):
-        err = VRAMInsufficientError(12.0, 8.5)
-        assert "12.0" in str(err)
-        assert "8.5" in str(err)
+    def test_message_contains_detail(self):
+        err = VRAMInsufficientError("CUDA out of memory")
+        assert "VRAM" in str(err)
+        assert "CUDA out of memory" in str(err)
 
-    def test_attributes(self):
-        err = VRAMInsufficientError(12.0, 8.5)
-        assert err.required_gb == pytest.approx(12.0)
-        assert err.available_gb == pytest.approx(8.5)
+    def test_no_detail(self):
+        err = VRAMInsufficientError()
+        assert "VRAM" in str(err)
+
+    def test_detail_attribute(self):
+        err = VRAMInsufficientError("detail text")
+        assert err.detail == "detail text"
 
 
 class TestInvalidStateTransitionError:

@@ -112,16 +112,23 @@ def _alpha_to_bgr(alpha: np.ndarray) -> np.ndarray:
 
 def _write(img: np.ndarray, path: Path, fmt: str, exr_flags: list[int], sixteen_bit: bool = False) -> None:
     """Write a single image to disk, creating parent directories as needed."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if fmt == "exr":
-        arr = img if img.dtype == np.float32 else img.astype(np.float32)
-        ok = cv2.imwrite(str(path), arr, exr_flags)
-    elif sixteen_bit:
-        # 16-bit PNG — preserves sub-pixel alpha precision for compositing.
-        arr = (np.clip(img, 0.0, 1.0) * 65535.0).astype(np.uint16)
-        ok = cv2.imwrite(str(path), arr)
-    else:
-        arr = (np.clip(img, 0.0, 1.0) * 255.0).astype(np.uint8)
-        ok = cv2.imwrite(str(path), arr)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise WriteFailureError(str(path), f"cannot create output directory: {e}") from e
+
+    try:
+        if fmt == "exr":
+            arr = img if img.dtype == np.float32 else img.astype(np.float32)
+            ok = cv2.imwrite(str(path), arr, exr_flags)
+        elif sixteen_bit:
+            arr = (np.clip(img, 0.0, 1.0) * 65535.0).astype(np.uint16)
+            ok = cv2.imwrite(str(path), arr)
+        else:
+            arr = (np.clip(img, 0.0, 1.0) * 255.0).astype(np.uint8)
+            ok = cv2.imwrite(str(path), arr)
+    except OSError as e:
+        raise WriteFailureError(str(path), str(e)) from e
+
     if not ok:
-        raise WriteFailureError(str(path))
+        raise WriteFailureError(str(path), "cv2.imwrite returned False")
