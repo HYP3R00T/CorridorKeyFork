@@ -81,9 +81,5 @@ class BoundedQueue[T]:
         """
         return self._q.get()
 
-    def task_done(self) -> None:
-        """Mark the last item returned by ``get()`` as processed."""
-        self._q.task_done()
-
     def __len__(self) -> int:
         return self._q.qsize()

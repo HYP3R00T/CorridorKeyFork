@@ -67,6 +67,7 @@ _EXR_COMPRESSION_IDS: dict[str, int] = {
     "dwaa": 6,
     "dwab": 7,
 }
+_EXR_ID_TO_NAME: dict[int, str] = {v: k for k, v in _EXR_COMPRESSION_IDS.items()}
 
 
 def write_frame(frame: ProcessedFrame, config: WriteConfig) -> None:
@@ -140,6 +141,17 @@ def _exr_flags(compression: str, half: bool = True) -> list[int]:
     return [cv2.IMWRITE_EXR_TYPE, exr_type, cv2.IMWRITE_EXR_COMPRESSION, codec]
 
 
+def _exr_compression_name(exr_flags: list[int]) -> str:
+    """Reverse-map an exr_flags list back to a compression name string.
+
+    Used to pass the user-configured compression through to pyexr, which
+    takes a name string rather than cv2 integer flags.
+    """
+    # exr_flags layout: [IMWRITE_EXR_TYPE, type_val, IMWRITE_EXR_COMPRESSION, codec_id]
+    codec_id = exr_flags[3] if len(exr_flags) >= 4 else _EXR_COMPRESSION_IDS["piz"]
+    return _EXR_ID_TO_NAME.get(codec_id, "piz")
+
+
 def _alpha_to_bgr(alpha: np.ndarray) -> np.ndarray:
     """Convert [H, W, 1] alpha to [H, W, 3] BGR grayscale for writing."""
     a2d = alpha[:, :, 0] if alpha.ndim == 3 else alpha
@@ -206,7 +218,9 @@ def _write(img: np.ndarray, path: Path, fmt: str, exr_flags: list[int], sixteen_
             arr = img if img.dtype == np.float32 else img.astype(np.float32)
             if _HAS_PYEXR:
                 # pyexr avoids the cv2 4.13 DWAB/DWAA corruption bug.
-                compression = "zip"  # default; caller passes flags for cv2 path
+                # Extract the compression name from exr_flags so the user's
+                # configured codec is honoured (not silently overridden).
+                compression = _exr_compression_name(exr_flags)
                 _write_exr_pyexr(arr, path, compression)
                 return
             ok = cv2.imwrite(str(path), arr, exr_flags)

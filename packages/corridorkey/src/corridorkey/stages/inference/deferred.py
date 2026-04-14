@@ -26,8 +26,6 @@ Usage::
 
 from __future__ import annotations
 
-import threading
-
 import torch
 
 from corridorkey.stages.preprocessor.contracts import FrameMeta
@@ -52,7 +50,6 @@ class DeferredTransfer:
         event: torch.cuda.Event | None = None,
         pinned_alpha: torch.Tensor | None = None,
         pinned_fg: torch.Tensor | None = None,
-        released: threading.Event | None = None,
     ) -> None:
         self._alpha = alpha
         self._fg = fg
@@ -60,7 +57,6 @@ class DeferredTransfer:
         self._event = event
         self._pinned_alpha = pinned_alpha
         self._pinned_fg = pinned_fg
-        self._released = released
 
     @property
     def meta(self) -> FrameMeta:
@@ -94,7 +90,6 @@ class DeferredTransfer:
         # Allocate pinned CPU buffers for the DMA destination.
         pinned_alpha = torch.empty(alpha.shape, dtype=alpha.dtype, pin_memory=True)
         pinned_fg = torch.empty(fg.shape, dtype=fg.dtype, pin_memory=True)
-        released = threading.Event()
 
         # Wait for the compute stream to finish before starting the copy.
         compute_event = torch.cuda.current_stream(alpha.device).record_event()
@@ -116,7 +111,6 @@ class DeferredTransfer:
             event=dma_event,
             pinned_alpha=pinned_alpha,
             pinned_fg=pinned_fg,
-            released=released,
         )
 
     def resolve(self) -> tuple[torch.Tensor, torch.Tensor, FrameMeta]:
@@ -134,8 +128,5 @@ class DeferredTransfer:
 
         alpha_cpu = self._pinned_alpha.float()  # type: ignore[union-attr]
         fg_cpu = self._pinned_fg.float()  # type: ignore[union-attr]
-
-        if self._released is not None:
-            self._released.set()
 
         return alpha_cpu, fg_cpu, self._meta

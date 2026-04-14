@@ -297,11 +297,11 @@ class Engine:
         self._emit("frame_done", index, total)
 
     def _compute_fps(self) -> float:
-        """Compute sustained fps excluding the first frame (JIT warmup cost).
+        """Compute sustained fps as a simple average over steady-state frames.
 
         Uses the timestamps of all frame_done events. Skips the first frame
-        so Triton compilation time doesn't drag down the displayed rate.
-        Returns 0.0 if fewer than 2 frames were processed after warmup.
+        so Triton/torch.compile JIT cost doesn't drag down the displayed rate.
+        Returns 0.0 if fewer than 2 steady-state frames were processed.
         """
         times = self._frame_times
         # Need at least 2 frames after warmup (index 0 = warmup, index 1+ = steady)

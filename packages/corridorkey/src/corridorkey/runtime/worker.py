@@ -17,6 +17,8 @@ needs the shared remaining counter for coordinated shutdown across N devices.
 from __future__ import annotations
 
 import logging
+import os
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -32,6 +34,52 @@ from corridorkey.stages.preprocessor import PreprocessConfig, preprocess_frame
 from corridorkey.stages.writer import WriteConfig, write_frame
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# RAM availability helper — defined once at module level so the Windows
+# ctypes struct is not re-created on every call.
+# ---------------------------------------------------------------------------
+
+if sys.platform == "win32":
+    import ctypes as _ctypes
+
+    class _MEMSTATUSEX(_ctypes.Structure):
+        _fields_ = [
+            ("dwLength", _ctypes.c_ulong),
+            ("dwMemoryLoad", _ctypes.c_ulong),
+            ("ullTotalPhys", _ctypes.c_ulonglong),
+            ("ullAvailPhys", _ctypes.c_ulonglong),
+            ("ullTotalPageFile", _ctypes.c_ulonglong),
+            ("ullAvailPageFile", _ctypes.c_ulonglong),
+            ("ullTotalVirtual", _ctypes.c_ulonglong),
+            ("ullAvailVirtual", _ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", _ctypes.c_ulonglong),
+        ]
+
+
+_MEM_HEADROOM = 1 * 1024 * 1024 * 1024  # 1 GB
+
+
+def _available_ram() -> int:
+    """Available system RAM in bytes. Returns a large value on failure."""
+    try:
+        if sys.platform == "linux":
+            with open("/proc/meminfo") as f:
+                for line in f:
+                    if line.startswith("MemAvailable:"):
+                        return int(line.split()[1]) * 1024
+        elif sys.platform == "win32":
+            stat = _MEMSTATUSEX()
+            stat.dwLength = _ctypes.sizeof(stat)
+            if _ctypes.windll.kernel32.GlobalMemoryStatusEx(_ctypes.byref(stat)):
+                return stat.ullAvailPhys
+    except Exception:
+        pass
+    # macOS / fallback
+    try:
+        return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")  # type: ignore[attr-defined]
+    except (AttributeError, ValueError):
+        return _MEM_HEADROOM * 8  # conservative: assume plenty of RAM
 
 
 @dataclass
@@ -59,9 +107,6 @@ class PreprocessWorker:
 
     def run(self) -> None:
         """Entry point for the preprocess thread."""
-        import os
-        import sys
-
         total = self.manifest.frame_count
         if self.events:
             self.events.stage_start("preprocess", total)
@@ -71,50 +116,13 @@ class PreprocessWorker:
 
         # Estimate frame size for RAM throttling (updated after first read).
         _frame_bytes_estimate: list[int] = [0]
-        _mem_headroom = 1 * 1024 * 1024 * 1024  # 1 GB
-
-        def _available_ram() -> int:
-            """Available system RAM in bytes. Returns a large value on failure."""
-            try:
-                if sys.platform == "linux":
-                    with open("/proc/meminfo") as f:
-                        for line in f:
-                            if line.startswith("MemAvailable:"):
-                                return int(line.split()[1]) * 1024
-                elif sys.platform == "win32":
-                    import ctypes
-
-                    class _MEMSTATUSEX(ctypes.Structure):
-                        _fields_ = [
-                            ("dwLength", ctypes.c_ulong),
-                            ("dwMemoryLoad", ctypes.c_ulong),
-                            ("ullTotalPhys", ctypes.c_ulonglong),
-                            ("ullAvailPhys", ctypes.c_ulonglong),
-                            ("ullTotalPageFile", ctypes.c_ulonglong),
-                            ("ullAvailPageFile", ctypes.c_ulonglong),
-                            ("ullTotalVirtual", ctypes.c_ulonglong),
-                            ("ullAvailVirtual", ctypes.c_ulonglong),
-                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-                        ]
-
-                    stat = _MEMSTATUSEX()
-                    stat.dwLength = ctypes.sizeof(stat)
-                    if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
-                        return stat.ullAvailPhys
-            except Exception:
-                pass
-            # macOS / fallback
-            try:
-                return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")  # type: ignore[attr-defined]
-            except (AttributeError, ValueError):
-                return _mem_headroom * 8  # conservative: assume plenty of RAM
 
         def _mem_ok() -> bool:
             """True if there is enough RAM to decode another frame."""
             est = _frame_bytes_estimate[0]
             if est == 0:
                 return True  # no estimate yet — allow first reads
-            return _available_ram() - est > _mem_headroom
+            return _available_ram() - est > _MEM_HEADROOM
 
         try:
             for i in range(*self.manifest.frame_range):
