@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from corridorkey.errors import ClipScanError
 from corridorkey.stages.scanner.contracts import SkippedClip
 from corridorkey.stages.scanner.normaliser import (
     _find_icase,
@@ -17,19 +18,23 @@ from corridorkey.stages.scanner.normaliser import (
 
 
 class TestSafeMove:
-    def test_copies_and_deletes_source(self, tmp_path: Path):
-        src = tmp_path / "src.mp4"
-        src.write_bytes(b"data")
-        dst = tmp_path / "dst.mp4"
+    def test_moves_file_successfully(self, tmp_path: Path):
+        src = tmp_path / "clip.mp4"
+        src.write_bytes(b"video data")
+        dst = tmp_path / "dest" / "clip.mp4"
+        dst.parent.mkdir()
+
         _safe_move(src, dst)
-        assert dst.read_bytes() == b"data"
+
+        assert dst.exists()
+        assert dst.read_bytes() == b"video data"
         assert not src.exists()
 
-    def test_copy_failure_raises_oserror(self, tmp_path: Path):
-        src = tmp_path / "src.mp4"
+    def test_raises_on_copy_failure(self, tmp_path: Path):
+        src = tmp_path / "clip.mp4"
         src.write_bytes(b"data")
-        dst = tmp_path / "dst.mp4"
-        from corridorkey.errors import ClipScanError
+        dst = tmp_path / "dest" / "clip.mp4"
+        dst.parent.mkdir()
 
         with (
             patch("shutil.copy2", side_effect=OSError("disk full")),
@@ -37,32 +42,45 @@ class TestSafeMove:
         ):
             _safe_move(src, dst)
 
-    def test_size_mismatch_raises_oserror(self, tmp_path: Path):
-        src = tmp_path / "src.mp4"
-        src.write_bytes(b"hello")
-        dst = tmp_path / "dst.mp4"
-        # Write a different-sized file to dst before the move to simulate mismatch
-        dst.write_bytes(b"hi")
-        from corridorkey.errors import ClipScanError
+    def test_raises_on_size_mismatch(self, tmp_path: Path):
+        """If dst size doesn't match src after copy, raises ClipScanError and removes dst."""
+        src = tmp_path / "clip.mp4"
+        src.write_bytes(b"original data")
+        dst = tmp_path / "dest" / "clip.mp4"
+        dst.parent.mkdir()
+
+        def fake_copy(s, d, **kwargs):
+            Path(d).write_bytes(b"truncated")
 
         with (
-            patch("shutil.copy2"),
+            patch("shutil.copy2", side_effect=fake_copy),
             pytest.raises(ClipScanError, match="Copy verification failed"),
-        ):  # no-op copy — dst already has wrong size
+        ):
             _safe_move(src, dst)
 
-    def test_delete_failure_raises_oserror(self, tmp_path: Path):
-        src = tmp_path / "src.mp4"
+        assert not dst.exists()
+
+    def test_raises_on_delete_failure(self, tmp_path: Path):
+        """If src deletion fails after successful copy, raises ClipScanError."""
+        src = tmp_path / "clip.mp4"
         src.write_bytes(b"data")
-        dst = tmp_path / "dst.mp4"
-        from corridorkey.errors import ClipScanError
+        dst = tmp_path / "dest" / "clip.mp4"
+        dst.parent.mkdir()
+
+        original_unlink = Path.unlink
+
+        def fail_unlink(self, missing_ok=False):
+            if self == src:
+                raise OSError("permission denied")
+            original_unlink(self, missing_ok=missing_ok)
 
         with (
-            patch("shutil.copy2", side_effect=lambda s, d: Path(d).write_bytes(b"data")),
-            patch.object(Path, "unlink", side_effect=OSError("locked")),
+            patch.object(Path, "unlink", fail_unlink),
             pytest.raises(ClipScanError, match="failed to delete source"),
         ):
             _safe_move(src, dst)
+
+        assert dst.exists()
 
 
 class TestFindAlphaAmbiguous:
@@ -130,7 +148,6 @@ class TestNormaliseVideoErrors:
     def test_mkdir_failure_raises_oserror(self, tmp_path: Path):
         video = tmp_path / "clip.mp4"
         video.write_bytes(b"data")
-        from corridorkey.errors import ClipScanError
 
         with (
             patch("pathlib.Path.mkdir", side_effect=OSError("no space")),
@@ -179,8 +196,6 @@ class TestNormaliseVideoMove:
 
 class TestNormaliseVideoOsError:
     def test_mkdir_failure_raises_oserror(self, tmp_path: Path):
-        from corridorkey.errors import ClipScanError
-
         video = tmp_path / "clip.mp4"
         video.touch()
         with (
