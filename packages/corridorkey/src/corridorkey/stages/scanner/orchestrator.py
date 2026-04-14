@@ -41,7 +41,6 @@ def scan(
         ClipScanError: If a path does not exist, is an unrecognised file type,
             a directory cannot be read, or video reorganisation fails.
     """
-    # Normalise to list
     path_list = [Path(paths)] if isinstance(paths, (str, Path)) else [Path(p) for p in paths]
 
     all_clips: list[Clip] = []
@@ -64,7 +63,7 @@ def scan(
 
 def _scan_one(
     path: Path,
-    events: PipelineEvents | None = None,
+    events: PipelineEvents | None,
 ) -> ScanResult:
     if not path.exists():
         raise ClipScanError(f"Path does not exist: {path}")
