@@ -74,12 +74,14 @@ def _make_pipeline_config(tmp_path: Path, devices: list[str] | None = None) -> P
 class TestInferenceWorker:
     def test_processes_frames_and_sends_stop_when_last(self, tmp_path: Path):
         from corridorkey.runtime.queue import STOP, BoundedQueue
+        from corridorkey.runtime.runner import _FrameWork, _InferenceWork
 
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
         frame = _make_fake_frame(0)
         result = _make_fake_result(0)
-        in_q.put(frame)
+        manifest = _make_manifest(tmp_path)
+        in_q.put(_FrameWork(frame=frame, manifest=manifest))
         in_q.put_stop()
 
         counter = [1]
@@ -96,13 +98,9 @@ class TestInferenceWorker:
             t.join(timeout=5)
 
         item = out_q.get()
-        from corridorkey.stages.inference.deferred import DeferredTransfer
-
-        if isinstance(item, DeferredTransfer):
-            alpha, fg, meta = item.resolve()
-            assert meta is result.meta
-        else:
-            assert item is result
+        assert isinstance(item, _InferenceWork)
+        _, _, meta = item.transfer.resolve()
+        assert meta is result.meta
         assert out_q.get() is STOP
 
     def test_non_last_worker_does_not_send_stop(self, tmp_path: Path):
@@ -128,15 +126,17 @@ class TestInferenceWorker:
 
     def test_two_workers_process_all_frames_exactly_once(self, tmp_path: Path):
         from corridorkey.runtime.queue import STOP, BoundedQueue
+        from corridorkey.runtime.runner import _FrameWork, _InferenceWork
 
         in_q: BoundedQueue = BoundedQueue(20)
         out_q: BoundedQueue = BoundedQueue(20)
+        manifest = _make_manifest(tmp_path)
 
         n_frames = 6
         frames = [_make_fake_frame(i) for i in range(n_frames)]
         results = [_make_fake_result(i) for i in range(n_frames)]
         for f in frames:
-            in_q.put(f)
+            in_q.put(_FrameWork(frame=f, manifest=manifest))
         in_q.put_stop()
 
         remaining = [2]
@@ -162,14 +162,9 @@ class TestInferenceWorker:
             item = out_q.get()
             if item is STOP:
                 break
-            from corridorkey.stages.inference.deferred import DeferredTransfer
-
-            if isinstance(item, DeferredTransfer):
-                _, _, meta = item.resolve()
-                received.append(meta)
-            else:
-                assert isinstance(item, InferenceResult)
-                received.append(item.meta)
+            assert isinstance(item, _InferenceWork)
+            _, _, meta = item.transfer.resolve()
+            received.append(meta)
 
         assert len(received) == n_frames
         assert {m.frame_index for m in received} == set(range(n_frames))
@@ -203,8 +198,8 @@ class TestRunClipEndToEnd:
         with (
             patch("corridorkey.stages.inference.loader.load_model", return_value=MagicMock()),
             patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=fake_run_inference),
-            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
-            patch("corridorkey.runtime.worker.write_frame"),
+            patch("corridorkey.runtime.runner.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey.runtime.runner.write_frame"),
         ):
             run_clip(manifest, cfg)
 
@@ -255,8 +250,8 @@ class TestRunClipPreloadedModel:
 
         with (
             patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=fake_run_inference),
-            patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
-            patch("corridorkey.runtime.worker.write_frame"),
+            patch("corridorkey.runtime.runner.postprocess_frame", return_value=MagicMock()),
+            patch("corridorkey.runtime.runner.write_frame"),
         ):
             run_clip(manifest, cfg)
 
@@ -337,8 +332,8 @@ class TestRunClipCancellation:
                 with (
                     patch("corridorkey.stages.inference.loader.load_model", return_value=MagicMock()),
                     patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=fake_run_inference),
-                    patch("corridorkey.runtime.worker.postprocess_frame", return_value=MagicMock()),
-                    patch("corridorkey.runtime.worker.write_frame", side_effect=counting_write),
+                    patch("corridorkey.runtime.runner.postprocess_frame", return_value=MagicMock()),
+                    patch("corridorkey.runtime.runner.write_frame", side_effect=counting_write),
                 ):
                     run_clip(manifest, cfg, cancel_event=cancel_event)
             except Exception as e:

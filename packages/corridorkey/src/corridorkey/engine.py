@@ -26,10 +26,10 @@ from typing import Any
 
 from corridorkey.errors import AlphaGeneratorError, EngineError, JobCancelledError
 from corridorkey.infra.config.pipeline import CorridorKeyConfig
+from corridorkey.runtime.clip_state import ClipRecord, ClipState
 from corridorkey.runtime.job_stats import JobStats
 from corridorkey.runtime.runner import PipelineConfig
 from corridorkey.stages.loader.contracts import ClipManifest
-from corridorkey.stages.scanner.contracts import Clip
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +50,6 @@ class Engine:
         self._alpha_generator: Any | None = None
         self._handlers: dict[str, list[Callable]] = {}
         self._cancel_event = threading.Event()
-
-    # ------------------------------------------------------------------
-    # Alpha generator registration
-    # ------------------------------------------------------------------
 
     def set_alpha_generator(self, plugin: Any) -> None:
         """Register an AlphaGenerator for the alpha slot.
@@ -79,10 +75,6 @@ class Engine:
         self._alpha_generator = plugin
         logger.debug("engine: registered alpha generator %s", type(plugin).__name__)
 
-    # ------------------------------------------------------------------
-    # Event registration
-    # ------------------------------------------------------------------
-
     def on(self, event: str, handler: Callable) -> None:
         """Register an event handler.
 
@@ -104,10 +96,6 @@ class Engine:
             except Exception as e:
                 logger.warning("engine: event handler for '%s' raised %s", event, e)
 
-    # ------------------------------------------------------------------
-    # Cancellation
-    # ------------------------------------------------------------------
-
     def cancel(self) -> None:
         """Request cancellation. Thread-safe, callable from any thread.
 
@@ -117,16 +105,15 @@ class Engine:
         logger.info("engine: cancel requested")
         self._cancel_event.set()
 
-    # ------------------------------------------------------------------
-    # Run
-    # ------------------------------------------------------------------
-
     def run(self, paths: list[Path]) -> JobStats:
         """Run the full pipeline for all clips found under paths.
 
         Initialisation (logging, device resolution, model download) happens
         here before any processing starts. If anything is wrong it raises
         before the first clip is touched.
+
+        Clips already in the COMPLETE state (all output frames written) are
+        skipped automatically and counted as clips_skipped.
 
         Args:
             paths: Paths to scan. Each may be a clips directory, a single
@@ -167,11 +154,22 @@ class Engine:
             self._emit("clip_skipped", skipped, skipped.reason)
             stats.clips_skipped += 1
 
-        for clip in result.clips:
-            self._emit("clip_found", clip)
+        # Build ClipRecord for each clip — resolves initial state from disk.
+        records = [ClipRecord.from_clip(clip) for clip in result.clips]
+
+        for record in records:
+            self._emit("clip_found", record.clip)
             if self._cancel_event.is_set():
                 break
-            self._process_clip(clip, stats)
+
+            # 3a — skip clips that are already fully processed.
+            if record.state == ClipState.COMPLETE:
+                logger.info("engine: skipping clip '%s' — already complete", record.name)
+                self._emit("clip_skipped", record.clip, "already complete")
+                stats.clips_skipped += 1
+                continue
+
+            self._process_clip(record, stats)
 
         stats.elapsed_seconds = time.monotonic() - start_time
         stats.frames_per_second = self._compute_fps()
@@ -185,10 +183,6 @@ class Engine:
             stats.elapsed_seconds,
         )
         return stats
-
-    # ------------------------------------------------------------------
-    # Internal — initialisation
-    # ------------------------------------------------------------------
 
     def _initialise(self) -> None:
         """Set up logging, resolve device, wire plugin configs, verify model."""
@@ -247,15 +241,13 @@ class Engine:
             except Exception as e:
                 raise EngineError(f"Plugin '{name}' config validation failed: {e}") from e
 
-    # ------------------------------------------------------------------
-    # Internal — clip processing
-    # ------------------------------------------------------------------
-
-    def _process_clip(self, clip: Clip, stats: JobStats) -> None:
+    def _process_clip(self, record: ClipRecord, stats: JobStats) -> None:
         """Run all three stages for a single clip."""
+        clip = record.clip
         self._emit("clip_loading", clip)
         logger.info("engine: processing clip '%s'", clip.name)
 
+        record.set_processing(True)
         try:
             # Stage 1 — load
             from corridorkey.stages.loader.orchestrator import load
@@ -266,30 +258,39 @@ class Engine:
                 e._stage = "load"  # type: ignore[attr-defined]
                 raise
 
+            record.manifest = manifest
+
             # Stage 2 — alpha (only when needed)
             if manifest.needs_alpha:
-                manifest = self._run_alpha(manifest)
+                manifest = self._run_alpha(manifest, record)
 
+            record.transition_to(ClipState.READY)
             self._emit("clip_ready", manifest)
 
             # Stage 3 — inference (threaded assembly line)
             self._run_inference(manifest)
 
+            record.transition_to(ClipState.COMPLETE)
             stats.clips_processed += 1
             stats.total_frames += manifest.frame_count
             self._emit("clip_complete", manifest)
             logger.info("engine: clip '%s' complete", clip.name)
 
         except JobCancelledError:
+            record.set_error("cancelled")
             stats.clips_cancelled += 1
             self._emit("clip_cancelled", clip)
             logger.info("engine: clip '%s' cancelled", clip.name)
 
         except Exception as e:
             stage = getattr(e, "_stage", "unknown")
+            record.set_error(f"{stage}: {e}")
             stats.clips_failed += 1
             self._emit("clip_error", stage, e)
             logger.error("engine: clip '%s' failed at stage '%s' — %s", clip.name, stage, e)
+
+        finally:
+            record.set_processing(False)
 
     def _on_frame_done(self, index: int, total: int) -> None:
         """Record frame completion time and emit frame_done event."""
@@ -314,7 +315,7 @@ class Engine:
         # frames / elapsed between first and last steady-state frame
         return (len(steady) - 1) / elapsed
 
-    def _run_alpha(self, manifest: ClipManifest) -> ClipManifest:
+    def _run_alpha(self, manifest: ClipManifest, record: ClipRecord) -> ClipManifest:
         """Stage 2 — call the registered alpha generator."""
         if self._alpha_generator is None:
             raise AlphaGeneratorError(manifest.clip_name)
@@ -328,6 +329,7 @@ class Engine:
                 f"AlphaGenerator returned needs_alpha=True for '{manifest.clip_name}' — "
                 "alpha_frames_dir must be set on the returned manifest"
             )
+        record.manifest = result
         self._emit("alpha_resolved", result)
         return result
 

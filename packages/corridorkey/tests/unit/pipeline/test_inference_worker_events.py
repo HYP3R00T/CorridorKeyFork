@@ -6,11 +6,14 @@ import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import cv2
+import numpy as np
 import torch
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import BoundedQueue
-from corridorkey.runtime.runner import _InferenceWorker
+from corridorkey.runtime.runner import _FrameWork, _InferenceWorker
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
+from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.preprocessor import PreprocessedFrame
 from corridorkey.stages.preprocessor.contracts import FrameMeta
 
@@ -30,6 +33,33 @@ def _make_result(frame: PreprocessedFrame) -> InferenceResult:
         fg=torch.zeros(1, 3, 32, 32),
         meta=frame.meta,
     )
+
+
+def _make_manifest(tmp_path: Path) -> ClipManifest:
+    frames_dir = tmp_path / "Frames"
+    frames_dir.mkdir(exist_ok=True)
+    alpha_dir = tmp_path / "AlphaFrames"
+    alpha_dir.mkdir(exist_ok=True)
+    output_dir = tmp_path / "Output"
+    output_dir.mkdir(exist_ok=True)
+    img = np.zeros((32, 32, 3), dtype=np.uint8)
+    cv2.imwrite(str(frames_dir / "frame_000000.png"), img)
+    cv2.imwrite(str(alpha_dir / "frame_000000.png"), np.zeros((32, 32), dtype=np.uint8))
+    return ClipManifest(
+        clip_name="test",
+        clip_root=tmp_path,
+        frames_dir=frames_dir,
+        alpha_frames_dir=alpha_dir,
+        output_dir=output_dir,
+        needs_alpha=False,
+        frame_count=1,
+        frame_range=(0, 1),
+        is_linear=False,
+    )
+
+
+def _wrap(frame: PreprocessedFrame, tmp_path: Path) -> _FrameWork:
+    return _FrameWork(frame=frame, manifest=_make_manifest(tmp_path))
 
 
 class TestInferenceWorkerEvents:
@@ -80,7 +110,7 @@ class TestInferenceWorkerEvents:
         out_q: BoundedQueue = BoundedQueue(10)
         frame = _make_frame(5)
         result = _make_result(frame)
-        in_q.put(frame)
+        in_q.put(_wrap(frame, tmp_path))
         in_q.put_stop()
 
         started: list[int] = []
@@ -105,7 +135,7 @@ class TestInferenceWorkerEvents:
         out_q: BoundedQueue = BoundedQueue(10)
         frame = _make_frame(3)
         result = _make_result(frame)
-        in_q.put(frame)
+        in_q.put(_wrap(frame, tmp_path))
         in_q.put_stop()
 
         queued: list[int] = []
@@ -129,7 +159,7 @@ class TestInferenceWorkerEvents:
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
         frame = _make_frame(7)
-        in_q.put(frame)
+        in_q.put(_wrap(frame, tmp_path))
         in_q.put_stop()
 
         errors: list[tuple[str, int]] = []
@@ -157,7 +187,7 @@ class TestInferenceWorkerEvents:
         out_q: BoundedQueue = BoundedQueue(10)
         frame = _make_frame(0)
         result = _make_result(frame)
-        in_q.put(frame)
+        in_q.put(_wrap(frame, tmp_path))
         in_q.put_stop()
 
         depths: list[tuple[int, int]] = []

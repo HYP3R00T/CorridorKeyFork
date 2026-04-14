@@ -27,11 +27,11 @@ def _write_png(path: Path, h: int = 32, w: int = 32, channels: int = 3) -> None:
 
 def _make_manifest(tmp_path: Path, frame_count: int = 2) -> ClipManifest:
     frames_dir = tmp_path / "Frames"
-    frames_dir.mkdir()
+    frames_dir.mkdir(exist_ok=True)
     alpha_dir = tmp_path / "AlphaFrames"
-    alpha_dir.mkdir()
+    alpha_dir.mkdir(exist_ok=True)
     output_dir = tmp_path / "Output"
-    output_dir.mkdir()
+    output_dir.mkdir(exist_ok=True)
 
     for i in range(frame_count):
         _write_png(frames_dir / f"frame_{i:06d}.png", channels=3)
@@ -207,6 +207,13 @@ class TestInferenceWorker:
             meta=frame.meta,
         )
 
+    def _wrap(self, frame: PreprocessedFrame, tmp_path: Path) -> object:
+        """Wrap a PreprocessedFrame in a _FrameWork for the inference worker."""
+        from corridorkey.runtime.runner import _FrameWork
+
+        manifest = _make_manifest(tmp_path)
+        return _FrameWork(frame=frame, manifest=manifest)
+
     def _worker(self, tmp_path, in_q, out_q, **kwargs):
         import threading
 
@@ -221,12 +228,14 @@ class TestInferenceWorker:
         )
 
     def test_passes_items_through(self, tmp_path: Path):
+        from corridorkey.runtime.runner import _InferenceWork
+
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
 
         frame = self._make_fake_frame()
         result = self._make_fake_result(frame)
-        in_q.put(frame)
+        in_q.put(self._wrap(frame, tmp_path))
         in_q.put_stop()
 
         with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
@@ -234,13 +243,9 @@ class TestInferenceWorker:
             t.join(timeout=5)
 
         item = out_q.get()
-        from corridorkey.stages.inference.deferred import DeferredTransfer
-
-        if isinstance(item, DeferredTransfer):
-            _, _, meta = item.resolve()
-            assert meta is result.meta
-        else:
-            assert item is result
+        assert isinstance(item, _InferenceWork)
+        _, _, meta = item.transfer.resolve()
+        assert meta is result.meta
         assert out_q.get() is STOP
 
     def test_stop_propagates_downstream(self, tmp_path: Path):
@@ -254,13 +259,15 @@ class TestInferenceWorker:
         assert out_q.get() is STOP
 
     def test_multiple_frames_passed_through(self, tmp_path: Path):
+        from corridorkey.runtime.runner import _InferenceWork
+
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
 
         frames = [self._make_fake_frame() for _ in range(4)]
         results = [self._make_fake_result(f) for f in frames]
         for f in frames:
-            in_q.put(f)
+            in_q.put(self._wrap(f, tmp_path))
         in_q.put_stop()
 
         with patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=results):
@@ -272,27 +279,24 @@ class TestInferenceWorker:
             item = out_q.get()
             if item is STOP:
                 break
-            from corridorkey.stages.inference.deferred import DeferredTransfer
-
-            if isinstance(item, DeferredTransfer):
-                _, _, meta = item.resolve()
-                received.append(meta)
-            else:
-                assert isinstance(item, InferenceResult)
-                received.append(item.meta)
+            assert isinstance(item, _InferenceWork)
+            _, _, meta = item.transfer.resolve()
+            received.append(meta)
 
         assert len(received) == len(results)
         assert [m.frame_index for m in received] == [r.meta.frame_index for r in results]
 
     def test_inference_error_skips_frame(self, tmp_path: Path):
+        from corridorkey.runtime.runner import _InferenceWork
+
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
 
         frame1 = self._make_fake_frame()
         frame2 = self._make_fake_frame()
         result2 = self._make_fake_result(frame2)
-        in_q.put(frame1)
-        in_q.put(frame2)
+        in_q.put(self._wrap(frame1, tmp_path))
+        in_q.put(self._wrap(frame2, tmp_path))
         in_q.put_stop()
 
         def side_effect(frame, model, config, **kwargs):
@@ -305,20 +309,16 @@ class TestInferenceWorker:
             t.join(timeout=5)
 
         item = out_q.get()
-        from corridorkey.stages.inference.deferred import DeferredTransfer
-
-        if isinstance(item, DeferredTransfer):
-            _, _, meta = item.resolve()
-            assert meta is result2.meta
-        else:
-            assert item is result2
+        assert isinstance(item, _InferenceWork)
+        _, _, meta = item.transfer.resolve()
+        assert meta is result2.meta
         assert out_q.get() is STOP
 
     def test_stop_sent_even_on_all_errors(self, tmp_path: Path):
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
 
-        in_q.put(self._make_fake_frame())
+        in_q.put(self._wrap(self._make_fake_frame(), tmp_path))
         in_q.put_stop()
 
         with patch("corridorkey.stages.inference.orchestrator.run_inference", side_effect=RuntimeError("boom")):
@@ -520,6 +520,12 @@ class TestInferenceWorkerEvents:
             meta=frame.meta,
         )
 
+    def _wrap(self, frame: PreprocessedFrame, tmp_path: Path) -> object:
+        from corridorkey.runtime.runner import _FrameWork
+
+        manifest = _make_manifest(tmp_path)
+        return _FrameWork(frame=frame, manifest=manifest)
+
     def _worker(self, tmp_path, in_q, out_q, **kwargs):
         import threading
 
@@ -562,7 +568,7 @@ class TestInferenceWorkerEvents:
         out_q: BoundedQueue = BoundedQueue(10)
         frame = self._make_fake_frame(3)
         result = self._make_fake_result(frame)
-        in_q.put(frame)
+        in_q.put(self._wrap(frame, tmp_path))
         in_q.put_stop()
 
         started: list[int] = []
@@ -578,7 +584,7 @@ class TestInferenceWorkerEvents:
         out_q: BoundedQueue = BoundedQueue(10)
         frame = self._make_fake_frame(7)
         result = self._make_fake_result(frame)
-        in_q.put(frame)
+        in_q.put(self._wrap(frame, tmp_path))
         in_q.put_stop()
 
         queued: list[int] = []
@@ -593,7 +599,7 @@ class TestInferenceWorkerEvents:
         in_q: BoundedQueue = BoundedQueue(10)
         out_q: BoundedQueue = BoundedQueue(10)
         frame = self._make_fake_frame(2)
-        in_q.put(frame)
+        in_q.put(self._wrap(frame, tmp_path))
         in_q.put_stop()
 
         errors: list[tuple[str, int]] = []
