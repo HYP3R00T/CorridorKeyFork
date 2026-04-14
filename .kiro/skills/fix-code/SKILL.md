@@ -93,7 +93,7 @@ Key rules:
 - No double-logging between a function and its caller
 - Log messages must include enough context to diagnose without the source code
 
-See `.kiro/skills/fix-logging/SKILL.md` for the full level conventions.
+See the `fix-logging` skill for the full level conventions.
 
 ---
 
@@ -109,7 +109,7 @@ Key rules:
 - `Raises:` sections are derived from scratch by tracing raise sites and called functions
 - Redundant docstrings on one-line wrappers are removed
 
-See `.kiro/skills/update-docstrings/SKILL.md` for the full checklist.
+See the `update-docstrings` skill for the full checklist.
 
 ---
 
