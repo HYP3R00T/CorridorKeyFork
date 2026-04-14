@@ -6,47 +6,35 @@ argument-hint: 'Name the stage or file to document (e.g. "scanner orchestrator",
 
 # Skill: update-docstrings
 
-Audit every docstring in the target file(s) and rewrite any that are wrong, stale, missing,
-or misleading. No logic changes, no test changes, no reformatting.
+Audit every docstring in the target file(s) and rewrite any that are wrong, stale, missing, or misleading. No logic changes, no test changes, no reformatting.
 
-The core principle: **do not trust what is written — verify every claim against the code.**
-A docstring that describes what a function used to do is worse than no docstring at all,
-because it actively misleads the reader.
+The core principle: **do not trust what is written — verify every claim against the code.** A docstring that describes what a function used to do is worse than no docstring at all, because it actively misleads the reader.
 
 ## Rules for this codebase
 
-**Module docstrings** — only `__init__.py` files get one. All other `.py` files have no
-module docstring. The filename, location, and public function docstrings are sufficient.
+**Module docstrings** — only `__init__.py` files get one. All other `.py` files have no module docstring. The filename, location, and public function docstrings are sufficient.
 
-**Private functions and classes** (`_name`) — no docstrings. They are implementation detail.
-Use an inline comment at a specific line if the logic is non-obvious.
+**Private functions and classes** (`_name`) — no docstrings. They are implementation detail. Use an inline comment at a specific line if the logic is non-obvious.
 
 **Trivial one-liners** — no docstring if the name and signature are self-explanatory.
 
-**Public functions and classes** — document anything non-trivial. If a public function has
-no docstring, write one.
+**Public functions and classes** — document anything non-trivial. If a public function has no docstring, write one.
 
 ## Steps
 
 ### 1. Read the source — all of it
 
-Read every function, class, and module in the target file(s). Also read any functions
-that are *called* from the target, specifically to verify exception propagation and return
-values. Do not assume a called function does what its name implies — read it.
+Read every function, class, and module in the target file(s). Also read any functions that are *called* from the target, specifically to verify exception propagation and return values. Do not assume a called function does what its name implies — read it.
 
 ### 2. Audit each docstring
 
 For every existing docstring, verify each claim independently. The questions to ask:
 
-**Summary line** — Does it describe what the function does *right now*? Is it specific to
-this function, or could it be copy-pasted into any file without being wrong? Is it redundant
-(a one-line wrapper whose docstring just restates the target)?
+**Summary line** — Does it describe what the function does *right now*? Is it specific to this function, or could it be copy-pasted into any file without being wrong? Is it redundant (a one-line wrapper whose docstring just restates the target)?
 
-**Args** — Does every documented parameter still exist in the signature? Is every parameter
-in the signature documented? Are the descriptions accurate, not just plausible-sounding?
+**Args** — Does every documented parameter still exist in the signature? Is every parameter in the signature documented? Are the descriptions accurate, not just plausible-sounding?
 
-**Returns** — Read the actual return statements. Does the documented return match all of them?
-If the function returns different things under different conditions, are all conditions covered?
+**Returns** — Read the actual return statements. Does the documented return match all of them? If the function returns different things under different conditions, are all conditions covered?
 
 **Raises** — This is the most commonly wrong section. Verify it from scratch every time:
 
