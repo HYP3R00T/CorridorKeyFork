@@ -1,14 +1,16 @@
-"""CorridorKey pipeline — public API.
+"""CorridorKey — public API.
 
 Single import surface for any interface (CLI, GUI, TUI, plugin).
-Do not import from submodules directly.
 
-Startup::
+Quickstart::
+
+    from corridorkey import Engine, load_config
 
     config = load_config()
     engine = Engine(config)
-
-See ENGINE.md and PUBLIC_API.md for full integration guidance.
+    engine.set_alpha_generator(MyAlphaGenerator())
+    engine.on("frame_done", lambda i, total: print(f"{i}/{total}"))
+    stats = engine.run([Path("/clips")])
 """
 
 from importlib.metadata import PackageNotFoundError
@@ -29,7 +31,6 @@ from corridorkey.errors import (
     ExtractionError,
     FrameMismatchError,
     FrameReadError,
-    InvalidStateTransitionError,
     JobCancelledError,
     ModelError,
     VRAMInsufficientError,
@@ -57,33 +58,13 @@ from corridorkey.infra import (
     write_config,
 )
 from corridorkey.protocols import AlphaGenerator
-from corridorkey.runtime.clip_state import ClipRecord, ClipState, FrameRange, get_clip_state
 from corridorkey.runtime.job_stats import JobStats
-from corridorkey.stages.inference import (
-    InferenceConfig,
-    InferenceResult,
-    ModelBackend,
-    load_model_backend,
-)
-from corridorkey.stages.loader import (
-    ClipManifest,
-    attach_alpha,
-    load,
-)
-from corridorkey.stages.loader.validator import list_frames
-from corridorkey.stages.postprocessor import PostprocessConfig, ProcessedFrame, postprocess_frame
-from corridorkey.stages.preprocessor import (
-    FrameMeta,
-    PreprocessConfig,
-    PreprocessedFrame,
-    preprocess_frame,
-)
-from corridorkey.stages.scanner import Clip, ScanResult, SkippedClip, scan
-from corridorkey.stages.writer import WriteConfig, write_frame
+from corridorkey.stages.loader.contracts import ClipManifest
+from corridorkey.stages.scanner.contracts import Clip, SkippedClip
 
 __all__ = [
     "__version__",
-    # Configuration
+    # Config
     "load_config",
     "load_config_with_metadata",
     "SettingsMetadata",
@@ -104,39 +85,15 @@ __all__ = [
     "detect_gpu",
     "GPUInfo",
     "default_checkpoint_path",
-    # Clip lifecycle
-    "scan",
-    "load",
-    "attach_alpha",
-    "list_frames",
-    "Clip",
-    "ScanResult",
-    "SkippedClip",
-    "ClipManifest",
-    "ClipRecord",
-    "ClipState",
-    "FrameRange",
-    "get_clip_state",
     # Engine
     "Engine",
     "JobStats",
-    # Protocols
+    # Data contracts (flow through events)
+    "Clip",
+    "SkippedClip",
+    "ClipManifest",
+    # Alpha slot protocol
     "AlphaGenerator",
-    "ModelBackend",
-    # Layer 2 — frame loop
-    "load_model_backend",
-    "preprocess_frame",
-    "postprocess_frame",
-    "write_frame",
-    "PreprocessedFrame",
-    "FrameMeta",
-    "InferenceResult",
-    "ProcessedFrame",
-    # Internal stage configs (advanced — prefer config.to_*_config())
-    "PreprocessConfig",
-    "InferenceConfig",
-    "PostprocessConfig",
-    "WriteConfig",
     # Errors
     "CorridorKeyError",
     "EngineError",
@@ -146,7 +103,6 @@ __all__ = [
     "ClipScanError",
     "ExtractionError",
     "FrameMismatchError",
-    "InvalidStateTransitionError",
     "JobCancelledError",
     "FrameReadError",
     "WriteFailureError",

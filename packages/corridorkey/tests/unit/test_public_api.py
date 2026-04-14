@@ -26,152 +26,102 @@ class TestVersionExposed:
         assert corridorkey.__version__ != ""
 
 
-class TestListFramesExported:
-    def test_list_frames_in_all(self):
-        assert "list_frames" in corridorkey.__all__
+class TestCoreExported:
+    def test_engine_in_all(self):
+        assert "Engine" in corridorkey.__all__
 
-    def test_list_frames_callable(self):
-        from corridorkey import list_frames
+    def test_job_stats_in_all(self):
+        assert "JobStats" in corridorkey.__all__
 
-        assert callable(list_frames)
+    def test_engine_is_class(self):
+        from corridorkey import Engine
 
-    def test_list_frames_returns_list(self, tmp_path):
-        import cv2
-        import numpy as np
-        from corridorkey import list_frames
+        assert isinstance(Engine, type)
 
-        assert list_frames(tmp_path) == []
+    def test_job_stats_is_class(self):
+        from corridorkey import JobStats
 
-        for i in range(3):
-            cv2.imwrite(str(tmp_path / f"frame_{i:06d}.png"), np.zeros((4, 4, 3), dtype=np.uint8))
+        assert isinstance(JobStats, type)
 
-        files = list_frames(tmp_path)
-        assert len(files) == 3
-        assert [f.name for f in files] == [
-            "frame_000000.png",
-            "frame_000001.png",
-            "frame_000002.png",
+
+class TestDataContractsExported:
+    def test_clip_in_all(self):
+        assert "Clip" in corridorkey.__all__
+
+    def test_skipped_clip_in_all(self):
+        assert "SkippedClip" in corridorkey.__all__
+
+    def test_clip_manifest_in_all(self):
+        assert "ClipManifest" in corridorkey.__all__
+
+    def test_clip_constructible(self, tmp_path):
+        from corridorkey import Clip
+
+        input_dir = tmp_path / "Input"
+        input_dir.mkdir()
+        clip = Clip(name="test", root=tmp_path, input_path=input_dir, alpha_path=None)
+        assert clip.name == "test"
+        assert clip.alpha_path is None
+
+    def test_skipped_clip_constructible(self, tmp_path):
+        from corridorkey import SkippedClip
+
+        s = SkippedClip(path=tmp_path, reason="test reason")
+        assert s.reason == "test reason"
+
+
+class TestAlphaGeneratorExported:
+    def test_alpha_generator_in_all(self):
+        assert "AlphaGenerator" in corridorkey.__all__
+
+    def test_alpha_generator_is_protocol(self):
+        from corridorkey import AlphaGenerator
+
+        # Protocol — not a concrete class, but importable
+        assert AlphaGenerator is not None
+
+    def test_engine_accepts_alpha_generator(self, tmp_path):
+        """set_alpha_generator() accepts any object with a generate() method."""
+        from corridorkey import Engine, load_config_with_metadata
+
+        config, _ = load_config_with_metadata()
+
+        class MinimalAlpha:
+            def generate(self, manifest):
+                return manifest
+
+        engine = Engine(config)
+        engine.set_alpha_generator(MinimalAlpha())  # should not raise
+
+    def test_engine_rejects_invalid_alpha_generator(self, tmp_path):
+        """set_alpha_generator() raises EngineError for objects without generate()."""
+        import pytest
+        from corridorkey import Engine, EngineError, load_config_with_metadata
+
+        config, _ = load_config_with_metadata()
+        engine = Engine(config)
+        with pytest.raises(EngineError):
+            engine.set_alpha_generator(object())
+
+
+class TestErrorsExported:
+    def test_all_errors_in_all(self):
+        expected = [
+            "CorridorKeyError",
+            "EngineError",
+            "AlphaGeneratorError",
+            "DeviceError",
+            "ModelError",
+            "ClipScanError",
+            "ExtractionError",
+            "FrameMismatchError",
+            "JobCancelledError",
+            "FrameReadError",
+            "WriteFailureError",
+            "VRAMInsufficientError",
         ]
-
-
-class TestClipRecordExported:
-    def test_clip_record_in_all(self):
-        assert "ClipRecord" in corridorkey.__all__
-
-    def test_clip_record_is_class(self):
-        from corridorkey import ClipRecord
-
-        assert isinstance(ClipRecord, type)
-
-    def test_clip_record_constructible_from_clip(self, tmp_path):
-        import cv2
-        import numpy as np
-        from corridorkey import Clip, ClipRecord, ClipState
-
-        input_dir = tmp_path / "Input"
-        input_dir.mkdir()
-        cv2.imwrite(str(input_dir / "frame_000001.png"), np.zeros((8, 8, 3), dtype=np.uint8))
-        clip = Clip(name="test", root=tmp_path, input_path=input_dir, alpha_path=None)
-        entry = ClipRecord.from_clip(clip)
-
-        assert entry.name == "test"
-        assert entry.state == ClipState.RAW
-        assert entry.manifest is None
-        assert entry.in_out_range is None
-
-    def test_clip_record_state_machine_accessible(self, tmp_path):
-        from corridorkey import Clip, ClipRecord, ClipState
-
-        input_dir = tmp_path / "Input"
-        input_dir.mkdir()
-        clip = Clip(name="test", root=tmp_path, input_path=input_dir, alpha_path=None)
-        entry = ClipRecord(clip=clip, state=ClipState.RAW)
-        entry.transition_to(ClipState.READY)
-        assert entry.state == ClipState.READY
-
-
-class TestFrameRangeExported:
-    def test_frame_range_in_all(self):
-        assert "FrameRange" in corridorkey.__all__
-
-    def test_frame_range_is_class(self):
-        from corridorkey import FrameRange
-
-        assert isinstance(FrameRange, type)
-
-    def test_frame_range_constructible(self):
-        from corridorkey import FrameRange
-
-        r = FrameRange(in_point=5, out_point=14)
-        assert r.frame_count == 10
-        assert r.contains(5)
-        assert r.contains(14)
-        assert not r.contains(15)
-
-    def test_frame_range_to_frame_range(self):
-        from corridorkey import FrameRange
-
-        r = FrameRange(in_point=0, out_point=9)
-        assert r.to_frame_range() == (0, 10)
-
-    def test_frame_range_usable_on_clip_record(self, tmp_path):
-        from corridorkey import Clip, ClipRecord, ClipState, FrameRange
-
-        input_dir = tmp_path / "Input"
-        input_dir.mkdir()
-        clip = Clip(name="test", root=tmp_path, input_path=input_dir, alpha_path=None)
-        entry = ClipRecord(clip=clip, state=ClipState.RAW)
-        entry.in_out_range = FrameRange(in_point=10, out_point=49)
-        assert entry.in_out_range.frame_count == 40
-
-
-class TestGetClipStateExported:
-    def test_get_clip_state_in_all(self):
-        assert "get_clip_state" in corridorkey.__all__
-
-    def test_get_clip_state_callable(self):
-        from corridorkey import get_clip_state
-
-        assert callable(get_clip_state)
-
-    def test_get_clip_state_returns_clip_state(self, tmp_path):
-        import cv2
-        import numpy as np
-        from corridorkey import Clip, ClipState, get_clip_state
-
-        input_dir = tmp_path / "Input"
-        input_dir.mkdir()
-        cv2.imwrite(str(input_dir / "frame_000001.png"), np.zeros((8, 8, 3), dtype=np.uint8))
-        clip = Clip(name="test", root=tmp_path, input_path=input_dir, alpha_path=None)
-        state = get_clip_state(clip)
-
-        assert isinstance(state, ClipState)
-        assert state == ClipState.RAW
-
-
-class TestRemovedFromPublicAPI:
-    def test_runner_not_in_all(self):
-        assert "Runner" not in corridorkey.__all__
-
-    def test_pipeline_config_not_in_all(self):
-        assert "PipelineConfig" not in corridorkey.__all__
-
-    def test_pipeline_events_not_in_all(self):
-        assert "PipelineEvents" not in corridorkey.__all__
-
-    def test_setup_logging_not_in_all(self):
-        assert "setup_logging" not in corridorkey.__all__
-
-    def test_ensure_model_not_in_all(self):
-        assert "ensure_model" not in corridorkey.__all__
-
-
-class TestNewErrorsExported:
-    def test_engine_error_in_all(self):
-        assert "EngineError" in corridorkey.__all__
-
-    def test_alpha_generator_error_in_all(self):
-        assert "AlphaGeneratorError" in corridorkey.__all__
+        for name in expected:
+            assert name in corridorkey.__all__, f"{name} missing from __all__"
 
     def test_alpha_generator_error_message(self):
         from corridorkey import AlphaGeneratorError
@@ -180,13 +130,109 @@ class TestNewErrorsExported:
         assert "MyClip" in str(err)
         assert "AlphaGenerator" in str(err)
 
+    def test_all_errors_catchable_as_base(self):
+        from corridorkey import (
+            AlphaGeneratorError,
+            ClipScanError,
+            CorridorKeyError,
+            DeviceError,
+            EngineError,
+            ExtractionError,
+            FrameMismatchError,
+            FrameReadError,
+            JobCancelledError,
+            ModelError,
+            VRAMInsufficientError,
+            WriteFailureError,
+        )
 
-class TestProtocolsExported:
-    def test_alpha_generator_in_all(self):
-        assert "AlphaGenerator" in corridorkey.__all__
+        errors = [
+            EngineError("x"),
+            AlphaGeneratorError("clip"),
+            ClipScanError("x"),
+            ExtractionError("clip", "detail"),
+            FrameMismatchError("clip", 3, 2),
+            FrameReadError("x"),
+            JobCancelledError("clip"),
+            DeviceError("x"),
+            ModelError("x"),
+            WriteFailureError("path"),
+            VRAMInsufficientError(10.0, 4.0),
+        ]
+        for err in errors:
+            assert isinstance(err, CorridorKeyError)
 
-    def test_model_backend_in_all(self):
-        assert "ModelBackend" in corridorkey.__all__
+
+class TestRemovedFromPublicAPI:
+    """Verify that internal symbols are not in __all__."""
+
+    def test_clip_record_not_in_all(self):
+        assert "ClipRecord" not in corridorkey.__all__
+
+    def test_clip_state_not_in_all(self):
+        assert "ClipState" not in corridorkey.__all__
+
+    def test_frame_range_not_in_all(self):
+        assert "FrameRange" not in corridorkey.__all__
+
+    def test_get_clip_state_not_in_all(self):
+        assert "get_clip_state" not in corridorkey.__all__
+
+    def test_scan_result_not_in_all(self):
+        assert "ScanResult" not in corridorkey.__all__
+
+    def test_list_frames_not_in_all(self):
+        assert "list_frames" not in corridorkey.__all__
+
+    def test_model_backend_not_in_all(self):
+        assert "ModelBackend" not in corridorkey.__all__
+
+    def test_pipeline_config_not_in_all(self):
+        assert "PipelineConfig" not in corridorkey.__all__
+
+    def test_pipeline_events_not_in_all(self):
+        assert "PipelineEvents" not in corridorkey.__all__
+
+    def test_preprocess_frame_not_in_all(self):
+        assert "preprocess_frame" not in corridorkey.__all__
+
+    def test_postprocess_frame_not_in_all(self):
+        assert "postprocess_frame" not in corridorkey.__all__
+
+    def test_write_frame_not_in_all(self):
+        assert "write_frame" not in corridorkey.__all__
+
+    def test_inference_result_not_in_all(self):
+        assert "InferenceResult" not in corridorkey.__all__
+
+    def test_processed_frame_not_in_all(self):
+        assert "ProcessedFrame" not in corridorkey.__all__
+
+    def test_internal_still_importable_from_submodule(self):
+        """Internal symbols stay in the codebase — just not in __all__."""
+        from corridorkey.runtime.clip_state import ClipRecord, ClipState
+        from corridorkey.stages.scanner.contracts import ScanResult
+
+        assert ClipRecord is not None
+        assert ClipState is not None
+        assert ScanResult is not None
+
+
+class TestConfigExported:
+    def test_load_config_in_all(self):
+        assert "load_config" in corridorkey.__all__
+
+    def test_corridorkey_config_in_all(self):
+        assert "CorridorKeyConfig" in corridorkey.__all__
+
+    def test_settings_metadata_in_all(self):
+        assert "SettingsMetadata" in corridorkey.__all__
+
+    def test_load_config_with_metadata_returns_settings_metadata(self):
+        from corridorkey import SettingsMetadata, load_config_with_metadata
+
+        _, metadata = load_config_with_metadata()
+        assert isinstance(metadata, SettingsMetadata)
 
 
 class TestModelConstantsNotInAll:
@@ -203,26 +249,3 @@ class TestModelConstantsNotInAll:
         assert MODEL_URL.startswith("https://")
         assert isinstance(MODEL_FILENAME, str)
         assert MODEL_FILENAME.endswith(".pth")
-
-
-class TestSettingsMetadataExported:
-    def test_settings_metadata_in_all(self):
-        assert "SettingsMetadata" in corridorkey.__all__
-
-    def test_settings_metadata_importable(self):
-        from corridorkey import SettingsMetadata
-
-        assert SettingsMetadata is not None
-
-    def test_load_config_with_metadata_returns_settings_metadata(self):
-        from corridorkey import SettingsMetadata, load_config_with_metadata
-
-        _, metadata = load_config_with_metadata()
-        assert isinstance(metadata, SettingsMetadata)
-
-    def test_settings_metadata_get_source_callable(self):
-        from corridorkey import load_config_with_metadata
-
-        _, metadata = load_config_with_metadata()
-        result = metadata.get_source("device")
-        assert result is None or hasattr(result, "source")
