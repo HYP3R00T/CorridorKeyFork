@@ -74,3 +74,33 @@ class TestClipManifest:
         assert restored.clip_name == m.clip_name
         assert restored.frame_count == m.frame_count
         assert restored.png_compression == m.png_compression
+
+
+class TestClipManifestFrameRangeValidation:
+    def test_start_equal_to_end_raises(self, tmp_path: Path):
+        with pytest.raises(Exception, match="must be less than end"):
+            _make_manifest(tmp_path, frame_count=10, frame_range=(5, 5))
+
+    def test_start_greater_than_end_raises(self, tmp_path: Path):
+        with pytest.raises(Exception, match="must be less than end"):
+            _make_manifest(tmp_path, frame_count=10, frame_range=(7, 3))
+
+    def test_start_negative_raises(self, tmp_path: Path):
+        with pytest.raises(Exception, match="frame_range start"):
+            _make_manifest(tmp_path, frame_count=10, frame_range=(-1, 5))
+
+    def test_end_exceeds_frame_count_raises(self, tmp_path: Path):
+        with pytest.raises(Exception, match="frame_range end"):
+            _make_manifest(tmp_path, frame_count=10, frame_range=(0, 11))
+
+    def test_valid_partial_range(self, tmp_path: Path):
+        m = _make_manifest(tmp_path, frame_count=10, frame_range=(2, 8))
+        assert m.frame_range == (2, 8)
+
+    def test_single_frame_range_valid(self, tmp_path: Path):
+        m = _make_manifest(tmp_path, frame_count=10, frame_range=(0, 1))
+        assert m.frame_range == (0, 1)
+
+    def test_full_range_valid(self, tmp_path: Path):
+        m = _make_manifest(tmp_path, frame_count=10, frame_range=(0, 10))
+        assert m.frame_range == (0, 10)

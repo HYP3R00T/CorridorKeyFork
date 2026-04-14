@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 import torch
 from corridorkey.stages.inference.config import InferenceConfig
 from corridorkey.stages.inference.contracts import InferenceResult
@@ -169,3 +170,168 @@ class TestRunInference:
 
         model.refiner.register_forward_hook.assert_called_once()
         handle.remove.assert_called_once()
+
+
+class TestRefinerScaleHook:
+    """Lines 79-86: the non-tiled refiner_scale != 1.0 scale hook path."""
+
+    def test_scale_hook_registered_when_not_tiling_and_scale_not_one(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="full_frame", refiner_scale=0.5)
+        frame = _make_frame()
+        model = MagicMock(return_value=_make_model_output())
+        handle = MagicMock()
+        model.refiner.register_forward_hook.return_value = handle
+
+        run_inference(frame, model, cfg)
+
+        model.refiner.register_forward_hook.assert_called_once()
+        handle.remove.assert_called_once()
+
+    def test_scale_hook_not_registered_when_scale_is_one(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="full_frame", refiner_scale=1.0)
+        frame = _make_frame()
+        model = MagicMock(return_value=_make_model_output())
+
+        run_inference(frame, model, cfg)
+
+        model.refiner.register_forward_hook.assert_not_called()
+
+    def test_scale_hook_not_registered_when_refiner_disabled(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, use_refiner=False, refiner_scale=0.5)
+        frame = _make_frame()
+        model = MagicMock(return_value=_make_model_output())
+
+        run_inference(frame, model, cfg)
+
+        model.refiner.register_forward_hook.assert_not_called()
+
+
+class TestFreeVramIfNeeded:
+    """Lines 131-136: _free_vram_if_needed CUDA branch."""
+
+    def test_non_cuda_device_does_nothing(self):
+        from corridorkey.stages.inference.orchestrator import _free_vram_if_needed
+
+        with patch("torch.cuda.get_device_properties") as mock_props:
+            _free_vram_if_needed("cpu")
+            mock_props.assert_not_called()
+
+    def test_cuda_high_vram_does_not_call_empty_cache(self):
+        from corridorkey.stages.inference.orchestrator import _free_vram_if_needed
+
+        mock_props = MagicMock()
+        mock_props.total_memory = 12 * 1024**3
+        with (
+            patch("torch.cuda.get_device_properties", return_value=mock_props),
+            patch("torch.cuda.empty_cache") as mock_empty,
+        ):
+            _free_vram_if_needed("cuda")
+            mock_empty.assert_not_called()
+
+    def test_cuda_low_vram_calls_empty_cache(self):
+        from corridorkey.stages.inference.orchestrator import _free_vram_if_needed
+
+        mock_props = MagicMock()
+        mock_props.total_memory = 4 * 1024**3
+        with (
+            patch("torch.cuda.get_device_properties", return_value=mock_props),
+            patch("torch.cuda.empty_cache") as mock_empty,
+        ):
+            _free_vram_if_needed("cuda")
+            mock_empty.assert_called_once()
+
+    def test_exception_in_vram_probe_is_swallowed(self):
+        from corridorkey.stages.inference.orchestrator import _free_vram_if_needed
+
+        with patch("torch.cuda.get_device_properties", side_effect=RuntimeError("no cuda")):
+            _free_vram_if_needed("cuda")  # must not raise
+
+
+class TestTiledRefinerHookGuard:
+    """Lines 248-254: the len(inputs) != 2 guard in _make_tiled_refiner_hook."""
+
+    def test_hook_raises_when_wrong_number_of_inputs(self):
+        from corridorkey.stages.inference.orchestrator import _make_tiled_refiner_hook, _TiledRefinerState
+
+        refiner = MagicMock()
+        _TiledRefinerState()
+        hook = _make_tiled_refiner_hook(refiner)
+
+        with pytest.raises(RuntimeError, match="expected 2 inputs"):
+            hook(refiner, (torch.zeros(1, 3, 32, 32),), torch.zeros(1, 4, 32, 32))
+
+    def test_hook_raises_when_zero_inputs(self):
+        from corridorkey.stages.inference.orchestrator import _make_tiled_refiner_hook
+
+        refiner = MagicMock()
+        hook = _make_tiled_refiner_hook(refiner)
+
+        with pytest.raises(RuntimeError, match="expected 2 inputs"):
+            hook(refiner, (), torch.zeros(1, 4, 32, 32))
+
+
+class TestRefinerScaleHookNoRefinerAttr:
+    """Line 84: the `if refiner is not None` guard — model has no .refiner attribute."""
+
+    def test_scale_hook_skipped_when_model_has_no_refiner(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="full_frame", refiner_scale=0.5)
+        frame = _make_frame()
+        model = MagicMock(spec=[])  # no attributes at all
+        model.return_value = _make_model_output()
+        result = run_inference(frame, model, cfg)
+        assert result is not None
+
+
+class TestProbeVramGbPynvml:
+    """Lines 203-210: the pynvml success path in _probe_vram_gb."""
+
+    def test_pynvml_success_path_returns_gb(self):
+        mock_mem = MagicMock()
+        mock_mem.total = 8 * 1024**3
+
+        with (
+            patch("pynvml.nvmlInit"),
+            patch("pynvml.nvmlDeviceGetHandleByIndex", return_value=MagicMock()),
+            patch("pynvml.nvmlDeviceGetMemoryInfo", return_value=mock_mem),
+        ):
+            result = _probe_vram_gb("cuda")
+
+        assert result == pytest.approx(8.0, abs=0.1)
+
+    def test_pynvml_failure_falls_back_to_torch(self):
+        mock_props = MagicMock()
+        mock_props.total_memory = 6 * 1024**3
+
+        with (
+            patch("pynvml.nvmlInit", side_effect=Exception("no nvml")),
+            patch("torch.cuda.is_available", return_value=True),
+            patch("torch.cuda.get_device_properties", return_value=mock_props),
+        ):
+            result = _probe_vram_gb("cuda")
+
+        assert result == pytest.approx(6.0, abs=0.1)
+
+    def test_cuda_index_parsed_correctly(self):
+        mock_mem = MagicMock()
+        mock_mem.total = 10 * 1024**3
+
+        captured_index = []
+        with (
+            patch("pynvml.nvmlInit"),
+            patch("pynvml.nvmlDeviceGetHandleByIndex", side_effect=lambda i: captured_index.append(i) or MagicMock()),
+            patch("pynvml.nvmlDeviceGetMemoryInfo", return_value=mock_mem),
+        ):
+            _probe_vram_gb("cuda:1")
+
+        assert captured_index == [1]
+
+
+class TestShouldTileRefinerMPS:
+    """Line 164: the MPS branch in _should_tile_refiner."""
+
+    def test_mps_device_always_tiles(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, use_refiner=True, refiner_mode="auto")
+        with patch("corridorkey.stages.inference.orchestrator.torch") as mock_torch:
+            mock_torch.device.return_value = MagicMock(type="mps")
+            result = _should_tile_refiner(cfg, resolved_refiner_mode=None)
+        assert result is True
