@@ -6,12 +6,9 @@ argument-hint: 'Name the stage or file to cover (e.g. "scanner orchestrator", "l
 
 # Skill: write-tests
 
-Read the source code, map every branch to an existing test, identify what is not covered,
-write the missing tests, and verify everything passes.
+Read the source code, map every branch to an existing test, identify what is not covered, write the missing tests, and verify everything passes.
 
-The goal is not 100% line coverage — it is meaningful branch coverage. Every decision point
-(if/else, exception path, early return, edge case) should have at least one test that exercises it.
-Tests that only cover the happy path are incomplete.
+The goal is not 100% line coverage — it is meaningful branch coverage. Every decision point (if/else, exception path, early return, edge case) should have at least one test that exercises it. Tests that only cover the happy path are incomplete.
 
 ## Test file location
 
@@ -33,31 +30,26 @@ Examples:
 | `src/corridorkey/infra/utils.py` | `tests/unit/infra/test_utils.py` |
 | `src/corridorkey/engine.py` | `tests/unit/test_engine.py` |
 
-If the test file does not exist yet, create it at the correct mirror path. Also create any
-missing `__init__.py` files in the new directories.
+If the test file does not exist yet, create it at the correct mirror path. Also create any missing `__init__.py` files in the new directories.
 
 Never create `_extra.py` files. All tests for a source file belong in its single test file.
 
 ## Test writing conventions
 
-**Every test function must have a docstring** describing what is tested, under what condition,
-and what the expected outcome is. This makes test output readable without having to open the file.
+**Every test function must have a docstring** describing what is tested, under what condition, and what the expected outcome is. This makes test output readable without having to open the file.
 
 ```python
 def test_normalise_video_already_in_place_skips_move(self, tmp_path: Path):
     """When the destination already exists with the same size, the source is not moved."""
 ```
 
-**One assertion per test** where possible. Tests that assert many things at once are hard to
-diagnose when they fail.
+**One assertion per test** where possible. Tests that assert many things at once are hard to diagnose when they fail.
 
-**Group related tests in a class** named after the function or behaviour under test:
-`TestNormaliseVideo`, `TestTryBuildClip`, `TestScanErrors`.
+**Group related tests in a class** named after the function or behaviour under test: `TestNormaliseVideo`, `TestTryBuildClip`, `TestScanErrors`.
 
 **Use `tmp_path`** for all filesystem operations — never hardcode paths.
 
-**Test observable behaviour, not implementation details.** If a test would break when you
-rename a private helper without changing any public behaviour, it is testing the wrong thing.
+**Test observable behaviour, not implementation details.** If a test would break when you rename a private helper without changing any public behaviour, it is testing the wrong thing.
 
 ## Steps
 
@@ -70,14 +62,11 @@ Read every function in the target file(s). For each function, list every branch:
 - Edge cases (empty input, None, zero, boundary values)
 - Any guard conditions (permission checks, type checks, existence checks)
 
-Do this by reading the code directly. Do not rely on coverage tools — they may fail in this
-repo due to heavy import chains involving torch and cv2.
+Do this by reading the code directly. Do not rely on coverage tools — they may fail in this repo due to heavy import chains involving torch and cv2.
 
 ### 2. Map branches to existing tests
 
-Locate the test file at the mirror path. Read it fully.
-For each branch you identified in step 1, find the test that exercises it.
-Mark what is covered and what is not.
+Locate the test file at the mirror path. Read it fully. For each branch you identified in step 1, find the test that exercises it. Mark what is covered and what is not.
 
 ### 3. Write the missing tests
 
