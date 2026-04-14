@@ -1,9 +1,3 @@
-"""Scanner stage — video normaliser and clip discovery helpers.
-
-Handles reorganising loose video files into the expected clip folder structure,
-and locating Input/ and AlphaHint/ assets inside a clip directory.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -43,7 +37,7 @@ def normalise_video(video_path: Path) -> Clip:
         Clip with root=parent, input_path=parent/Input/video, alpha_path=None.
 
     Raises:
-        OSError: If directory creation, copy, or delete fails.
+        ClipScanError: If directory creation, copy, size verification, or delete fails.
     """
     clip_root = video_path.parent
     input_dir = clip_root / "Input"
@@ -70,14 +64,17 @@ def normalise_video(video_path: Path) -> Clip:
 def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedClip | None]:
     """Attempt to build a Clip from a directory.
 
+    Args:
+        clip_dir: Directory to inspect for Input/ and AlphaHint/ assets.
+
     Returns:
         (Clip, None) on success.
-        (None, SkippedClip) if the directory was a recognisable clip structure
-            that failed validation.
-        (None, None) if the directory is simply not a clip (no Input/ folder).
+        (None, SkippedClip) if the directory has an Input/ folder but it is
+            ambiguous, empty of videos, or fails Clip validation.
+        (None, None) if the directory has no Input/ folder at all.
     """
     try:
-        input_path, input_skip = find_input(clip_dir)
+        input_path, input_skip = _find_asset(clip_dir, "Input")
     except PermissionError as e:
         reason = f"cannot read directory: {e}"
         logger.warning("Skipping '%s': %s", clip_dir, reason)
@@ -90,10 +87,11 @@ def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedClip | None]:
         # No Input/ folder at all — not a clip, silently ignore.
         return None, None
 
-    alpha_path, alpha_skip = find_alpha(clip_dir)
+    alpha_path, alpha_skip = _find_asset(clip_dir, "AlphaHint")
     if alpha_skip is not None:
-        logger.warning("Clip '%s': alpha hint skipped — %s", clip_dir.name, alpha_skip.reason)
-
+        logger.warning(
+            "Clip '%s': AlphaHint skipped (%s) — clip will need alpha generated", clip_dir.name, alpha_skip.reason
+        )
     try:
         clip = Clip(name=clip_dir.name, root=clip_dir, input_path=input_path, alpha_path=alpha_path)
         return clip, None
@@ -103,76 +101,39 @@ def try_build_clip(clip_dir: Path) -> tuple[Clip | None, SkippedClip | None]:
         return None, SkippedClip(path=clip_dir, reason=reason)
 
 
-def find_input(clip_dir: Path) -> tuple[Path | None, SkippedClip | None]:
-    """Locate the input asset inside a clip folder (case-insensitive).
-
-    Returns:
-        (video_path, None) if Input/ contains exactly one video.
-        (input_dir, None) if Input/ contains no video (image sequence).
-        (None, SkippedClip) if Input/ contains multiple videos (ambiguous).
-        (None, None) if no Input/ folder exists.
-
-    Raises:
-        PermissionError: If clip_dir cannot be read.
-    """
-    input_dir = _find_icase(clip_dir, "Input")
-    if input_dir is None:
+def _find_asset(
+    clip_dir: Path,
+    folder_name: str,
+) -> tuple[Path | None, SkippedClip | None]:
+    # Locate a named asset subfolder (Input/ or AlphaHint/) and resolve its content.
+    # Returns (asset_path, None), (None, SkippedClip), or (None, None).
+    asset_dir = _find_icase(clip_dir, folder_name)
+    if asset_dir is None:
         return None, None
 
-    videos = _find_videos_in(input_dir)
+    videos = _find_videos_in(asset_dir)
     if len(videos) == 0:
-        return input_dir, None
-    if len(videos) == 1:
-        return videos[0], None
-
-    # Multiple videos — ambiguous, report as skipped.
-    names = ", ".join(v.name for v in videos)
-    reason = f"Input/ contains multiple video files ({names}) — keep exactly one"
-    logger.warning("Skipping '%s': %s", clip_dir, reason)
-    return None, SkippedClip(path=clip_dir, reason=reason)
-
-
-def find_alpha(clip_dir: Path) -> tuple[Path | None, SkippedClip | None]:
-    """Locate the AlphaHint asset inside a clip folder (case-insensitive).
-
-    Returns:
-        (video_path, None) if AlphaHint/ contains exactly one video.
-        (alpha_dir, None) if AlphaHint/ contains no video (image sequence).
-        (None, SkippedClip) if AlphaHint/ contains multiple videos (ambiguous).
-        (None, None) if no AlphaHint/ folder exists.
-    """
-    alpha_dir = _find_icase(clip_dir, "AlphaHint")
-    if alpha_dir is None:
-        return None, None
-
-    videos = _find_videos_in(alpha_dir)
-    if len(videos) == 0:
-        return alpha_dir, None
+        return asset_dir, None
     if len(videos) == 1:
         return videos[0], None
 
     names = ", ".join(v.name for v in videos)
-    reason = f"AlphaHint/ contains multiple video files ({names}) — keep exactly one"
+    reason = f"{folder_name}/ contains multiple video files ({names}) — keep exactly one"
     return None, SkippedClip(path=clip_dir, reason=reason)
 
 
 def _find_videos_in(directory: Path) -> list[Path]:
-    """Return all video files found in a directory, sorted by name."""
     try:
         return sorted(
             (child for child in directory.iterdir() if child.is_file() and child.suffix.lower() in VIDEO_EXTENSIONS),
             key=lambda p: p.name.lower(),
         )
     except PermissionError:
+        logger.warning("Cannot read directory '%s' — treating as empty", directory)
         return []
 
 
 def _find_icase(parent: Path, name: str) -> Path | None:
-    """Case-insensitive lookup of a child entry inside parent.
-
-    Raises:
-        PermissionError: If parent cannot be read.
-    """
     try:
         for child in parent.iterdir():
             if child.name.lower() == name.lower():
@@ -183,15 +144,6 @@ def _find_icase(parent: Path, name: str) -> Path | None:
 
 
 def _safe_move(src: Path, dst: Path) -> None:
-    """Copy src to dst, verify size matches, then delete src.
-
-    Safer than shutil.move for cross-filesystem moves: shutil.move falls back
-    to copy-then-delete without verifying the copy succeeded. This function
-    verifies the destination size matches before removing the source.
-
-    Raises:
-        OSError: If copy, size verification, or delete fails.
-    """
     src_size = src.stat().st_size
     try:
         shutil.copy2(str(src), str(dst))

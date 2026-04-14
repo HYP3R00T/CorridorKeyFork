@@ -1,8 +1,3 @@
-"""Scanner stage — contracts.
-
-Output contract of stage 0. Consumed by the loader stage (stage 1).
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -22,9 +17,8 @@ class Clip(BaseModel):
         input_path: Path to the input asset. Either the Input/ directory (for
             pre-structured clips) or a video file inside Input/ (for normalised
             videos).
-        alpha_path: Path to the alpha hint asset. None if absent — the interface
-            must generate alpha externally and call attach_alpha() before
-            proceeding.
+        alpha_path: Path to the alpha hint asset. None if absent — alpha must
+            be generated externally before the clip can proceed to inference.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -77,7 +71,7 @@ class ScanResult(BaseModel):
     Attributes:
         clips: Valid clips ready for the loader stage.
         skipped: Paths that were encountered but could not be used, with
-            reasons. Empty list if nothing was skipped.
+            reasons. Empty tuple if nothing was skipped.
     """
 
     model_config = ConfigDict(frozen=True)

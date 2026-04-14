@@ -11,7 +11,6 @@ from corridorkey.stages.scanner.normaliser import (
     _find_icase,
     _find_videos_in,
     _safe_move,
-    find_alpha,
     normalise_video,
     try_build_clip,
 )
@@ -68,11 +67,13 @@ class TestSafeMove:
 
 class TestFindAlphaAmbiguous:
     def test_multiple_videos_returns_skipped(self, tmp_path: Path):
+        from corridorkey.stages.scanner.normaliser import _find_asset
+
         alpha_dir = tmp_path / "AlphaHint"
         alpha_dir.mkdir()
         (alpha_dir / "a.mp4").touch()
         (alpha_dir / "b.mp4").touch()
-        path, skip = find_alpha(tmp_path)
+        path, skip = _find_asset(tmp_path, "AlphaHint")
         assert path is None
         assert isinstance(skip, SkippedClip)
         assert "multiple" in skip.reason.lower()
@@ -232,7 +233,7 @@ class TestFindVideosInFallback:
 class TestTryBuildClipPermissionError:
     def test_permission_error_on_find_input_returns_skipped(self, tmp_path: Path):
         with patch(
-            "corridorkey.stages.scanner.normaliser.find_input",
+            "corridorkey.stages.scanner.normaliser._find_asset",
             side_effect=PermissionError("denied"),
         ):
             clip, skip = try_build_clip(tmp_path)

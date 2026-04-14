@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 def scan(
     paths: list[Path] | Path | str,
-    reorganise: bool = True,
     events: PipelineEvents | None = None,
 ) -> ScanResult:
     """Scan one or more paths for processable clips.
@@ -22,16 +21,15 @@ def scan(
     Accepts a single path or a list of paths. Each path may be:
     - A clips directory containing multiple clip subfolders
     - A single clip folder (must contain Input/ and optionally AlphaHint/)
-    - A single video file (reorganised in-place into a clip folder structure)
+    - A single video file (moved in-place into a clip folder structure)
 
     Passing a list allows scanning clips that live at unrelated locations on
     disk (different drives, different projects) in a single call.
 
+    Loose video files are always reorganised into an Input/ subfolder in-place.
+
     Args:
         paths: A single path or list of paths to scan.
-        reorganise: If True (default), loose video files are moved into an
-            Input/ subfolder in-place. If False, loose videos are reported as
-            skipped rather than silently ignored.
         events: Optional PipelineEvents for streaming clip discovery to a GUI.
             on_clip_found fires for each valid clip as it is discovered.
             on_clip_skipped fires for each path that could not be used.
@@ -50,45 +48,43 @@ def scan(
     all_skipped: list[SkippedClip] = []
 
     for path in path_list:
-        result = _scan_one(path, reorganise=reorganise, events=events)
+        result = _scan_one(path, events=events)
         all_clips.extend(result.clips)
         all_skipped.extend(result.skipped)
 
-    return ScanResult(clips=tuple(all_clips), skipped=tuple(all_skipped))
+    result = ScanResult(clips=tuple(all_clips), skipped=tuple(all_skipped))
+    logger.info(
+        "Scan complete: %d clip(s) found, %d skipped across %d path(s)",
+        result.clip_count,
+        result.skipped_count,
+        len(path_list),
+    )
+    return result
 
 
 def _scan_one(
     path: Path,
-    reorganise: bool,
     events: PipelineEvents | None = None,
 ) -> ScanResult:
     if not path.exists():
         raise ClipScanError(f"Path does not exist: {path}")
 
     if path.is_file():
-        return _scan_video_file(path, reorganise=reorganise, events=events)
+        return _scan_video_file(path, events=events)
 
     clip, skip = try_build_clip(path)
     if clip is not None or skip is not None:
         return _scan_clip_folder(clip, skip, events=events)
 
-    return _scan_clips_directory(path, reorganise=reorganise, events=events)
+    return _scan_clips_directory(path, events=events)
 
 
 def _scan_video_file(
     path: Path,
-    reorganise: bool,
     events: PipelineEvents | None,
 ) -> ScanResult:
     if path.suffix.lower() not in VIDEO_EXTENSIONS:
         raise ClipScanError(f"File is not a recognised video format: {path}")
-
-    if not reorganise:
-        reason = "reorganise=False — loose video files are not processed without reorganisation"
-        logger.warning("Skipping '%s': %s", path, reason)
-        if events:
-            events.clip_skipped(reason, path)
-        return ScanResult(clips=(), skipped=(SkippedClip(path=path, reason=reason),))
 
     clip = normalise_video(path)
     if events:
@@ -108,6 +104,7 @@ def _scan_clip_folder(
 
     # skip is non-None here: try_build_clip returns (None, SkippedClip) or (Clip, None)
     assert skip is not None  # noqa: S101
+    logger.warning("Skipping '%s': %s", skip.path, skip.reason)
     if events:
         events.clip_skipped(skip.reason, skip.path)
     return ScanResult(clips=(), skipped=(skip,))
@@ -115,7 +112,6 @@ def _scan_clip_folder(
 
 def _scan_clips_directory(
     path: Path,
-    reorganise: bool,
     events: PipelineEvents | None,
 ) -> ScanResult:
     try:
@@ -128,7 +124,7 @@ def _scan_clips_directory(
 
     for item in items:
         if item.is_file():
-            _collect_loose_video(item, reorganise=reorganise, events=events, clips=clips, skipped=skipped)
+            _collect_loose_video(item, events=events, clips=clips)
         elif item.is_dir():
             _collect_clip_folder(item, events=events, clips=clips, skipped=skipped)
 
@@ -140,24 +136,15 @@ def _scan_clips_directory(
 
 def _collect_loose_video(
     item: Path,
-    reorganise: bool,
     events: PipelineEvents | None,
     clips: list[Clip],
-    skipped: list[SkippedClip],
 ) -> None:
     if item.suffix.lower() not in VIDEO_EXTENSIONS:
         return
-    if reorganise:
-        clip = normalise_video(item)
-        clips.append(clip)
-        if events:
-            events.clip_found(clip.name, clip.root)
-    else:
-        reason = "reorganise=False — loose video files are not processed without reorganisation"
-        logger.debug("Skipping loose video '%s': %s", item, reason)
-        skipped.append(SkippedClip(path=item, reason=reason))
-        if events:
-            events.clip_skipped(reason, item)
+    clip = normalise_video(item)
+    clips.append(clip)
+    if events:
+        events.clip_found(clip.name, clip.root)
 
 
 def _collect_clip_folder(
@@ -172,6 +159,7 @@ def _collect_clip_folder(
         if events:
             events.clip_found(clip.name, clip.root)
     elif skip is not None:
+        logger.warning("Skipping '%s': %s", skip.path, skip.reason)
         skipped.append(skip)
         if events:
             events.clip_skipped(skip.reason, skip.path)

@@ -108,37 +108,24 @@ class TestScanErrors:
             scan(f)
 
 
-class TestScanVideoReorganise:
-    def test_video_file_reorganised_when_reorganise_true(self, tmp_path: Path):
+class TestScanVideoFile:
+    def test_video_file_reorganised(self, tmp_path: Path):
         (tmp_path / "clip.mp4").touch()
-        result = scan(tmp_path / "clip.mp4", reorganise=True)
+        result = scan(tmp_path / "clip.mp4")
         assert result.clip_count == 1
         assert (tmp_path / "Input" / "clip.mp4").exists()
-
-    def test_video_file_skipped_when_reorganise_false(self, tmp_path: Path):
-        (tmp_path / "clip.mp4").touch()
-        result = scan(tmp_path / "clip.mp4", reorganise=False)
-        assert result.clip_count == 0
-        assert result.skipped_count == 1
-        assert "reorganise" in result.skipped[0].reason
 
     def test_loose_video_in_dir_reorganised(self, tmp_path: Path):
         (tmp_path / "clip.mp4").touch()
-        result = scan(tmp_path, reorganise=True)
+        result = scan(tmp_path)
         assert result.clip_count == 1
         assert (tmp_path / "Input" / "clip.mp4").exists()
-
-    def test_loose_video_in_dir_skipped_when_reorganise_false(self, tmp_path: Path):
-        (tmp_path / "clip.mp4").touch()
-        result = scan(tmp_path, reorganise=False)
-        assert result.clip_count == 0
-        assert result.skipped_count == 1
 
     def test_reorganise_idempotent(self, tmp_path: Path):
         """Scanning the same video twice should not fail or duplicate."""
         (tmp_path / "clip.mp4").touch()
-        scan(tmp_path / "clip.mp4", reorganise=True)
-        result = scan(tmp_path / "Input" / "clip.mp4", reorganise=True)
+        scan(tmp_path / "clip.mp4")
+        result = scan(tmp_path / "Input" / "clip.mp4")
         assert result.clip_count == 1
 
 
@@ -166,11 +153,15 @@ class TestScanEvents:
         assert sorted(found) == ["clip_a", "clip_b"]
 
     def test_on_clip_skipped_fires_for_skipped_paths(self, tmp_path: Path):
-        (tmp_path / "clip.mp4").touch()
+        clip_dir = tmp_path / "bad_clip"
+        input_dir = clip_dir / "Input"
+        input_dir.mkdir(parents=True)
+        (input_dir / "a.mp4").touch()
+        (input_dir / "b.mp4").touch()
 
         skipped: list[str] = []
         events = PipelineEvents(on_clip_skipped=lambda reason, path: skipped.append(reason))
-        scan(tmp_path / "clip.mp4", reorganise=False, events=events)
+        scan(tmp_path, events=events)
         assert len(skipped) == 1
 
     def test_events_none_does_not_raise(self, tmp_path: Path):
@@ -260,16 +251,8 @@ class TestScanDirectoryLoopEvents:
         (tmp_path / "clip.mp4").touch()
         found: list[str] = []
         events = PipelineEvents(on_clip_found=lambda name, root: found.append(name))
-        scan(tmp_path, reorganise=True, events=events)
+        scan(tmp_path, events=events)
         assert len(found) == 1
-
-    def test_loose_video_skipped_event_fires_in_directory_loop(self, tmp_path: Path):
-        """on_clip_skipped fires when reorganise=False and a loose video is in a directory."""
-        (tmp_path / "clip.mp4").touch()
-        skipped: list[str] = []
-        events = PipelineEvents(on_clip_skipped=lambda reason, path: skipped.append(reason))
-        scan(tmp_path, reorganise=False, events=events)
-        assert len(skipped) == 1
 
 
 class TestScanVideoFileWithEvents:
@@ -279,18 +262,8 @@ class TestScanVideoFileWithEvents:
         video.touch()
         found: list[str] = []
         events = PipelineEvents(on_clip_found=lambda name, root: found.append(name))
-        scan(video, reorganise=True, events=events)
+        scan(video, events=events)
         assert len(found) == 1
-
-    def test_clip_skipped_fires_when_scanning_video_file_directly_no_reorganise(self, tmp_path: Path):
-        """on_clip_skipped fires when a video file is passed directly with reorganise=False."""
-        video = tmp_path / "clip.mp4"
-        video.touch()
-        skipped_paths: list[Path] = []
-        events = PipelineEvents(on_clip_skipped=lambda reason, path: skipped_paths.append(path))
-        scan(video, reorganise=False, events=events)
-        assert len(skipped_paths) == 1
-        assert skipped_paths[0] == video
 
 
 class TestScanDirectoryLoopNonVideoFiles:
