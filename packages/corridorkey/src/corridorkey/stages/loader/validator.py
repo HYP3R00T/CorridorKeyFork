@@ -32,7 +32,7 @@ def scan_frames(path: Path) -> FrameScan:
 
     Returns a FrameScan with the sorted file list and linearity flag.
     This is the single entry point for all frame discovery — call it once
-    and pass the result to ``validate_scan()`` and other helpers.
+    and pass the result to ``validate()`` and other helpers.
 
     Args:
         path: Directory to scan.
