@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import time
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
@@ -29,6 +30,9 @@ MODEL_FILENAME = "CorridorKey_v1.0.pth"
 MODEL_CHECKSUM = "a03827f58e8c79b2ca26031bf67c77db5390dc1718c1ffc5b7aed8b57315788f"
 DEFAULT_MODEL_DIR = Path("~/.config/corridorkey/models")
 
+_DOWNLOAD_RETRIES = 3
+_RETRY_BASE_DELAY = 2.0  # seconds; doubles each attempt
+
 
 def default_checkpoint_path() -> Path:
     """Return the expected path for the default model checkpoint."""
@@ -41,6 +45,9 @@ def ensure_model(
 ) -> Path:
     """Return the checkpoint path, downloading it first if it doesn't exist.
 
+    Retries up to 3 times with exponential backoff (2s, 4s, 8s) before
+    raising ModelError.
+
     Args:
         dest_dir: Directory to store the model. Defaults to DEFAULT_MODEL_DIR.
         on_progress: Optional callback(bytes_downloaded, total_bytes).
@@ -49,7 +56,8 @@ def ensure_model(
         Absolute path to the verified checkpoint file.
 
     Raises:
-        ModelError: If the download fails or the checksum doesn't match.
+        ModelError: If the download fails after all retries or the checksum
+            doesn't match.
     """
     directory = (dest_dir or DEFAULT_MODEL_DIR).expanduser()
     dest = directory / MODEL_FILENAME
@@ -61,32 +69,65 @@ def ensure_model(
     directory.mkdir(parents=True, exist_ok=True)
     tmp = directory / (MODEL_FILENAME + ".tmp")
 
-    logger.info("model_hub: downloading model from %s", MODEL_URL)
-    print(f"Downloading model to {dest} ...")
+    last_error: Exception | None = None
+    for attempt in range(1, _DOWNLOAD_RETRIES + 1):
+        if attempt > 1:
+            delay = _RETRY_BASE_DELAY * (2 ** (attempt - 2))
+            logger.warning(
+                "model_hub: download attempt %d/%d failed, retrying in %.0fs — %s",
+                attempt - 1,
+                _DOWNLOAD_RETRIES,
+                delay,
+                last_error,
+            )
+            time.sleep(delay)
 
-    try:
-        with urllib.request.urlopen(MODEL_URL) as response:  # noqa: S310
-            total = int(response.headers.get("Content-Length", 0))
-            downloaded = 0
-            chunk = 64 * 1024
+        logger.info(
+            "model_hub: downloading model from %s (attempt %d/%d)",
+            MODEL_URL,
+            attempt,
+            _DOWNLOAD_RETRIES,
+        )
+        try:
+            with urllib.request.urlopen(MODEL_URL) as response:  # noqa: S310
+                total = int(response.headers.get("Content-Length", 0))
+                downloaded = 0
+                chunk = 64 * 1024
+                last_log_pct = -1
 
-            with open(tmp, "wb") as f:
-                while True:
-                    data = response.read(chunk)
-                    if not data:
-                        break
-                    f.write(data)
-                    downloaded += len(data)
-                    if on_progress:
-                        on_progress(downloaded, total)
-                    else:
-                        _print_progress(downloaded, total)
+                with open(tmp, "wb") as f:
+                    while True:
+                        data = response.read(chunk)
+                        if not data:
+                            break
+                        f.write(data)
+                        downloaded += len(data)
+                        if on_progress:
+                            on_progress(downloaded, total)
+                        else:
+                            # Log at most once per 5% to avoid flooding the log
+                            if total > 0:
+                                pct = int(downloaded / total * 100)
+                                if pct >= last_log_pct + 5:
+                                    last_log_pct = pct
+                                    mb = downloaded / (1024 * 1024)
+                                    total_mb = total / (1024 * 1024)
+                                    logger.info(
+                                        "model_hub: downloading %d%% (%.1f / %.1f MB)",
+                                        pct,
+                                        mb,
+                                        total_mb,
+                                    )
+            last_error = None
+            break  # success
+        except Exception as e:
+            last_error = e
+            tmp.unlink(missing_ok=True)
 
-    except Exception as e:
-        tmp.unlink(missing_ok=True)
-        raise ModelError(f"Model download failed: {e}") from e
+    if last_error is not None:
+        raise ModelError(f"Model download failed after {_DOWNLOAD_RETRIES} attempt(s): {last_error}") from last_error
 
-    print()  # newline after progress bar
+    logger.info("model_hub: download complete")
 
     if MODEL_CHECKSUM:
         logger.info("model_hub: verifying checksum")
@@ -103,7 +144,6 @@ def ensure_model(
 
     os.replace(tmp, dest)
     logger.info("model_hub: model saved to %s", dest)
-    print(f"Model saved to {dest}")
     return dest
 
 
@@ -113,14 +153,3 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: f.read(64 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
-
-
-def _print_progress(downloaded: int, total: int) -> None:
-    if total > 0:
-        pct = downloaded / total * 100
-        mb = downloaded / (1024 * 1024)
-        total_mb = total / (1024 * 1024)
-        print(f"\r  {pct:5.1f}%  {mb:.1f} / {total_mb:.1f} MB", end="", flush=True)
-    else:
-        mb = downloaded / (1024 * 1024)
-        print(f"\r  {mb:.1f} MB downloaded", end="", flush=True)

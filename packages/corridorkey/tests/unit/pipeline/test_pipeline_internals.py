@@ -1,11 +1,12 @@
 """Unit tests for internal frame-loop threading primitives.
 
-Tests PipelineConfig, _AtomicCounter, _InferenceWorker, _override_device,
+Tests PipelineConfig, _InferenceWorker, _override_device,
 and run_clip — the internal assembly line used by the Engine.
 """
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -14,7 +15,7 @@ import numpy as np
 import pytest
 import torch
 from corridorkey.errors import JobCancelledError
-from corridorkey.runtime.runner import PipelineConfig, _AtomicCounter, _InferenceWorker, run_clip
+from corridorkey.runtime.runner import PipelineConfig, _InferenceWorker, run_clip
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
 from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.preprocessor import PreprocessConfig, PreprocessedFrame
@@ -67,38 +68,6 @@ def _make_pipeline_config(tmp_path: Path, devices: list[str] | None = None) -> P
     )
 
 
-# _AtomicCounter
-
-
-class TestAtomicCounter:
-    def test_decrement_returns_new_value(self):
-        c = _AtomicCounter(3)
-        assert c.decrement() == 2
-        assert c.decrement() == 1
-        assert c.decrement() == 0
-
-    def test_thread_safe_decrement(self):
-        import threading
-
-        n = 50
-        c = _AtomicCounter(n)
-        results: list[int] = []
-        lock = threading.Lock()
-
-        def worker():
-            v = c.decrement()
-            with lock:
-                results.append(v)
-
-        threads = [threading.Thread(target=worker) for _ in range(n)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=5)
-
-        assert sorted(results) == list(range(0, n))
-
-
 # _InferenceWorker
 
 
@@ -113,14 +82,16 @@ class TestInferenceWorker:
         in_q.put(frame)
         in_q.put_stop()
 
-        counter = _AtomicCounter(1)
+        counter = [1]
+        lock = threading.Lock()
         with patch("corridorkey.stages.inference.orchestrator.run_inference", return_value=result):
             t = _InferenceWorker(
                 preprocess_queue=in_q,
                 inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_inference_config(tmp_path),
-                active_workers=counter,
+                remaining=counter,
+                remaining_lock=lock,
             ).start()
             t.join(timeout=5)
 
@@ -134,13 +105,15 @@ class TestInferenceWorker:
         out_q: BoundedQueue = BoundedQueue(10)
         in_q.put_stop()
 
-        counter = _AtomicCounter(2)
+        counter = [2]
+        lock = threading.Lock()
         t = _InferenceWorker(
             preprocess_queue=in_q,
             inference_queue=out_q,
             model=MagicMock(),
             config=_make_inference_config(tmp_path),
-            active_workers=counter,
+            remaining=counter,
+            remaining_lock=lock,
         ).start()
         t.join(timeout=5)
 
@@ -159,7 +132,8 @@ class TestInferenceWorker:
             in_q.put(f)
         in_q.put_stop()
 
-        counter = _AtomicCounter(2)
+        remaining = [2]
+        lock = threading.Lock()
         call_map = {id(f): r for f, r in zip(frames, results, strict=True)}
 
         def side_effect(frame, model, config, **kwargs):
@@ -172,7 +146,8 @@ class TestInferenceWorker:
                     inference_queue=out_q,
                     model=MagicMock(),
                     config=_make_inference_config(tmp_path),
-                    active_workers=counter,
+                    remaining=remaining,
+                    remaining_lock=lock,
                 ).start()
 
         received = []
@@ -327,7 +302,6 @@ class TestPipelineConfigDefaults:
 
 class TestRunClipCancellation:
     def _run_with_cancel(self, tmp_path: Path, frame_count: int = 10, cancel_after_frames: int = 2):
-        import threading
 
         manifest = _make_manifest(tmp_path, frame_count=frame_count)
         cfg = _make_pipeline_config(tmp_path)

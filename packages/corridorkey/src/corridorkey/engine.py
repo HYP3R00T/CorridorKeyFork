@@ -27,6 +27,7 @@ from typing import Any
 from corridorkey.errors import AlphaGeneratorError, EngineError, JobCancelledError
 from corridorkey.infra.config.pipeline import CorridorKeyConfig
 from corridorkey.runtime.job_stats import JobStats
+from corridorkey.runtime.runner import PipelineConfig
 from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.scanner.contracts import Clip
 
@@ -139,7 +140,10 @@ class Engine:
             EngineError: If plugin config validation fails.
             ModelError: If the model cannot be verified or downloaded.
         """
+        # Reset per-run state so calling run() twice works correctly.
         self._cancel_event.clear()
+        self._resolved_device: str | None = None
+        self._pipeline_config: PipelineConfig | None = None
         start_time = time.monotonic()
         stats = JobStats()
 
@@ -307,12 +311,19 @@ class Engine:
         from corridorkey.events import PipelineEvents
         from corridorkey.runtime.runner import run_clip
 
+        assert self._pipeline_config is not None, (
+            "_pipeline_config is None — _initialise() must be called before _run_inference()"
+        )
         total = manifest.frame_count
         events = PipelineEvents(
             on_frame_written=lambda i, _t: self._emit("frame_done", i, total),
             on_frame_error=lambda s, i, e: self._emit("frame_error", s, i, e),
             on_stage_start=lambda s, t: self._emit("stage_start", s, t),
             on_stage_done=lambda s: self._emit("stage_done", s),
+            on_preprocess_queued=lambda i: self._emit("preprocess_queued", i),
+            on_inference_start=lambda i: self._emit("inference_start", i),
+            on_inference_queued=lambda i: self._emit("inference_queued", i),
+            on_queue_depth=lambda p, w: self._emit("queue_depth", p, w),
             on_clip_complete=lambda name, n: None,  # engine emits clip_complete itself
         )
         run_clip(manifest, self._pipeline_config, events=events, cancel_event=self._cancel_event)

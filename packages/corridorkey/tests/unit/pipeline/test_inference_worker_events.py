@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import torch
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import BoundedQueue
-from corridorkey.runtime.runner import _AtomicCounter, _InferenceWorker
+from corridorkey.runtime.runner import _InferenceWorker
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
 from corridorkey.stages.preprocessor import PreprocessedFrame
 from corridorkey.stages.preprocessor.contracts import FrameMeta
@@ -44,7 +45,8 @@ class TestInferenceWorkerEvents:
             inference_queue=out_q,
             model=MagicMock(),
             config=_make_config(tmp_path),
-            active_workers=_AtomicCounter(1),
+            remaining=[1],
+            remaining_lock=threading.Lock(),
             events=events,
         )
         t = worker.start()
@@ -64,7 +66,8 @@ class TestInferenceWorkerEvents:
             inference_queue=out_q,
             model=MagicMock(),
             config=_make_config(tmp_path),
-            active_workers=_AtomicCounter(1),
+            remaining=[1],
+            remaining_lock=threading.Lock(),
             events=events,
         )
         t = worker.start()
@@ -88,7 +91,8 @@ class TestInferenceWorkerEvents:
                 inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
-                active_workers=_AtomicCounter(1),
+                remaining=[1],
+                remaining_lock=threading.Lock(),
                 events=events,
             )
             t = worker.start()
@@ -112,7 +116,8 @@ class TestInferenceWorkerEvents:
                 inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
-                active_workers=_AtomicCounter(1),
+                remaining=[1],
+                remaining_lock=threading.Lock(),
                 events=events,
             )
             t = worker.start()
@@ -135,7 +140,8 @@ class TestInferenceWorkerEvents:
                 inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
-                active_workers=_AtomicCounter(1),
+                remaining=[1],
+                remaining_lock=threading.Lock(),
                 events=events,
             )
             t = worker.start()
@@ -162,7 +168,8 @@ class TestInferenceWorkerEvents:
                 inference_queue=out_q,
                 model=MagicMock(),
                 config=_make_config(tmp_path),
-                active_workers=_AtomicCounter(1),
+                remaining=[1],
+                remaining_lock=threading.Lock(),
                 events=events,
             )
             t = worker.start()

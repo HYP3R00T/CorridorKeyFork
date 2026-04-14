@@ -10,7 +10,7 @@ import numpy as np
 import torch
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import STOP, BoundedQueue
-from corridorkey.runtime.runner import _AtomicCounter, _InferenceWorker
+from corridorkey.runtime.runner import _InferenceWorker
 from corridorkey.runtime.worker import PostWriteWorker, PreprocessWorker
 from corridorkey.stages.inference import InferenceConfig, InferenceResult
 from corridorkey.stages.loader.contracts import ClipManifest
@@ -208,12 +208,15 @@ class TestInferenceWorker:
         )
 
     def _worker(self, tmp_path, in_q, out_q, **kwargs):
+        import threading
+
         return _InferenceWorker(
             preprocess_queue=in_q,
             inference_queue=out_q,
             model=MagicMock(),
             config=self._make_config(tmp_path),
-            active_workers=_AtomicCounter(1),
+            remaining=[1],
+            remaining_lock=threading.Lock(),
             **kwargs,
         )
 
@@ -496,12 +499,15 @@ class TestInferenceWorkerEvents:
         )
 
     def _worker(self, tmp_path, in_q, out_q, **kwargs):
+        import threading
+
         return _InferenceWorker(
             preprocess_queue=in_q,
             inference_queue=out_q,
             model=MagicMock(),
             config=self._make_config(tmp_path),
-            active_workers=_AtomicCounter(1),
+            remaining=[1],
+            remaining_lock=threading.Lock(),
             **kwargs,
         )
 

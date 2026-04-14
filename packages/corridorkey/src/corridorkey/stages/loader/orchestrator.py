@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from corridorkey.errors import ExtractionError
+from corridorkey.errors import ClipLoadError, ExtractionError
 from corridorkey.events import PipelineEvents
 from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.extractor import (

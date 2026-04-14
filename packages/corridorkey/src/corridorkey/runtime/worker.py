@@ -19,13 +19,14 @@ import threading
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from corridorkey.errors import FrameReadError, PostprocessError, WriteFailureError
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import STOP, BoundedQueue
 from corridorkey.stages.inference import InferenceResult
 from corridorkey.stages.loader.contracts import ClipManifest
 from corridorkey.stages.loader.validator import list_frames
 from corridorkey.stages.postprocessor import PostprocessConfig, postprocess_frame
-from corridorkey.stages.preprocessor import FrameReadError, PreprocessConfig, preprocess_frame
+from corridorkey.stages.preprocessor import PreprocessConfig, preprocess_frame
 from corridorkey.stages.writer import WriteConfig, write_frame
 
 logger = logging.getLogger(__name__)
@@ -154,18 +155,18 @@ class PostWriteWorker:
                 logger.debug("postwrite_worker: wrote frame %d", item.meta.frame_index)
                 if self.events:
                     self.events.frame_written(item.meta.frame_index, self.total_frames)
+            except WriteFailureError as e:
+                logger.error("postwrite_worker: write failed frame %d — %s", item.meta.frame_index, e)
+                if self.events:
+                    self.events.frame_error("postwrite", item.meta.frame_index, e)
+            except OSError as e:
+                typed = WriteFailureError(str(getattr(e, "filename", "unknown")), str(e))
+                logger.error("postwrite_worker: write failed frame %d — %s", item.meta.frame_index, typed)
+                if self.events:
+                    self.events.frame_error("postwrite", item.meta.frame_index, typed)
             except Exception as e:
-                from corridorkey.errors import PostprocessError, WriteFailureError
-
-                # Classify the error so the event carries a typed exception
-                detail = str(e)
-                if isinstance(e, (WriteFailureError, OSError)) and hasattr(e, "path"):
-                    typed: Exception = e  # already typed
-                elif isinstance(e, OSError):
-                    typed = WriteFailureError(str(getattr(e, "filename", "unknown")), detail)
-                else:
-                    typed = PostprocessError(item.meta.frame_index, detail)
-                logger.error("postwrite_worker: skipping frame %d — %s", item.meta.frame_index, typed)
+                typed = PostprocessError(item.meta.frame_index, str(e))
+                logger.error("postwrite_worker: postprocess failed frame %d — %s", item.meta.frame_index, typed)
                 if self.events:
                     self.events.frame_error("postwrite", item.meta.frame_index, typed)
 

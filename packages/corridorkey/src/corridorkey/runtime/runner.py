@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 import torch
 import torch.nn as nn
 
+from corridorkey.errors import JobCancelledError, ModelError
 from corridorkey.events import PipelineEvents
 from corridorkey.runtime.queue import BoundedQueue
 from corridorkey.runtime.worker import PostWriteWorker, PreprocessWorker
@@ -85,7 +86,6 @@ def run_clip(
         JobCancelledError: If cancel_event is set before all frames are processed.
         ValueError: If config.inference is None.
     """
-    from corridorkey.errors import JobCancelledError
 
     _events = events if events is not None else config.events
     _cancel = cancel_event or threading.Event()
@@ -113,7 +113,11 @@ def run_clip(
     )
 
     models, resolved_refiner_mode = _load_models(devices, config)
-    active_workers = _AtomicCounter(n)
+
+    # Shared counter to detect when the last inference worker finishes
+    # and should send STOP downstream. Protected by a lock.
+    _remaining_lock = threading.Lock()
+    _remaining = [n]
 
     inference_threads: list[threading.Thread] = []
     for device, model in zip(devices, models, strict=True):
@@ -123,7 +127,8 @@ def run_clip(
             model=model,
             config=dataclasses.replace(config.inference, device=device),
             resolved_refiner_mode=resolved_refiner_mode,
-            active_workers=active_workers,
+            remaining=_remaining,
+            remaining_lock=_remaining_lock,
             events=_events,
             cancel_event=_cancel,
         )
@@ -220,38 +225,35 @@ def _load_models(
                 del models[i]
         torch.cuda.empty_cache()
         i, err = failed[0]
-        from corridorkey.errors import ModelError
-
         raise ModelError(f"Failed to load model on {devices[i]}: {err}") from err
 
     return models, resolved_refiner_mode or config.inference.refiner_mode  # type: ignore[return-value]
 
 
-class _AtomicCounter:
-    """Thread-safe decrement counter."""
-
-    def __init__(self, value: int) -> None:
-        self._value = value
-        self._lock = threading.Lock()
-
-    def decrement(self) -> int:
-        with self._lock:
-            self._value -= 1
-            return self._value
-
-
-@dataclass
 class _InferenceWorker:
     """Pulls PreprocessedFrame, runs inference, pushes InferenceResult."""
 
-    preprocess_queue: BoundedQueue
-    inference_queue: BoundedQueue
-    model: nn.Module
-    config: InferenceConfig
-    active_workers: _AtomicCounter
-    resolved_refiner_mode: str | None = None
-    events: PipelineEvents | None = None
-    cancel_event: threading.Event | None = None
+    def __init__(
+        self,
+        preprocess_queue: BoundedQueue,
+        inference_queue: BoundedQueue,
+        model: nn.Module,
+        config: InferenceConfig,
+        remaining: list[int],
+        remaining_lock: threading.Lock,
+        resolved_refiner_mode: str | None = None,
+        events: PipelineEvents | None = None,
+        cancel_event: threading.Event | None = None,
+    ) -> None:
+        self.preprocess_queue = preprocess_queue
+        self.inference_queue = inference_queue
+        self.model = model
+        self.config = config
+        self.remaining = remaining
+        self.remaining_lock = remaining_lock
+        self.resolved_refiner_mode = resolved_refiner_mode
+        self.events = events
+        self.cancel_event = cancel_event
 
     def run(self) -> None:
         from corridorkey.runtime.queue import STOP
@@ -283,10 +285,9 @@ class _InferenceWorker:
                 except Exception as e:
                     from corridorkey.errors import InferenceError, VRAMInsufficientError
 
-                    # Detect CUDA OOM and raise a typed error
                     detail = str(e)
                     if "out of memory" in detail.lower() or "cuda out of memory" in detail.lower():
-                        typed = VRAMInsufficientError(detail)
+                        typed: Exception = VRAMInsufficientError(detail)
                     else:
                         typed = InferenceError(item.meta.frame_index, detail)
                     logger.error(
@@ -295,7 +296,12 @@ class _InferenceWorker:
                     if self.events:
                         self.events.frame_error(f"inference[{self.config.device}]", item.meta.frame_index, typed)
         finally:
-            if self.active_workers.decrement() == 0:
+            # Decrement the shared counter. The last worker to finish
+            # sends STOP downstream to the postwrite worker.
+            with self.remaining_lock:
+                self.remaining[0] -= 1
+                is_last = self.remaining[0] == 0
+            if is_last:
                 self.inference_queue.put_stop()
             if self.events:
                 self.events.stage_done(f"inference[{self.config.device}]")
