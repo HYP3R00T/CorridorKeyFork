@@ -21,10 +21,12 @@ def _make_clip_dir(root: Path, name: str = "my_clip", with_alpha: bool = True) -
 
 class TestScanReturnType:
     def test_returns_scan_result(self, tmp_path: Path):
+        """Scanning an empty directory returns a ScanResult instance."""
         result = scan(tmp_path)
         assert isinstance(result, ScanResult)
 
     def test_empty_dir_returns_empty_result(self, tmp_path: Path):
+        """Scanning an empty directory returns a result with zero clips and zero skipped."""
         result = scan(tmp_path)
         assert result.clip_count == 0
         assert result.skipped_count == 0
@@ -32,51 +34,61 @@ class TestScanReturnType:
 
 class TestScanClipDiscovery:
     def test_finds_single_clip(self, tmp_path: Path):
+        """Scanning a directory with one valid clip folder returns one clip with the correct name."""
         _make_clip_dir(tmp_path)
         result = scan(tmp_path)
         assert result.clip_count == 1
         assert result.clips[0].name == "my_clip"
 
     def test_finds_multiple_clips(self, tmp_path: Path):
+        """Scanning a directory with three valid clip folders returns three clips."""
         for name in ("clip_a", "clip_b", "clip_c"):
             (tmp_path / name / "Input").mkdir(parents=True)
         assert scan(tmp_path).clip_count == 3
 
     def test_clips_sorted_by_name(self, tmp_path: Path):
+        """Clips in the result are sorted alphabetically by name regardless of discovery order."""
         for name in ("clip_c", "clip_a", "clip_b"):
             (tmp_path / name / "Input").mkdir(parents=True)
         names = [c.name for c in scan(tmp_path).clips]
         assert names == sorted(names)
 
     def test_clip_without_alpha_has_none_alpha_path(self, tmp_path: Path):
+        """A clip folder with no AlphaHint directory results in alpha_path being None."""
         _make_clip_dir(tmp_path, with_alpha=False)
         assert scan(tmp_path).clips[0].alpha_path is None
 
     def test_clip_with_alpha_has_alpha_path(self, tmp_path: Path):
+        """A clip folder with an AlphaHint directory results in a non-None alpha_path."""
         _make_clip_dir(tmp_path, with_alpha=True)
         assert scan(tmp_path).clips[0].alpha_path is not None
 
     def test_directory_is_itself_a_clip(self, tmp_path: Path):
+        """When the scanned directory itself contains an Input folder, it is treated as a single clip."""
         (tmp_path / "Input").mkdir()
         assert scan(tmp_path).clip_count == 1
 
     def test_case_insensitive_input_folder(self, tmp_path: Path):
+        """A clip folder whose Input directory uses a different case is still recognised."""
         (tmp_path / "my_clip" / "input").mkdir(parents=True)
         assert scan(tmp_path).clip_count == 1
 
     def test_case_insensitive_alphahint_folder(self, tmp_path: Path):
+        """A clip folder whose AlphaHint directory uses a different case is still recognised."""
         clip = tmp_path / "my_clip"
         (clip / "Input").mkdir(parents=True)
         (clip / "alphahint").mkdir()
         assert scan(tmp_path).clips[0].alpha_path is not None
 
     def test_skips_non_clip_subdirs_silently(self, tmp_path: Path):
+        """A subdirectory with no Input folder is silently ignored and does not appear in clips or skipped."""
         (tmp_path / "not_a_clip").mkdir()
         result = scan(tmp_path)
         assert result.clip_count == 0
         assert result.skipped_count == 0  # no Input/ folder = not a clip, not an error
 
     def test_video_inside_input_dir_used_as_input_path(self, tmp_path: Path):
+        """When a single video exists inside the Input folder, it is used as the clip's input_path."""
         clip_dir = tmp_path / "my_clip"
         input_dir = clip_dir / "Input"
         input_dir.mkdir(parents=True)
@@ -86,6 +98,7 @@ class TestScanClipDiscovery:
         assert clips[0].input_path == video
 
     def test_video_inside_alphahint_dir_used_as_alpha_path(self, tmp_path: Path):
+        """When a single video exists inside the AlphaHint folder, it is used as the clip's alpha_path."""
         clip_dir = tmp_path / "my_clip"
         (clip_dir / "Input").mkdir(parents=True)
         alpha_dir = clip_dir / "AlphaHint"
@@ -98,10 +111,12 @@ class TestScanClipDiscovery:
 
 class TestScanErrors:
     def test_nonexistent_path_raises(self, tmp_path: Path):
+        """Scanning a path that does not exist raises ClipScanError."""
         with pytest.raises(ClipScanError, match="does not exist"):
             scan(tmp_path / "ghost")
 
     def test_unrecognised_file_extension_raises(self, tmp_path: Path):
+        """Scanning a file with an unrecognised extension raises ClipScanError."""
         f = tmp_path / "file.txt"
         f.touch()
         with pytest.raises(ClipScanError, match="not a recognised video format"):
@@ -110,12 +125,14 @@ class TestScanErrors:
 
 class TestScanVideoFile:
     def test_video_file_reorganised(self, tmp_path: Path):
+        """Scanning a video file directly reorganises it into an Input subfolder and returns one clip."""
         (tmp_path / "clip.mp4").touch()
         result = scan(tmp_path / "clip.mp4")
         assert result.clip_count == 1
         assert (tmp_path / "Input" / "clip.mp4").exists()
 
     def test_loose_video_in_dir_reorganised(self, tmp_path: Path):
+        """A loose video file inside a scanned directory is reorganised into an Input subfolder."""
         (tmp_path / "clip.mp4").touch()
         result = scan(tmp_path)
         assert result.clip_count == 1
@@ -131,6 +148,7 @@ class TestScanVideoFile:
 
 class TestScanAmbiguousVideos:
     def test_multiple_videos_in_input_reported_as_skipped(self, tmp_path: Path):
+        """A clip folder whose Input directory contains multiple videos is reported as skipped with a 'multiple' reason."""
         clip_dir = tmp_path / "my_clip"
         input_dir = clip_dir / "Input"
         input_dir.mkdir(parents=True)
@@ -144,6 +162,7 @@ class TestScanAmbiguousVideos:
 
 class TestScanEvents:
     def test_on_clip_found_fires_for_each_clip(self, tmp_path: Path):
+        """on_clip_found fires once for each discovered clip when scanning a directory."""
         for name in ("clip_a", "clip_b"):
             (tmp_path / name / "Input").mkdir(parents=True)
 
@@ -153,6 +172,7 @@ class TestScanEvents:
         assert sorted(found) == ["clip_a", "clip_b"]
 
     def test_on_clip_skipped_fires_for_skipped_paths(self, tmp_path: Path):
+        """on_clip_skipped fires once when a clip folder is skipped due to ambiguous videos."""
         clip_dir = tmp_path / "bad_clip"
         input_dir = clip_dir / "Input"
         input_dir.mkdir(parents=True)
@@ -165,6 +185,7 @@ class TestScanEvents:
         assert len(skipped) == 1
 
     def test_events_none_does_not_raise(self, tmp_path: Path):
+        """Passing events=None to scan does not raise any error."""
         _make_clip_dir(tmp_path)
         scan(tmp_path, events=None)  # should not raise
 
@@ -308,11 +329,13 @@ class TestScanDirectoryLoopNoneNoneFolder:
 
 class TestScanMultiplePaths:
     def test_single_path_in_list(self, tmp_path: Path):
+        """Passing a single-element list to scan returns the same result as passing the path directly."""
         _make_clip_dir(tmp_path)
         result = scan([tmp_path])
         assert result.clip_count == 1
 
     def test_two_separate_paths_aggregated(self, tmp_path: Path):
+        """Scanning two separate directories aggregates their clips into a single result."""
         dir_a = tmp_path / "project_a"
         dir_b = tmp_path / "project_b"
         dir_a.mkdir()
@@ -326,6 +349,7 @@ class TestScanMultiplePaths:
         assert names == {"clip_a", "clip_b"}
 
     def test_skipped_aggregated_across_paths(self, tmp_path: Path):
+        """Skipped clips from multiple directories are all collected in the combined result."""
         dir_a = tmp_path / "project_a"
         dir_b = tmp_path / "project_b"
         dir_a.mkdir()
@@ -341,6 +365,7 @@ class TestScanMultiplePaths:
         assert result.skipped_count == 2
 
     def test_mixed_valid_and_skipped_across_paths(self, tmp_path: Path):
+        """Scanning two directories where one has a valid clip and one has a skipped clip returns both in the result."""
         dir_a = tmp_path / "project_a"
         dir_b = tmp_path / "project_b"
         dir_a.mkdir()
@@ -356,15 +381,18 @@ class TestScanMultiplePaths:
         assert result.skipped_count == 1
 
     def test_nonexistent_path_in_list_raises(self, tmp_path: Path):
+        """Passing a list containing a nonexistent path raises ClipScanError."""
         with pytest.raises(ClipScanError, match="does not exist"):
             scan([tmp_path / "ghost"])
 
     def test_string_path_accepted(self, tmp_path: Path):
+        """Passing a path as a string instead of a Path object is accepted and returns the correct result."""
         _make_clip_dir(tmp_path)
         result = scan(str(tmp_path))
         assert result.clip_count == 1
 
     def test_empty_list_returns_empty_result(self, tmp_path: Path):
+        """Passing an empty list to scan returns a result with zero clips and zero skipped."""
         result = scan([])
         assert result.clip_count == 0
         assert result.skipped_count == 0

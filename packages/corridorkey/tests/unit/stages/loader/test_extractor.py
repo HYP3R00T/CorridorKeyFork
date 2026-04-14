@@ -138,3 +138,37 @@ class TestSaveLoadVideoMetadata:
         loaded = load_video_metadata(tmp_path)
         assert loaded is not None
         assert loaded.width == 3840
+
+
+class TestVideoMetadataFpsEdgeCases:
+    def test_fps_fractional_ntsc(self):
+        """29.97 fps (30000/1001) is computed correctly."""
+        meta = _make_meta(fps_num=30000, fps_den=1001)
+        assert abs(meta.fps - 29.97) < 0.01
+
+    def test_fps_25(self):
+        """25 fps is returned exactly."""
+        meta = _make_meta(fps_num=25, fps_den=1)
+        assert meta.fps == 25.0
+
+    def test_fps_60(self):
+        """60 fps is returned exactly."""
+        meta = _make_meta(fps_num=60, fps_den=1)
+        assert meta.fps == 60.0
+
+
+class TestVideoMetadataEstimatedFrameCountEdgeCases:
+    def test_rounds_fractional_result(self):
+        """29.97 fps * 10s = 299.7 rounds to 300."""
+        meta = _make_meta(frame_count=0, fps_num=30000, fps_den=1001, duration_s=10.0)
+        assert meta.estimated_frame_count == 300
+
+    def test_returns_zero_when_fps_is_zero(self):
+        """Zero fps with a duration produces zero estimated frames."""
+        meta = _make_meta(frame_count=0, fps_num=0, fps_den=0, duration_s=5.0)
+        assert meta.estimated_frame_count == 0
+
+    def test_frame_count_takes_priority_over_duration(self):
+        """frame_count wins over duration * fps when both are present."""
+        meta = _make_meta(frame_count=50, fps_num=24, fps_den=1, duration_s=10.0)
+        assert meta.estimated_frame_count == 50

@@ -323,3 +323,130 @@ class TestToInferenceConfigRefinerModeAuto:
         with patch("corridorkey.stages.inference.orchestrator._probe_vram_gb", return_value=0.0):
             _, resolved = cfg._resolve_inference_params(device="cuda")
         assert resolved == "full_frame"
+
+
+class TestToPostprocessConfig:
+    def test_returns_postprocess_config(self):
+        """to_postprocess_config returns a PostprocessConfig instance."""
+        from corridorkey.stages.postprocessor.config import PostprocessConfig
+
+        cfg = CorridorKeyConfig()
+        result = cfg.to_postprocess_config()
+        assert isinstance(result, PostprocessConfig)
+
+    def test_despill_strength_passed_through(self):
+        """despill_strength from PostprocessSettings is forwarded to PostprocessConfig."""
+        from corridorkey.infra.config.postprocess import PostprocessSettings
+
+        cfg = CorridorKeyConfig(postprocess=PostprocessSettings(despill_strength=0.3))
+        assert cfg.to_postprocess_config().despill_strength == pytest.approx(0.3)
+
+    def test_auto_despeckle_passed_through(self):
+        """auto_despeckle=False is forwarded correctly."""
+        from corridorkey.infra.config.postprocess import PostprocessSettings
+
+        cfg = CorridorKeyConfig(postprocess=PostprocessSettings(auto_despeckle=False))
+        assert cfg.to_postprocess_config().auto_despeckle is False
+
+    def test_hint_sharpen_passed_through(self):
+        """hint_sharpen=False is forwarded correctly."""
+        from corridorkey.infra.config.postprocess import PostprocessSettings
+
+        cfg = CorridorKeyConfig(postprocess=PostprocessSettings(hint_sharpen=False))
+        assert cfg.to_postprocess_config().hint_sharpen is False
+
+    def test_debug_dump_passed_through(self):
+        """debug_dump=True is forwarded correctly."""
+        from corridorkey.infra.config.postprocess import PostprocessSettings
+
+        cfg = CorridorKeyConfig(postprocess=PostprocessSettings(debug_dump=True))
+        assert cfg.to_postprocess_config().debug_dump is True
+
+    def test_edge_blur_px_passed_through(self):
+        """edge_blur_px is forwarded from PostprocessSettings to PostprocessConfig."""
+        from corridorkey.infra.config.postprocess import PostprocessSettings
+
+        cfg = CorridorKeyConfig(postprocess=PostprocessSettings(edge_blur_px=5))
+        assert cfg.to_postprocess_config().edge_blur_px == 5
+
+    def test_edge_blur_px_default_matches_postprocess_config(self):
+        """PostprocessSettings.edge_blur_px default must match PostprocessConfig default."""
+        from corridorkey.infra.config.postprocess import PostprocessSettings
+        from corridorkey.stages.postprocessor.config import PostprocessConfig
+
+        assert PostprocessSettings().edge_blur_px == PostprocessConfig().edge_blur_px
+
+
+class TestToWriterConfig:
+    def test_returns_write_config(self, tmp_path):
+        """to_writer_config returns a WriteConfig instance."""
+        from corridorkey.stages.writer.contracts import WriteConfig
+
+        assert isinstance(CorridorKeyConfig().to_writer_config(tmp_path), WriteConfig)
+
+    def test_output_dir_set(self, tmp_path):
+        """output_dir on the returned config matches the argument."""
+        assert CorridorKeyConfig().to_writer_config(tmp_path).output_dir == tmp_path
+
+    def test_alpha_format_passed_through(self, tmp_path):
+        """alpha_format='exr' is forwarded to WriteConfig."""
+        from corridorkey.infra.config.writer import WriterSettings
+
+        cfg = CorridorKeyConfig(writer=WriterSettings(alpha_format="exr"))
+        assert cfg.to_writer_config(tmp_path).alpha_format == "exr"
+
+    def test_comp_enabled_passed_through(self, tmp_path):
+        """comp_enabled=False is forwarded to WriteConfig."""
+        from corridorkey.infra.config.writer import WriterSettings
+
+        cfg = CorridorKeyConfig(writer=WriterSettings(comp_enabled=False))
+        assert cfg.to_writer_config(tmp_path).comp_enabled is False
+
+    def test_output_dir_as_string(self, tmp_path):
+        """Passing output_dir as a string is accepted and converted to Path."""
+        assert CorridorKeyConfig().to_writer_config(str(tmp_path)).output_dir == tmp_path
+
+
+class TestToPipelineConfig:
+    def _cfg(self, tmp_path):
+        from corridorkey.infra.config.inference import InferenceSettings
+        from corridorkey.infra.config.preprocess import PreprocessSettings
+
+        return CorridorKeyConfig(
+            device="cpu",
+            preprocess=PreprocessSettings(img_size=512),
+            inference=InferenceSettings(
+                checkpoint_path=tmp_path / "model.pth",
+                refiner_mode="full_frame",
+                model_precision="float32",
+            ),
+        )
+
+    def test_returns_pipeline_config(self, tmp_path):
+        """to_pipeline_config returns a PipelineConfig instance."""
+        from corridorkey.runtime.runner import PipelineConfig
+
+        assert isinstance(self._cfg(tmp_path).to_pipeline_config(device="cpu"), PipelineConfig)
+
+    def test_device_propagated_to_preprocess_and_inference(self, tmp_path):
+        """device='cpu' is forwarded to both preprocess and inference sub-configs."""
+        result = self._cfg(tmp_path).to_pipeline_config(device="cpu")
+        assert result.preprocess.device == "cpu"
+        assert result.inference.device == "cpu"
+
+    def test_model_passed_through(self, tmp_path):
+        """A pre-loaded model is stored on the returned PipelineConfig."""
+        import torch.nn as nn
+
+        dummy = nn.Linear(1, 1)
+        result = self._cfg(tmp_path).to_pipeline_config(device="cpu", model=dummy)
+        assert result.model is dummy
+
+    def test_devices_empty_by_default(self, tmp_path):
+        """devices defaults to an empty list when not provided."""
+        assert self._cfg(tmp_path).to_pipeline_config(device="cpu").devices == []
+
+    def test_devices_passed_through(self, tmp_path):
+        """An explicit devices list is stored on the returned PipelineConfig."""
+        result = self._cfg(tmp_path).to_pipeline_config(device="cpu", devices=["cuda:0", "cuda:1"])
+        assert result.devices == ["cuda:0", "cuda:1"]

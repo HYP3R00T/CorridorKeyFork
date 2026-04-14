@@ -335,3 +335,179 @@ class TestShouldTileRefinerMPS:
             mock_torch.device.return_value = MagicMock(type="mps")
             result = _should_tile_refiner(cfg, resolved_refiner_mode=None)
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# Tiled refiner tests — _run_refiner_tiled
+# ---------------------------------------------------------------------------
+
+import torch.nn as nn
+from corridorkey.stages.inference.orchestrator import _run_refiner_tiled, _TiledRefinerState
+
+
+class _ZeroRefiner(nn.Module):
+    def forward(self, img: torch.Tensor, coarse: torch.Tensor) -> torch.Tensor:
+        return torch.zeros(img.shape[0], 4, img.shape[2], img.shape[3], device=img.device)
+
+
+class _OnesRefiner(nn.Module):
+    def forward(self, img: torch.Tensor, coarse: torch.Tensor) -> torch.Tensor:
+        return torch.ones(img.shape[0], 4, img.shape[2], img.shape[3], device=img.device)
+
+
+class _RaisingRefiner(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self._calls = 0
+
+    def forward(self, img: torch.Tensor, coarse: torch.Tensor) -> torch.Tensor:
+        self._calls += 1
+        if self._calls >= 2:
+            raise RuntimeError("deliberate test error")
+        return torch.zeros(img.shape[0], 4, img.shape[2], img.shape[3])
+
+
+def _rgb(h: int, w: int) -> torch.Tensor:
+    return torch.rand(1, 3, h, w)
+
+
+def _coarse(h: int, w: int) -> torch.Tensor:
+    return torch.rand(1, 4, h, w)
+
+
+def _state() -> _TiledRefinerState:
+    return _TiledRefinerState()
+
+
+class TestTiledRefinerOutputShape:
+    @pytest.mark.parametrize("h,w", [(512, 512), (256, 256), (1024, 1024), (600, 800), (513, 513)])
+    def test_output_shape_matches_input(self, h: int, w: int):
+        """Output shape must equal input shape for any resolution."""
+        result = _run_refiner_tiled(_ZeroRefiner(), _rgb(h, w), _coarse(h, w), _state(), tile_size=512, overlap=128)
+        assert result.shape == (1, 4, h, w)
+
+    def test_batch_size_preserved(self):
+        """Batch dimension is preserved through tiled processing."""
+        rgb = torch.rand(2, 3, 512, 512)
+        coarse = torch.rand(2, 4, 512, 512)
+        result = _run_refiner_tiled(_ZeroRefiner(), rgb, coarse, _state(), tile_size=512, overlap=128)
+        assert result.shape == (2, 4, 512, 512)
+
+
+class TestTiledRefinerZeroRefiner:
+    def test_single_tile_all_zeros(self):
+        """A zero-delta refiner on a sub-tile image produces all-zero output."""
+        result = _run_refiner_tiled(
+            _ZeroRefiner(), _rgb(256, 256), _coarse(256, 256), _state(), tile_size=512, overlap=128
+        )
+        assert torch.allclose(result, torch.zeros_like(result))
+
+    def test_multi_tile_all_zeros(self):
+        """A zero-delta refiner on a multi-tile image produces all-zero output."""
+        result = _run_refiner_tiled(
+            _ZeroRefiner(), _rgb(1024, 1024), _coarse(1024, 1024), _state(), tile_size=512, overlap=128
+        )
+        assert torch.allclose(result, torch.zeros_like(result))
+
+    def test_non_multiple_all_zeros(self):
+        """A zero-delta refiner on a non-tile-multiple image produces all-zero output."""
+        result = _run_refiner_tiled(
+            _ZeroRefiner(), _rgb(600, 800), _coarse(600, 800), _state(), tile_size=512, overlap=128
+        )
+        assert torch.allclose(result, torch.zeros_like(result))
+
+
+class TestTiledRefinerOnesRefiner:
+    def test_single_tile_all_ones(self):
+        """An all-ones refiner on a sub-tile image produces all-ones output after blend normalisation."""
+        result = _run_refiner_tiled(
+            _OnesRefiner(), _rgb(256, 256), _coarse(256, 256), _state(), tile_size=512, overlap=128
+        )
+        assert torch.allclose(result, torch.ones_like(result), atol=1e-5)
+
+    def test_multi_tile_all_ones(self):
+        """An all-ones refiner on a multi-tile image produces all-ones output."""
+        result = _run_refiner_tiled(
+            _OnesRefiner(), _rgb(1024, 1024), _coarse(1024, 1024), _state(), tile_size=512, overlap=128
+        )
+        assert torch.allclose(result, torch.ones_like(result), atol=1e-5)
+
+
+class TestTiledRefinerDtype:
+    def test_float32_preserved(self):
+        """float32 input produces float32 output."""
+        result = _run_refiner_tiled(
+            _ZeroRefiner(), _rgb(256, 256).float(), _coarse(256, 256).float(), _state(), tile_size=512, overlap=128
+        )
+        assert result.dtype == torch.float32
+
+    def test_float16_preserved(self):
+        """float16 input produces float16 output."""
+        result = _run_refiner_tiled(
+            _ZeroRefiner(), _rgb(256, 256).half(), _coarse(256, 256).half(), _state(), tile_size=512, overlap=128
+        )
+        assert result.dtype == torch.float16
+
+
+class TestTiledRefinerBypassFlag:
+    def test_bypass_false_after_normal_run(self):
+        """bypass is reset to False after a successful tiled run."""
+        state = _state()
+        _run_refiner_tiled(_ZeroRefiner(), _rgb(256, 256), _coarse(256, 256), state, tile_size=512, overlap=128)
+        assert state.bypass is False
+
+    def test_bypass_false_after_refiner_exception(self):
+        """bypass is reset to False even when the refiner raises mid-run."""
+        state = _state()
+        with pytest.raises(RuntimeError, match="deliberate test error"):
+            _run_refiner_tiled(
+                _RaisingRefiner(), _rgb(1024, 512), _coarse(1024, 512), state, tile_size=512, overlap=128
+            )
+        assert state.bypass is False
+
+
+class TestTiledRefinerEdgeCases:
+    def test_overlap_larger_than_half_tile_clamped(self):
+        """Overlap > tile_size//2 - 1 is clamped safely without crashing."""
+        result = _run_refiner_tiled(
+            _OnesRefiner(), _rgb(512, 512), _coarse(512, 512), _state(), tile_size=512, overlap=300
+        )
+        assert result.shape == (1, 4, 512, 512)
+
+    def test_zero_overlap(self):
+        """overlap=0 stitches tiles directly without blending."""
+        result = _run_refiner_tiled(
+            _OnesRefiner(), _rgb(512, 512), _coarse(512, 512), _state(), tile_size=256, overlap=0
+        )
+        assert result.shape == (1, 4, 512, 512)
+        assert torch.allclose(result, torch.ones_like(result), atol=1e-5)
+
+    def test_image_smaller_than_tile(self):
+        """Image smaller than tile_size uses a single padded tile, cropped back to original size."""
+        result = _run_refiner_tiled(
+            _OnesRefiner(), _rgb(100, 150), _coarse(100, 150), _state(), tile_size=512, overlap=128
+        )
+        assert result.shape == (1, 4, 100, 150)
+
+
+class TestTiledRefinerScale:
+    def test_scale_zero_produces_all_zeros(self):
+        """refiner_scale=0.0 zeroes out all delta output."""
+        result = _run_refiner_tiled(
+            _OnesRefiner(), _rgb(512, 512), _coarse(512, 512), _state(), tile_size=512, overlap=128, refiner_scale=0.0
+        )
+        assert torch.allclose(result, torch.zeros_like(result), atol=1e-6)
+
+    def test_scale_one_unchanged(self):
+        """refiner_scale=1.0 produces the same result as the default."""
+        result = _run_refiner_tiled(
+            _OnesRefiner(), _rgb(512, 512), _coarse(512, 512), _state(), tile_size=512, overlap=128, refiner_scale=1.0
+        )
+        assert torch.allclose(result, torch.ones_like(result), atol=1e-5)
+
+    def test_scale_half_produces_half(self):
+        """refiner_scale=0.5 halves the delta output."""
+        result = _run_refiner_tiled(
+            _OnesRefiner(), _rgb(512, 512), _coarse(512, 512), _state(), tile_size=512, overlap=128, refiner_scale=0.5
+        )
+        assert torch.allclose(result, torch.full_like(result, 0.5), atol=1e-5)

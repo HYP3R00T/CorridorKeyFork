@@ -19,6 +19,7 @@ from corridorkey.stages.scanner.normaliser import (
 
 class TestSafeMove:
     def test_moves_file_successfully(self, tmp_path: Path):
+        """Moving a file to a new destination succeeds and removes the source."""
         src = tmp_path / "clip.mp4"
         src.write_bytes(b"video data")
         dst = tmp_path / "dest" / "clip.mp4"
@@ -31,6 +32,7 @@ class TestSafeMove:
         assert not src.exists()
 
     def test_raises_on_copy_failure(self, tmp_path: Path):
+        """When the underlying copy raises OSError, _safe_move raises ClipScanError."""
         src = tmp_path / "clip.mp4"
         src.write_bytes(b"data")
         dst = tmp_path / "dest" / "clip.mp4"
@@ -85,6 +87,7 @@ class TestSafeMove:
 
 class TestFindAlphaAmbiguous:
     def test_multiple_videos_returns_skipped(self, tmp_path: Path):
+        """When an alpha directory contains multiple videos, _find_asset returns a SkippedClip."""
         from corridorkey.stages.scanner.normaliser import _find_asset
 
         alpha_dir = tmp_path / "AlphaHint"
@@ -99,6 +102,7 @@ class TestFindAlphaAmbiguous:
 
 class TestFindVideosInPermission:
     def test_permission_error_returns_empty_list(self, tmp_path: Path):
+        """When iterdir raises PermissionError, _find_videos_in returns an empty list."""
         with patch("pathlib.Path.iterdir", side_effect=PermissionError("denied")):
             result = _find_videos_in(tmp_path)
         assert result == []
@@ -106,12 +110,14 @@ class TestFindVideosInPermission:
 
 class TestFindIcasePermission:
     def test_permission_error_raises(self, tmp_path: Path):
+        """When iterdir raises PermissionError, _find_icase re-raises it."""
         with patch("pathlib.Path.iterdir", side_effect=PermissionError("denied")), pytest.raises(PermissionError):
             _find_icase(tmp_path, "Input")
 
 
 class TestTryBuildClipErrors:
     def test_permission_error_returns_skipped(self, tmp_path: Path):
+        """When _find_icase raises PermissionError, try_build_clip returns a SkippedClip."""
         clip_dir = tmp_path / "my_clip"
         clip_dir.mkdir()
         with patch(
@@ -124,6 +130,7 @@ class TestTryBuildClipErrors:
         assert "cannot read directory" in skip.reason
 
     def test_validation_error_returns_skipped(self, tmp_path: Path):
+        """When Clip construction raises a ValidationError, try_build_clip returns a SkippedClip."""
         clip_dir = tmp_path / "my_clip"
         input_dir = clip_dir / "Input"
         input_dir.mkdir(parents=True)
@@ -146,6 +153,7 @@ class TestTryBuildClipErrors:
 
 class TestNormaliseVideoErrors:
     def test_mkdir_failure_raises_oserror(self, tmp_path: Path):
+        """When mkdir raises OSError, normalise_video raises ClipScanError."""
         video = tmp_path / "clip.mp4"
         video.write_bytes(b"data")
 
@@ -196,6 +204,7 @@ class TestNormaliseVideoMove:
 
 class TestNormaliseVideoOsError:
     def test_mkdir_failure_raises_oserror(self, tmp_path: Path):
+        """When mkdir raises OSError, normalise_video raises ClipScanError."""
         video = tmp_path / "clip.mp4"
         video.touch()
         with (
@@ -205,6 +214,7 @@ class TestNormaliseVideoOsError:
             normalise_video(video)
 
     def test_already_in_place_skips_move(self, tmp_path: Path):
+        """When the video is already in the Input folder, normalise_video returns the clip without moving."""
         video = tmp_path / "clip.mp4"
         video.write_bytes(b"fake video data")
         clip = normalise_video(video)
@@ -213,6 +223,7 @@ class TestNormaliseVideoOsError:
         assert dest.exists()
 
     def test_safe_move_called_when_not_in_place(self, tmp_path: Path):
+        """When the video is not yet in the Input folder, normalise_video moves it there."""
         video = tmp_path / "clip.mp4"
         video.write_bytes(b"data")
         clip = normalise_video(video)
@@ -223,16 +234,19 @@ class TestNormaliseVideoOsError:
 
 class TestFindVideosInFallback:
     def test_returns_empty_list_when_no_videos(self, tmp_path: Path):
+        """When a directory contains only non-video files, _find_videos_in returns an empty list."""
         (tmp_path / "frame_000001.png").touch()
         (tmp_path / "frame_000002.png").touch()
         result = _find_videos_in(tmp_path)
         assert result == []
 
     def test_returns_empty_list_for_empty_directory(self, tmp_path: Path):
+        """When a directory is empty, _find_videos_in returns an empty list."""
         result = _find_videos_in(tmp_path)
         assert result == []
 
     def test_returns_videos_sorted(self, tmp_path: Path):
+        """When a directory contains multiple video files, _find_videos_in returns them sorted by name."""
         for name in ("c.mp4", "a.mp4", "b.mov"):
             (tmp_path / name).touch()
         result = _find_videos_in(tmp_path)
@@ -240,6 +254,7 @@ class TestFindVideosInFallback:
         assert names == sorted(names, key=str.lower)
 
     def test_permission_error_returns_empty_list(self, tmp_path: Path):
+        """When iterdir raises PermissionError, _find_videos_in returns an empty list."""
         with patch.object(Path, "iterdir", side_effect=PermissionError("denied")):
             result = _find_videos_in(tmp_path)
         assert result == []
@@ -247,6 +262,7 @@ class TestFindVideosInFallback:
 
 class TestTryBuildClipPermissionError:
     def test_permission_error_on_find_input_returns_skipped(self, tmp_path: Path):
+        """When _find_asset raises PermissionError, try_build_clip returns a SkippedClip."""
         with patch(
             "corridorkey.stages.scanner.normaliser._find_asset",
             side_effect=PermissionError("denied"),
