@@ -193,6 +193,7 @@ def run_clips(
         default_postprocess_config=config.postprocess,
         default_write_config=config.write,
         total_frames=total_frames,
+        n_gpus=n,
         events=_events,
         cancel_event=_cancel,
     )
@@ -328,16 +329,19 @@ class _InferenceWorker:
         self.resolved_refiner_mode = resolved_refiner_mode
         self.events = events
         self.cancel_event = cancel_event
-        # Dedicated copy stream for async GPU→CPU DMA (CUDA only).
-        self._copy_stream: torch.cuda.Stream | None = None
-        if torch.device(config.device).type == "cuda":
-            self._copy_stream = torch.cuda.Stream(device=config.device)
 
     def run(self) -> None:
         from corridorkey.stages.inference.orchestrator import run_inference
 
         if self.events:
             self.events.stage_start(f"inference[{self.config.device}]", 0)
+
+        # Create the copy stream here, on the inference thread, so the CUDA
+        # context is bound to the correct thread (required for torch.compile
+        # and CUDA graph TLS correctness).
+        copy_stream: torch.cuda.Stream | None = None
+        if torch.device(self.config.device).type == "cuda":
+            copy_stream = torch.cuda.Stream(device=self.config.device)
 
         warmup_fn = getattr(self.model, "warmup_on_current_thread", None)
         if callable(warmup_fn):
@@ -366,7 +370,7 @@ class _InferenceWorker:
                     result = run_inference(
                         frame, self.model, self.config, resolved_refiner_mode=self.resolved_refiner_mode
                     )
-                    transfer = DeferredTransfer.start(result.alpha, result.fg, result.meta, self._copy_stream)
+                    transfer = DeferredTransfer.start(result.alpha, result.fg, result.meta, copy_stream)
                     self.inference_queue.put(_InferenceWork(transfer=transfer, manifest=manifest))
                     if self.events:
                         self.events.inference_queued(frame.meta.frame_index)
@@ -517,6 +521,7 @@ class _MultiClipPostWriteWorker:
         default_postprocess_config: PostprocessConfig,
         default_write_config: WriteConfig | None,
         total_frames: int = 0,
+        n_gpus: int = 1,
         events: PipelineEvents | None = None,
         cancel_event: threading.Event | None = None,
     ) -> None:
@@ -524,11 +529,11 @@ class _MultiClipPostWriteWorker:
         self.default_postprocess_config = default_postprocess_config
         self.default_write_config = default_write_config
         self.total_frames = total_frames
+        self.n_gpus = n_gpus
         self.events = events
         self.cancel_event = cancel_event
 
     def run(self) -> None:
-        import os
         from concurrent.futures import ThreadPoolExecutor
 
         from corridorkey.errors import PostprocessError, WriteFailureError
@@ -536,7 +541,9 @@ class _MultiClipPostWriteWorker:
         if self.events:
             self.events.stage_start("postwrite", self.total_frames)
 
-        n_workers = max(2, (os.cpu_count() or 4) // 4)
+        # Scale pool to GPU count: each GPU can produce frames concurrently,
+        # so the write pool needs enough threads to drain all of them.
+        n_workers = max(4, self.n_gpus * 4)
         futures: list = []
 
         with ThreadPoolExecutor(max_workers=n_workers, thread_name_prefix="postwrite") as pool:

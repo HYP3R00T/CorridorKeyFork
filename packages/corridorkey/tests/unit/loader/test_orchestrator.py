@@ -355,10 +355,12 @@ class TestResolveAlpha:
             attach_alpha(manifest, alpha_dir)
 
     def test_raises_on_empty_alpha_dir(self, tmp_path: Path):
+        from corridorkey.errors import ClipLoadError
+
         manifest = self._base_manifest(tmp_path)
         alpha_dir = tmp_path / "my_clip" / "AlphaFrames"
         alpha_dir.mkdir()
-        with pytest.raises(FrameMismatchError):
+        with pytest.raises(ClipLoadError, match="alpha directory is empty"):
             attach_alpha(manifest, alpha_dir)
 
     def test_raises_if_alpha_dir_does_not_exist(self, tmp_path: Path):

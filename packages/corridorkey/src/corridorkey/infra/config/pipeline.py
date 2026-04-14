@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Literal, overload
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -166,9 +166,7 @@ class CorridorKeyConfig(BaseModel):
         else:
             resolved_devices = devices or []
 
-        inference_config, resolved_refiner_mode = self.to_inference_config(
-            device=resolved_device, _return_resolved_refiner_mode=True
-        )
+        inference_config, resolved_refiner_mode = self._resolve_inference_params(device=resolved_device)
 
         return PipelineConfig(
             preprocess=self.to_preprocess_config(
@@ -260,22 +258,10 @@ class CorridorKeyConfig(BaseModel):
             exr_compression=self.writer.exr_compression,
         )
 
-    @overload
-    def to_inference_config(
-        self, device: str | None = None, _return_resolved_refiner_mode: Literal[False] = ...
-    ) -> InferenceConfig: ...
-
-    @overload
-    def to_inference_config(
-        self, device: str | None = None, _return_resolved_refiner_mode: Literal[True] = ...
-    ) -> tuple[InferenceConfig, str]: ...
-
-    def to_inference_config(
-        self, device: str | None = None, _return_resolved_refiner_mode: bool = False
-    ) -> InferenceConfig | tuple[InferenceConfig, str]:
+    def to_inference_config(self, device: str | None = None) -> InferenceConfig:
         """Build an :class:`~corridorkey.stages.inference.InferenceConfig`.
 
-        **Layer 2.** When using Layer 1 (``Runner``), call
+        **Layer 2.** When using Layer 1 (``Engine``), call
         :meth:`to_pipeline_config` instead — it calls this internally and
         shares the VRAM probe result with the preprocess config.
 
@@ -285,10 +271,18 @@ class CorridorKeyConfig(BaseModel):
 
         Args:
             device: Override the device string. If None, uses ``self.device``.
-            _return_resolved_refiner_mode: Internal flag used by
-                ``to_pipeline_config`` to receive the resolved refiner mode
-                alongside the config so it can be stored in ``PipelineConfig``
-                and passed to ``Engine`` without a second VRAM probe.
+        """
+        config, _ = self._resolve_inference_params(device=device)
+        return config
+
+    def _resolve_inference_params(self, device: str | None = None) -> tuple[InferenceConfig, str]:
+        """Resolve inference config and refiner mode in a single VRAM probe.
+
+        Used internally by :meth:`to_pipeline_config` so the probe result is
+        shared with the preprocess config without a second pynvml call.
+
+        Returns:
+            (InferenceConfig, resolved_refiner_mode)
         """
         import torch
 
@@ -367,6 +361,4 @@ class CorridorKeyConfig(BaseModel):
             flash_attention=self.inference.flash_attention,
         )
 
-        if _return_resolved_refiner_mode:
-            return config, resolved_refiner_mode
-        return config
+        return config, resolved_refiner_mode

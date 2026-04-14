@@ -96,7 +96,7 @@ class TestToInferenceConfigRefinerModeAuto:
             inference=InferenceSettings(checkpoint_path=p, refiner_mode="auto"),
         )
         with patch("corridorkey.stages.inference.orchestrator._probe_vram_gb", return_value=8.0):
-            _, resolved = cfg.to_inference_config(device="cuda", _return_resolved_refiner_mode=True)
+            _, resolved = cfg._resolve_inference_params(device="cuda")
         assert resolved == "tiled"
 
     def test_auto_refiner_mode_high_vram_resolves_to_full_frame(self, tmp_path: Path):
@@ -106,7 +106,7 @@ class TestToInferenceConfigRefinerModeAuto:
             inference=InferenceSettings(checkpoint_path=p, refiner_mode="auto"),
         )
         with patch("corridorkey.stages.inference.orchestrator._probe_vram_gb", return_value=24.0):
-            _, resolved = cfg.to_inference_config(device="cuda", _return_resolved_refiner_mode=True)
+            _, resolved = cfg._resolve_inference_params(device="cuda")
         assert resolved == "full_frame"
 
     def test_auto_refiner_mode_zero_vram_resolves_to_full_frame(self, tmp_path: Path):
@@ -117,5 +117,5 @@ class TestToInferenceConfigRefinerModeAuto:
             inference=InferenceSettings(checkpoint_path=p, refiner_mode="auto"),
         )
         with patch("corridorkey.stages.inference.orchestrator._probe_vram_gb", return_value=0.0):
-            _, resolved = cfg.to_inference_config(device="cuda", _return_resolved_refiner_mode=True)
+            _, resolved = cfg._resolve_inference_params(device="cuda")
         assert resolved == "full_frame"

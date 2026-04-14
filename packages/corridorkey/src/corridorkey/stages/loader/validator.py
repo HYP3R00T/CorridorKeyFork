@@ -133,6 +133,8 @@ def validate(
     alpha_scan: FrameScan | None = None
     if alpha_frames_dir is not None:
         alpha_scan = scan_frames(alpha_frames_dir)
+        if alpha_scan.count == 0:
+            raise ClipLoadError(clip_name, f"alpha directory is empty: {alpha_frames_dir}")
         if alpha_scan.count != input_count:
             raise FrameMismatchError(clip_name, input_count, alpha_scan.count)
 
