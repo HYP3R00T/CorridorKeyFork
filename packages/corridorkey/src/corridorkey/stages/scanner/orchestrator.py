@@ -1,7 +1,7 @@
 """Scanner stage — orchestrator (stage 0).
 
-Accepts a path from the external interface (CLI, GUI, or API) and produces
-a ScanResult containing valid Clip objects and any skipped paths with reasons.
+Accepts one or more paths and produces a ScanResult containing valid Clip
+objects and any skipped paths with reasons.
 
 This is the only place that touches the filesystem for discovery purposes,
 and the only place that reorganises the user's files (video normalisation).
@@ -24,19 +24,22 @@ logger = logging.getLogger(__name__)
 
 
 def scan(
-    path: str | Path,
+    paths: list[Path] | Path | str,
     reorganise: bool = True,
     events: PipelineEvents | None = None,
 ) -> ScanResult:
-    """Scan a path for processable clips.
+    """Scan one or more paths for processable clips.
 
-    Accepts:
+    Accepts a single path or a list of paths. Each path may be:
     - A clips directory containing multiple clip subfolders
     - A single clip folder (must contain Input/ and optionally AlphaHint/)
     - A single video file (reorganised in-place into a clip folder structure)
 
+    Passing a list allows scanning clips that live at unrelated locations on
+    disk (different drives, different projects) in a single call.
+
     Args:
-        path: Path to a clips directory, a single clip folder, or a video file.
+        paths: A single path or list of paths to scan.
         reorganise: If True (default), loose video files are moved into an
             Input/ subfolder in-place. If False, loose videos are reported as
             skipped rather than silently ignored.
@@ -48,12 +51,36 @@ def scan(
         ScanResult with clips ready for the loader stage and any skipped paths.
 
     Raises:
-        ClipScanError: If the path does not exist or is an unrecognised file type.
-        PermissionError: If the top-level directory cannot be read.
+        ClipScanError: If a path does not exist or is an unrecognised file type.
+        PermissionError: If a top-level directory cannot be read.
         OSError: If video reorganisation fails.
     """
-    path = Path(path)
+    # Normalise to list
+    path_list = [Path(paths)] if isinstance(paths, (str, Path)) else [Path(p) for p in paths]
 
+    all_clips: list[Clip] = []
+    all_skipped: list[SkippedClip] = []
+
+    for path in path_list:
+        result = _scan_one(path, reorganise=reorganise, events=events)
+        all_clips.extend(result.clips)
+        all_skipped.extend(result.skipped)
+
+    return ScanResult(clips=tuple(all_clips), skipped=tuple(all_skipped))
+
+
+def _scan_one(
+    path: Path,
+    reorganise: bool = True,
+    events: PipelineEvents | None = None,
+) -> ScanResult:
+    """Scan a single path for processable clips.
+
+    Handles three cases:
+    - A single video file → reorganise and return one clip
+    - A single clip folder → validate and return one clip
+    - A clips directory → iterate and return all clips found inside
+    """
     if not path.exists():
         raise ClipScanError(f"Path does not exist: {path}")
 
