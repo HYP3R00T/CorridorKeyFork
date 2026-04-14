@@ -1,18 +1,3 @@
-"""Stage 1 — video extraction.
-
-Extracts video files to PNG image sequences using PyAV (Python bindings to
-FFmpeg C libraries). PyAV bundles its own FFmpeg — no system install required.
-
-Performance notes:
-  - Decoding is sequential (PyAV demux is inherently sequential).
-  - Frame writes are overlapped with decoding via a single writer thread.
-    The writer thread keeps the disk busy while the decoder is working,
-    giving a meaningful speedup on fast NVMe storage.
-  - PNG compression level is configurable. Level 1 (default) is dramatically
-    faster than OpenCV's default of 3 with minimal size difference for
-    intermediate frames that will be read back immediately.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -92,7 +77,6 @@ class VideoMetadata(BaseModel):
 
 
 def is_video(path: Path) -> bool:
-    """Check if a path points to a video file."""
     return path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS
 
 
@@ -161,17 +145,14 @@ def extract_video(
 
     stream = container.streams.video[0]
     stream.codec_context.thread_type = av.codec.context.ThreadType.AUTO
-
     metadata = _extract_metadata(container, video_path)
-    total_frames = metadata.estimated_frame_count
 
     encode_params = [cv2.IMWRITE_PNG_COMPRESSION, png_compression]
-
-    # Writer thread: pulls (path, array) from the queue and writes to disk.
-    # This overlaps I/O with decoding so the decoder is never waiting on disk.
     write_queue: queue.Queue = queue.Queue(maxsize=8)
     write_error: list[Exception] = []
 
+    # Writer thread: pulls (path, array) from the queue and writes to disk.
+    # This overlaps I/O with decoding so the decoder is never waiting on disk.
     def _writer() -> None:
         while True:
             item = write_queue.get()
@@ -188,18 +169,16 @@ def extract_video(
 
     frame_index = 0
     try:
-        for packet in container.demux(stream):
-            for frame in packet.decode():
-                bgr = frame.to_ndarray(format="bgr24")
-                out_path = output_dir / pattern.format(frame_index)
-                write_queue.put((out_path, bgr))
-                if on_frame:
-                    on_frame(frame_index, total_frames)
-                frame_index += 1
-                if write_error:
-                    raise write_error[0]
-    except av.FFmpegError as e:
-        raise RuntimeError(f"Error decoding '{video_path}' at frame {frame_index}: {e}") from e
+        frame_index = _decode_frames(
+            container,
+            stream,
+            output_dir,
+            pattern,
+            metadata.estimated_frame_count,
+            write_queue,
+            write_error,
+            on_frame,
+        )
     finally:
         write_queue.put(_STOP)
         writer_thread.join()
@@ -210,6 +189,34 @@ def extract_video(
 
     logger.info("Extracted %d frames to %s", frame_index, output_dir)
     return metadata
+
+
+def _decode_frames(
+    container: av.container.InputContainer,
+    stream: av.video.stream.VideoStream,
+    output_dir: Path,
+    pattern: str,
+    total_frames: int,
+    write_queue: queue.Queue,
+    write_error: list[Exception],
+    on_frame: Callable[[int, int], None] | None,
+) -> int:
+    # Decode all frames from the container stream, pushing each to the write queue.
+    # Returns the total number of frames decoded.
+    frame_index = 0
+    try:
+        for packet in container.demux(stream):
+            for frame in packet.decode():
+                bgr = frame.to_ndarray(format="bgr24")
+                write_queue.put((output_dir / pattern.format(frame_index), bgr))
+                if on_frame:
+                    on_frame(frame_index, total_frames)
+                frame_index += 1
+                if write_error:
+                    raise write_error[0]
+    except av.FFmpegError as e:
+        raise RuntimeError(f"Error decoding at frame {frame_index}: {e}") from e
+    return frame_index
 
 
 def save_video_metadata(metadata: VideoMetadata, clip_root: Path) -> Path:
@@ -244,7 +251,6 @@ def load_video_metadata(clip_root: Path) -> VideoMetadata | None:
 
 
 def _extract_metadata(container: av.container.InputContainer, video_path: Path) -> VideoMetadata:
-    """Pull metadata from an open PyAV container."""
     stream = container.streams.video[0]
     ctx = stream.codec_context
 

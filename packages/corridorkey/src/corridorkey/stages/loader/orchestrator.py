@@ -1,13 +1,3 @@
-"""Loader stage — orchestrator.
-
-Validates a Clip and returns a ClipManifest ready for downstream stages.
-User files are never modified. For video inputs, frames are extracted into
-a sibling Frames/ or AlphaFrames/ directory. For image sequences, the
-existing directory is used directly.
-
-Each stage in the pipeline has a corresponding orchestrator.py.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -51,13 +41,15 @@ def load(
         alpha externally via attach_alpha() if needs_alpha is True.
 
     Raises:
-        FrameMismatchError: If validation fails.
+        ClipLoadError: If input has no frames or the output directory cannot be created.
+        FrameMismatchError: If alpha frame count does not match input frame count.
         ExtractionError: If video extraction fails.
     """
     frames_dir = _resolve_frames(
         clip.input_path,
         clip.root,
         "Frames",
+        save_metadata=True,
         events=events,
         png_compression=png_compression,
     )
@@ -66,6 +58,7 @@ def load(
             clip.alpha_path,
             clip.root,
             "AlphaFrames",
+            save_metadata=False,
             events=events,
             png_compression=png_compression,
         )
@@ -76,6 +69,7 @@ def load(
     # Single scan pass per directory — validate() returns FrameScan results
     # so we reuse them for frame_count and is_linear without re-scanning.
     input_scan, _ = validate(clip.name, frames_dir, alpha_frames_dir)
+    assert input_scan is not None  # noqa: S101 — only None when expected_frame_count is passed
 
     output_dir = clip.root / "Output"
     try:
@@ -109,49 +103,54 @@ def load(
     )
 
 
+def _check_extraction_cache(video_path: Path, output_dir: Path) -> bool:
+    # Returns True if output_dir already contains a complete extraction.
+    # Verifies frame count against container metadata — not just non-empty —
+    # to catch partial extractions from crashed runs.
+    if not output_dir.exists():
+        return False
+    existing = scan_frames(output_dir)
+    if existing.count == 0:
+        return False
+    try:
+        meta = read_video_metadata(video_path)
+        expected = meta.estimated_frame_count
+    except RuntimeError:
+        expected = 0
+    if expected == 0 or existing.count == expected:
+        # expected == 0 means the container doesn't report a frame count —
+        # we can't verify completeness, so accept whatever is on disk.
+        logger.info("Frames already extracted (%d frames), skipping: %s", existing.count, output_dir)
+        return True
+    logger.warning(
+        "Incomplete extraction detected for '%s': %d frames on disk, %d expected — re-extracting.",
+        output_dir,
+        existing.count,
+        expected,
+    )
+    return False
+
+
 def _resolve_frames(
     path: Path,
     clip_root: Path,
     extracted_dir_name: str,
+    save_metadata: bool = False,
     events: PipelineEvents | None = None,
     png_compression: int = DEFAULT_PNG_COMPRESSION,
 ) -> Path:
-    """Resolve the frame sequence directory for a given input path.
-
-    clip_root is passed explicitly rather than derived from path arithmetic
-    (path.parent.parent) to avoid fragile assumptions about directory depth.
-    """
+    # Resolve the frame sequence directory for a given input path.
+    # clip_root is passed explicitly rather than derived from path arithmetic
+    # (path.parent.parent) to avoid fragile assumptions about directory depth.
+    # save_metadata controls whether video metadata is written to clip_root
+    # after extraction — True for the input video, False for alpha hint videos.
     if not is_video(path):
         return path
 
     output_dir = clip_root / extracted_dir_name
 
-    # Cache check: verify frame count matches container metadata, not just
-    # that the directory is non-empty. A partial extraction (crashed run,
-    # .DS_Store, Thumbs.db) would otherwise be treated as complete.
-    if output_dir.exists():
-        existing = scan_frames(output_dir)
-        if existing.count > 0:
-            try:
-                meta = read_video_metadata(path)
-                expected = meta.estimated_frame_count
-            except RuntimeError:
-                expected = 0
-
-            if expected == 0 or existing.count == expected:
-                logger.info(
-                    "Frames already extracted (%d frames), skipping: %s",
-                    existing.count,
-                    output_dir,
-                )
-                return output_dir
-            else:
-                logger.warning(
-                    "Incomplete extraction detected for '%s': %d frames on disk, %d expected — re-extracting.",
-                    output_dir,
-                    existing.count,
-                    expected,
-                )
+    if _check_extraction_cache(path, output_dir):
+        return output_dir
 
     # Pre-open the container to get an accurate frame count for the progress
     # callback before extraction starts, so the GUI shows a real total.
@@ -178,7 +177,7 @@ def _resolve_frames(
     if events:
         events.stage_done("extract")
 
-    if extracted_dir_name == "Frames":
+    if save_metadata:
         save_video_metadata(metadata, clip_root)
 
     return output_dir

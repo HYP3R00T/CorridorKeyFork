@@ -9,7 +9,6 @@ from corridorkey.errors import FrameMismatchError
 from corridorkey.stages.loader.validator import (
     FrameScan,
     count_frames,
-    detect_is_linear,
     list_frames,
     scan_frames,
     validate,
@@ -118,24 +117,12 @@ class TestCountFrames:
         assert count_frames(tmp_path) == 0
 
 
-class TestDetectIsLinear:
-    def test_exr_frames_are_linear(self, tmp_path: Path):
-        _touch_frames(tmp_path, ["frame_1.exr", "frame_2.exr"])
-        assert detect_is_linear(tmp_path) is True
-
-    def test_png_frames_are_not_linear(self, tmp_path: Path):
-        _touch_frames(tmp_path, ["frame_1.png", "frame_2.png"])
-        assert detect_is_linear(tmp_path) is False
-
-    def test_empty_directory_returns_false(self, tmp_path: Path):
-        assert detect_is_linear(tmp_path) is False
-
-
 class TestValidate:
     def test_valid_clip_no_alpha_returns_scans(self, tmp_path: Path):
         input_dir = tmp_path / "Input"
         _touch_frames(input_dir, ["frame_1.png", "frame_2.png"])
         input_scan, alpha_scan = validate("test_clip", input_dir, None)
+        assert input_scan is not None
         assert input_scan.count == 2
         assert alpha_scan is None
 
@@ -145,6 +132,7 @@ class TestValidate:
         _touch_frames(input_dir, ["frame_1.png", "frame_2.png"])
         _touch_frames(alpha_dir, ["alpha_1.png", "alpha_2.png"])
         input_scan, alpha_scan = validate("test_clip", input_dir, alpha_dir)
+        assert input_scan is not None
         assert input_scan.count == 2
         assert alpha_scan is not None
         assert alpha_scan.count == 2

@@ -1,5 +1,3 @@
-"""Stage 1 contracts."""
-
 from __future__ import annotations
 
 from pathlib import Path
