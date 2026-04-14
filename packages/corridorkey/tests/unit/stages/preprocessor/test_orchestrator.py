@@ -302,3 +302,107 @@ class TestPreprocessConfigValidation:
     def test_img_size_positive_is_valid(self):
         cfg = PreprocessConfig(img_size=1)
         assert cfg.img_size == 1
+
+
+class TestAlphaHint:
+    def test_alpha_hint_populated_when_alpha_present(self, tmp_path: Path):
+        """When alpha frames exist, meta.alpha_hint must be a float32 array."""
+        manifest = _make_manifest(tmp_path)
+        config = PreprocessConfig(img_size=64, device="cpu")
+        result = preprocess_frame(manifest, 0, config)
+        assert result.meta.alpha_hint is not None
+        assert isinstance(result.meta.alpha_hint, np.ndarray)
+        assert result.meta.alpha_hint.dtype == np.float32
+
+    def test_alpha_hint_shape_is_hwc1(self, tmp_path: Path):
+        """alpha_hint must be [H, W, 1] at source resolution, not model resolution."""
+        manifest = _make_manifest(tmp_path, img_h=48, img_w=80)
+        config = PreprocessConfig(img_size=64, device="cpu")
+        result = preprocess_frame(manifest, 0, config)
+        assert result.meta.alpha_hint is not None
+        assert result.meta.alpha_hint.shape == (48, 80, 1)
+
+    def test_alpha_hint_values_in_range(self, tmp_path: Path):
+        """alpha_hint values must be in [0, 1]."""
+        manifest = _make_manifest(tmp_path)
+        config = PreprocessConfig(img_size=64, device="cpu")
+        result = preprocess_frame(manifest, 0, config)
+        assert result.meta.alpha_hint is not None
+        assert result.meta.alpha_hint.min() >= 0.0
+        assert result.meta.alpha_hint.max() <= 1.0
+
+    def test_alpha_hint_from_3channel_alpha_is_single_channel(self, tmp_path: Path):
+        """A 3-channel alpha PNG must be collapsed to [H, W, 1] in alpha_hint."""
+        frames_dir = tmp_path / "Frames"
+        frames_dir.mkdir(parents=True)
+        alpha_dir = tmp_path / "AlphaFrames"
+        alpha_dir.mkdir()
+        output_dir = tmp_path / "Output"
+        output_dir.mkdir()
+        _write_png(frames_dir / "frame_000000.png", h=8, w=8, channels=3)
+        # Write a 3-channel alpha (RGB PNG used as alpha hint)
+        rgb_alpha = np.full((8, 8, 3), 200, dtype=np.uint8)
+        cv2.imwrite(str(alpha_dir / "frame_000000.png"), rgb_alpha)
+        manifest = ClipManifest(
+            clip_name="test",
+            clip_root=tmp_path,
+            frames_dir=frames_dir,
+            alpha_frames_dir=alpha_dir,
+            output_dir=output_dir,
+            needs_alpha=False,
+            frame_count=1,
+            frame_range=(0, 1),
+            is_linear=False,
+        )
+        config = PreprocessConfig(img_size=8, device="cpu")
+        result = preprocess_frame(manifest, 0, config)
+        assert result.meta.alpha_hint is not None
+        assert result.meta.alpha_hint.shape == (8, 8, 1)
+
+
+class TestFrameRangeOffset:
+    def test_non_zero_start_offset_resolves_correct_frame(self, tmp_path: Path):
+        """frame_range=(1, 3) means frames at index 1 and 2 — offset must be applied."""
+        frames_dir = tmp_path / "Frames"
+        frames_dir.mkdir(parents=True)
+        alpha_dir = tmp_path / "AlphaFrames"
+        alpha_dir.mkdir()
+        output_dir = tmp_path / "Output"
+        output_dir.mkdir()
+        # Write 3 frames with distinct content so we can verify the right one is read
+        for i in range(3):
+            fill = i * 80  # 0, 80, 160 — clearly distinct
+            img = np.full((8, 8, 3), fill, dtype=np.uint8)
+            cv2.imwrite(str(frames_dir / f"frame_{i:06d}.png"), img)
+            cv2.imwrite(str(alpha_dir / f"frame_{i:06d}.png"), np.full((8, 8), 255, dtype=np.uint8))
+        manifest = ClipManifest(
+            clip_name="offset_test",
+            clip_root=tmp_path,
+            frames_dir=frames_dir,
+            alpha_frames_dir=alpha_dir,
+            output_dir=output_dir,
+            needs_alpha=False,
+            frame_count=3,
+            frame_range=(1, 3),  # only frames 1 and 2
+            is_linear=False,
+        )
+        config = PreprocessConfig(img_size=8, device="cpu")
+        # frame index 1 should read frames_dir/frame_000001.png (fill=80)
+        result = preprocess_frame(manifest, 1, config)
+        assert result.meta.frame_index == 1
+
+    def test_frame_range_start_boundary_is_valid(self, tmp_path: Path):
+        """The start index of frame_range must be a valid frame to process."""
+        manifest = _make_manifest(tmp_path, frame_count=3)
+        config = PreprocessConfig(img_size=64, device="cpu")
+        # frame_range is (0, 3) — index 0 is the boundary, must succeed
+        result = preprocess_frame(manifest, 0, config)
+        assert result.meta.frame_index == 0
+
+    def test_frame_range_end_boundary_is_exclusive(self, tmp_path: Path):
+        """frame_range end is exclusive — index equal to end must raise."""
+        manifest = _make_manifest(tmp_path, frame_count=3)
+        config = PreprocessConfig(img_size=64, device="cpu")
+        # frame_range is (0, 3) — index 3 is out of range
+        with pytest.raises(ValueError, match="out of range"):
+            preprocess_frame(manifest, 3, config)

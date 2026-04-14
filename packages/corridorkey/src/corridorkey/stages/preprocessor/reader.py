@@ -1,20 +1,3 @@
-"""Preprocessing stage — frame reader (internal).
-
-Reads one frame pair (image + alpha) from disk and returns two float32 arrays
-in range 0.0–1.0. This is the only place in the preprocessor that touches
-the filesystem.
-
-Channel layout note
--------------------
-OpenCV reads images as BGR. We do NOT reorder channels here — that would
-require a full CPU memcopy of the entire frame just to swap two channels.
-Instead we return the raw BGR layout and set ``bgr=True`` on the image array
-so ``to_tensors`` can do the reorder on the GPU as a near-zero-cost index
-operation (``img_t[:, [2, 1, 0]]``), after the data is already on-device.
-
-Not part of the public API — called by orchestrator.py.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -32,7 +15,7 @@ logger = logging.getLogger(__name__)
 _BGR_TO_GRAY = np.array([0.114, 0.587, 0.299], dtype=np.float32)
 
 
-def _read_frame_pair(
+def read_frame_pair(
     image_path: Path,
     alpha_path: Path,
 ) -> tuple[np.ndarray, np.ndarray, bool]:
@@ -86,16 +69,8 @@ def _read_frame_pair(
 
 
 def _read_image(path: Path, channels: int) -> tuple[np.ndarray, bool]:
-    """Read an image file and return a float32 array normalised to 0.0–1.0.
-
-    Returns:
-        (array [H, W, channels] float32, bgr) where bgr=True means the
-        channel order is BGR (OpenCV native). Single-channel arrays always
-        have bgr=False.
-
-    Raises:
-        FrameReadError: If the file cannot be read or decoded.
-    """
+    # Read an image file and return a float32 array normalised to 0.0–1.0.
+    # Returns (array [H, W, channels] float32, bgr) where bgr=True means BGR order.
     raw = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)
     if raw is None:
         raise FrameReadError(f"cv2.imread returned None for '{path}' — file missing or unreadable.")
@@ -106,15 +81,10 @@ def _read_image(path: Path, channels: int) -> tuple[np.ndarray, bool]:
 
 
 def _to_float32(arr: np.ndarray, path: Path) -> np.ndarray:
-    """Normalise array to float32 in range 0.0–1.0.
-
-    uint8  -> multiply by 1/255   (single allocation, no intermediate)
-    uint16 -> multiply by 1/65535 (single allocation, no intermediate)
-    float  -> clamp to [0, 1]     (EXR values outside range are clipped)
-
-    np.multiply with out=None and dtype=float32 writes directly into the
-    output without creating an intermediate array, unlike astype() / 255.
-    """
+    # Normalise to float32 in range 0.0–1.0.
+    # uint8  → multiply by 1/255   (single allocation, no intermediate)
+    # uint16 → multiply by 1/65535 (single allocation, no intermediate)
+    # float  → clamp to [0, 1]     (EXR values outside range are clipped)
     if arr.dtype == np.uint8:
         return np.multiply(arr, 1.0 / 255.0, dtype=np.float32)
     if arr.dtype == np.uint16:
@@ -127,25 +97,10 @@ def _to_float32(arr: np.ndarray, path: Path) -> np.ndarray:
 
 
 def _to_channels(arr: np.ndarray, channels: int, path: Path) -> tuple[np.ndarray, bool]:
-    """Reshape to the expected output shape without reordering BGR channels.
-
-    For 3-channel images we keep the native BGR layout and return bgr=True.
-    The caller (to_tensors) will reorder on-device as a zero-copy index op.
-
-    For single-channel (alpha) and grayscale-broadcast cases, bgr is always
-    False — channel order is irrelevant.
-
-    Args:
-        arr: float32 array as returned by cv2.imread (H, W) or (H, W, C).
-        channels: Desired output channel count (1 or 3).
-        path: Source path, used in error messages only.
-
-    Returns:
-        (array [H, W, channels], bgr)
-
-    Raises:
-        FrameReadError: If the source channel count is incompatible.
-    """
+    # Reshape to the expected output shape without reordering BGR channels.
+    # For 3-channel images: keep native BGR, return bgr=True so the caller
+    # can reorder on-device as a zero-copy strided view (no CPU memcopy).
+    # For single-channel and grayscale: bgr=False, channel order irrelevant.
     # Grayscale — add trailing channel dim
     if arr.ndim == 2:
         arr = arr[:, :, np.newaxis]

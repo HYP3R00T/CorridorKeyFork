@@ -8,8 +8,6 @@ Public API::
         PreprocessedFrame,
         FrameMeta,
         FrameReadError,
-        ImageUpsampleMode,
-        DEFAULT_IMAGE_UPSAMPLE_MODE,
     )
 """
 

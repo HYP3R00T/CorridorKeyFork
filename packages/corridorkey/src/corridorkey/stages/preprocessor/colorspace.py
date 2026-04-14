@@ -1,15 +1,3 @@
-"""Preprocessing stage — color space conversion.
-
-Converts linear light images to sRGB before inference.
-The model requires sRGB input — this is an input contract, not an optimisation.
-
-GPU path  — operates on a PyTorch tensor, runs on whatever device the tensor
-            lives on (CUDA, MPS, or CPU).
-CPU path  — operates on a NumPy array, used for source_passthrough capture
-            before the tensor is moved to the device. Uses the shared LUT from
-            infra.colorspace for speed and consistency with the postprocessor.
-"""
-
 from __future__ import annotations
 
 import numpy as np

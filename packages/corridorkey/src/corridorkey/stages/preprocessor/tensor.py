@@ -1,25 +1,3 @@
-"""Preprocessing stage — tensor construction.
-
-Converts NumPy arrays from the reader into PyTorch tensors in channel-first
-layout and moves them to the target device. All subsequent transforms operate
-on these tensors directly on the device.
-
-This is the boundary between NumPy (CPU disk I/O) and PyTorch (device compute).
-
-Single PCIe transfer
---------------------
-Image [3, H, W] and alpha [1, H, W] are concatenated into a single [4, H, W]
-array on CPU before calling ``.to(device)``. This produces one DMA operation
-instead of two, halving the number of PCIe round-trips per frame.
-
-BGR→RGB reorder
----------------
-OpenCV reads images as BGR. Rather than reordering on CPU (a full memcopy),
-we transfer the BGR tensor to the device and then reorder channels there as
-a near-zero-cost index operation: ``img_t[:, [2, 1, 0], :, :]``.
-On CUDA this is a strided view — no data is copied.
-"""
-
 from __future__ import annotations
 
 import numpy as np
@@ -43,7 +21,7 @@ def to_tensors(
         alpha: float32 [H, W, 1], linear, range 0.0–1.0.
         device: PyTorch device string ("cuda", "mps", "cpu").
         bgr: If True, reorder image channels BGR→RGB on-device after transfer.
-            Pass the value returned by ``_read_frame_pair``.
+            Pass the value returned by ``read_frame_pair``.
 
     Returns:
         Tuple of (image [1, 3, H, W] RGB, alpha [1, 1, H, W]) on the device.

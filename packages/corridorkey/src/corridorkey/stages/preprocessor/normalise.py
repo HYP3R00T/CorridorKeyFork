@@ -1,28 +1,3 @@
-"""Preprocessing stage — ImageNet normalisation.
-
-Normalises the image with ImageNet mean and std before inference.
-This is a model input contract — the weights were trained exclusively
-on inputs in this distribution.
-
-Operates on a PyTorch tensor so the computation runs on whatever device the
-tensor lives on (CUDA, MPS, or CPU).
-
-The alpha hint is never normalised — it is passed through as-is.
-
-In-place ops
-------------
-``sub_`` and ``div_`` modify the tensor in-place, eliminating two intermediate
-allocations compared to ``(image - mean) / std``. This is safe here because
-the tensor is freshly created by ``to_tensors`` and is not referenced anywhere
-else at the point normalisation runs.
-
-Caching
--------
-The mean and std tensors are cached per (dtype, device) pair via
-``functools.lru_cache``. For a 1000-frame clip this avoids 2000 small tensor
-allocations — the cached tensors are reused on every frame.
-"""
-
 from __future__ import annotations
 
 import functools
@@ -36,11 +11,8 @@ _STD = [0.229, 0.224, 0.225]
 
 @functools.lru_cache(maxsize=8)
 def _get_mean_std(dtype: torch.dtype, device: torch.device) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return cached mean and std tensors for the given dtype and device.
-
-    Cached per (dtype, device) — at most 8 entries (one per device/dtype combo
-    seen in practice). Avoids re-allocating these small tensors on every frame.
-    """
+    # Cached per (dtype, device) — at most 8 entries. Avoids re-allocating
+    # these small tensors on every frame for a 1000-frame clip.
     mean = torch.tensor(_MEAN, dtype=dtype, device=device).view(1, 3, 1, 1)
     std = torch.tensor(_STD, dtype=dtype, device=device).view(1, 3, 1, 1)
     return mean, std

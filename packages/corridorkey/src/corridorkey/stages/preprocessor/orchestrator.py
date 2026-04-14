@@ -1,23 +1,18 @@
-"""Preprocessing stage — orchestrator.
-
-Runs steps 1–9 in order. Owns no transformation logic itself — each step
-is delegated to its own module.
-
-    Step 1  — validate inputs            (here)
-    Step 2  — read from disk             → reader.py
-    Step 3  — capture original dims      (here)
-    Step 4  — capture source_image       (here, CPU — no GPU→CPU transfer)
-    Step 5  — move to device tensor      → tensor.py  (single PCIe transfer)
-    Step 6  — color space conversion     → colorspace.py
-    Step 7  — resize to model resolution → resize.py  (simple square stretch)
-    Step 8  — ImageNet normalisation     → normalise.py
-    Step 9  — concat + return            (here)
-
-All transforms from step 5 onward run on the configured device (CUDA, MPS,
-or CPU) — no separate fallback is needed; PyTorch handles device dispatch.
-
-Public entry point: preprocess_frame(manifest, i, config)
-"""
+# Preprocessing pipeline — runs steps 1–9 in order.
+# Owns no transformation logic itself — each step is delegated to its own module.
+#
+#   Step 1  — validate inputs            (here)
+#   Step 2  — read from disk             → reader.py
+#   Step 3  — capture original dims      (here)
+#   Step 4  — capture source_image       (here, CPU — no GPU→CPU transfer)
+#   Step 5  — move to device tensor      → tensor.py  (single PCIe transfer)
+#   Step 6  — color space conversion     → colorspace.py
+#   Step 7  — resize to model resolution → resize.py  (simple square stretch)
+#   Step 8  — ImageNet normalisation     → normalise.py
+#   Step 9  — concat + return            (here)
+#
+# All transforms from step 5 onward run on the configured device (CUDA, MPS,
+# or CPU) — no separate fallback is needed; PyTorch handles device dispatch.
 
 from __future__ import annotations
 
@@ -33,8 +28,8 @@ from corridorkey.stages.loader.validator import list_frames
 from corridorkey.stages.preprocessor.colorspace import linear_to_srgb, linear_to_srgb_numpy
 from corridorkey.stages.preprocessor.contracts import FrameMeta, PreprocessedFrame
 from corridorkey.stages.preprocessor.normalise import normalise_image
-from corridorkey.stages.preprocessor.reader import _read_frame_pair
-from corridorkey.stages.preprocessor.resize import DEFAULT_IMAGE_UPSAMPLE_MODE, ImageUpsampleMode, resize_frame
+from corridorkey.stages.preprocessor.reader import read_frame_pair
+from corridorkey.stages.preprocessor.resize import resize_frame
 from corridorkey.stages.preprocessor.tensor import to_tensors
 
 logger = logging.getLogger(__name__)
@@ -48,25 +43,16 @@ class PreprocessConfig:
         img_size: Square resolution the model runs at. 2048 is the native
             training resolution — do not change unless retraining.
         device: PyTorch device string ("cuda", "mps", "cpu").
-        image_upsample_mode: Interpolation mode used when the source image is
-            smaller than img_size. "bicubic" (default) gives the sharpest
-            result. "bilinear" is faster but slightly softer. Has no effect
-            when downscaling — area mode is always used then.
         half_precision: If True, cast tensors to float16 before inference.
         source_passthrough: If True, carry the original sRGB source image in
             FrameMeta so the postprocessor can replace model FG in opaque
             interior regions with original source pixels.
-        sharpen_strength: Unsharp mask strength applied after upscaling.
-            0.3 (default) recovers softness from the antialias filter.
-            0.0 disables. Has no effect when downscaling.
     """
 
     img_size: int = 2048
     device: str = "cpu"
-    image_upsample_mode: ImageUpsampleMode = DEFAULT_IMAGE_UPSAMPLE_MODE
     half_precision: bool = False
     source_passthrough: bool = True
-    sharpen_strength: float = 0.3
 
     def __post_init__(self) -> None:
         if self.img_size <= 0:
@@ -106,7 +92,7 @@ def preprocess_frame(
 
     # Step 2 — read from disk (CPU NumPy — I/O boundary)
     image_path, alpha_path = _resolve_paths(manifest, i, image_files, alpha_files)
-    image, alpha, bgr = _read_frame_pair(image_path, alpha_path)
+    image, alpha, bgr = read_frame_pair(image_path, alpha_path)
 
     # Step 3 — capture original dimensions before any resizing
     original_h, original_w = image.shape[:2]
@@ -123,7 +109,7 @@ def preprocess_frame(
     # at native resolution, avoiding soft edges from upscaling.
     alpha_hint: np.ndarray | None = None
     if alpha is not None:
-        # alpha from _read_frame_pair is [H, W] or [H, W, 1] float32 0-1
+        # alpha from read_frame_pair is [H, W] or [H, W, 1] float32 0-1
         arr = alpha if alpha.ndim == 3 else alpha[:, :, np.newaxis]
         alpha_hint = arr.astype(np.float32, copy=False)
 
@@ -139,9 +125,6 @@ def preprocess_frame(
         img_t,
         alp_t,
         config.img_size,
-        image_upsample_mode=config.image_upsample_mode,
-        sharpen_strength=config.sharpen_strength,
-        is_srgb=not manifest.is_linear,
     )
 
     # Step 8 — ImageNet normalisation (image only, on device)
@@ -182,6 +165,7 @@ def _resolve_paths(
     alpha_files: list[Path] | None,
 ) -> tuple[Path, Path]:
     imgs = image_files if image_files is not None else list_frames(manifest.frames_dir)
-    alps = alpha_files if alpha_files is not None else list_frames(manifest.alpha_frames_dir)  # type: ignore[arg-type]
+    assert manifest.alpha_frames_dir is not None  # noqa: S101 — guaranteed by needs_alpha=False check in preprocess_frame
+    alps = alpha_files if alpha_files is not None else list_frames(manifest.alpha_frames_dir)
     offset = manifest.frame_range[0]
     return imgs[i - offset], alps[i - offset]

@@ -7,7 +7,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
-from corridorkey.stages.preprocessor.reader import FrameReadError, _read_frame_pair
+from corridorkey.stages.preprocessor.reader import FrameReadError, read_frame_pair
 
 
 def _write_png(path: Path, h: int = 64, w: int = 64, channels: int = 3) -> None:
@@ -26,7 +26,7 @@ class TestReadFramePair:
         alpha_path = tmp_path / "alpha.png"
         _write_png(img_path, channels=3)
         _write_png(alpha_path, channels=1)
-        result = _read_frame_pair(img_path, alpha_path)
+        result = read_frame_pair(img_path, alpha_path)
         assert len(result) == 3
 
     def test_returns_float32_arrays(self, tmp_path: Path):
@@ -34,7 +34,7 @@ class TestReadFramePair:
         alpha_path = tmp_path / "alpha.png"
         _write_png(img_path, channels=3)
         _write_png(alpha_path, channels=1)
-        image, alpha, _ = _read_frame_pair(img_path, alpha_path)
+        image, alpha, _ = read_frame_pair(img_path, alpha_path)
         assert image.dtype == np.float32
         assert alpha.dtype == np.float32
 
@@ -43,7 +43,7 @@ class TestReadFramePair:
         alpha_path = tmp_path / "alpha.png"
         _write_png(img_path, h=32, w=48, channels=3)
         _write_png(alpha_path, h=32, w=48, channels=1)
-        image, alpha, _ = _read_frame_pair(img_path, alpha_path)
+        image, alpha, _ = read_frame_pair(img_path, alpha_path)
         assert image.shape == (32, 48, 3)
 
     def test_alpha_shape_is_hwc1(self, tmp_path: Path):
@@ -51,7 +51,7 @@ class TestReadFramePair:
         alpha_path = tmp_path / "alpha.png"
         _write_png(img_path, h=32, w=48, channels=3)
         _write_png(alpha_path, h=32, w=48, channels=1)
-        image, alpha, _ = _read_frame_pair(img_path, alpha_path)
+        image, alpha, _ = read_frame_pair(img_path, alpha_path)
         assert alpha.shape == (32, 48, 1)
 
     def test_values_in_range_0_1(self, tmp_path: Path):
@@ -59,7 +59,7 @@ class TestReadFramePair:
         alpha_path = tmp_path / "alpha.png"
         _write_png(img_path)
         _write_png(alpha_path, channels=1)
-        image, alpha, _ = _read_frame_pair(img_path, alpha_path)
+        image, alpha, _ = read_frame_pair(img_path, alpha_path)
         assert image.min() >= 0.0 and image.max() <= 1.0
         assert alpha.min() >= 0.0 and alpha.max() <= 1.0
 
@@ -68,7 +68,7 @@ class TestReadFramePair:
         alpha_path = tmp_path / "alpha.png"
         _write_uint16_png(img_path)
         _write_png(alpha_path, channels=1)
-        image, _, _ = _read_frame_pair(img_path, alpha_path)
+        image, _, _ = read_frame_pair(img_path, alpha_path)
         assert image.dtype == np.float32
         assert image.max() <= 1.0
 
@@ -77,27 +77,27 @@ class TestReadFramePair:
         alpha_path = tmp_path / "alpha.png"
         _write_png(img_path, h=64, w=64, channels=3)
         _write_png(alpha_path, h=32, w=32, channels=1)
-        image, alpha, _ = _read_frame_pair(img_path, alpha_path)
+        image, alpha, _ = read_frame_pair(img_path, alpha_path)
         assert alpha.shape[:2] == image.shape[:2]
 
     def test_missing_image_raises(self, tmp_path: Path):
         alpha_path = tmp_path / "alpha.png"
         _write_png(alpha_path, channels=1)
         with pytest.raises(FrameReadError, match="cv2.imread returned None"):
-            _read_frame_pair(tmp_path / "ghost.png", alpha_path)
+            read_frame_pair(tmp_path / "ghost.png", alpha_path)
 
     def test_missing_alpha_raises(self, tmp_path: Path):
         img_path = tmp_path / "frame.png"
         _write_png(img_path)
         with pytest.raises(FrameReadError, match="cv2.imread returned None"):
-            _read_frame_pair(img_path, tmp_path / "ghost.png")
+            read_frame_pair(img_path, tmp_path / "ghost.png")
 
     def test_rgb_alpha_hint_collapsed_to_single_channel(self, tmp_path: Path):
         img_path = tmp_path / "frame.png"
         alpha_path = tmp_path / "alpha.png"
         _write_png(img_path, channels=3)
         _write_png(alpha_path, channels=3)
-        _, alpha, _ = _read_frame_pair(img_path, alpha_path)
+        _, alpha, _ = read_frame_pair(img_path, alpha_path)
         assert alpha.shape[2] == 1
 
     def test_multichannel_alpha_dot_product_preserves_precision(self, tmp_path: Path):
@@ -125,7 +125,7 @@ class TestReadFramePair:
         alpha_path = tmp_path / "alpha.png"
         _write_png(img_path, channels=3)
         _write_png(alpha_path, channels=1)
-        _, _, bgr = _read_frame_pair(img_path, alpha_path)
+        _, _, bgr = read_frame_pair(img_path, alpha_path)
         assert bgr is True
 
     def test_bgr_flag_false_for_single_channel_alpha(self, tmp_path: Path):
@@ -134,7 +134,7 @@ class TestReadFramePair:
         alpha_path = tmp_path / "alpha.png"
         _write_png(img_path, channels=3)
         _write_png(alpha_path, channels=1)
-        image, alpha, _ = _read_frame_pair(img_path, alpha_path)
+        image, alpha, _ = read_frame_pair(img_path, alpha_path)
         # alpha has no BGR concept — verify it's single channel
         assert alpha.shape[2] == 1
 
@@ -146,7 +146,7 @@ class TestReadFramePair:
         red_bgr[:, :, 2] = 255  # red in BGR is channel index 2
         cv2.imwrite(str(img_path), red_bgr)
         _write_png(alpha_path, h=4, w=4, channels=1)
-        image, _, bgr = _read_frame_pair(img_path, alpha_path)
+        image, _, bgr = read_frame_pair(img_path, alpha_path)
         assert bgr is True
         # Channel 2 should be 1.0 (red in BGR), channels 0 and 1 should be 0.0
         assert image[0, 0, 2] == pytest.approx(1.0)

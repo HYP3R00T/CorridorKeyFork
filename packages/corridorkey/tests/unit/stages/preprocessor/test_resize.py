@@ -3,10 +3,7 @@
 from __future__ import annotations
 
 import torch
-from corridorkey.stages.preprocessor.resize import (
-    DEFAULT_IMAGE_UPSAMPLE_MODE,
-    resize_frame,
-)
+from corridorkey.stages.preprocessor.resize import resize_frame
 
 
 def _make_image(h: int, w: int, fill: float | None = None) -> torch.Tensor:
@@ -73,19 +70,6 @@ class TestAlphaClamp:
 
 
 class TestBilinearResize:
-    def test_default_image_upsample_mode_is_bicubic(self):
-        # DEFAULT_IMAGE_UPSAMPLE_MODE is kept for API compatibility
-        assert DEFAULT_IMAGE_UPSAMPLE_MODE == "bicubic"
-
-    def test_ignored_params_do_not_change_output(self):
-        # image_upsample_mode, sharpen_strength, is_srgb are all ignored —
-        # resize always uses plain bilinear to match the reference pipeline.
-        src = _make_image(512, 512)
-        alp = _make_alpha(512, 512)
-        img_a, _ = resize_frame(src, alp, 128, image_upsample_mode="bicubic", sharpen_strength=0.5, is_srgb=True)
-        img_b, _ = resize_frame(src, alp, 128, image_upsample_mode="bilinear", sharpen_strength=0.0, is_srgb=False)
-        torch.testing.assert_close(img_a, img_b)
-
     def test_output_in_range_downscale(self):
         src = _make_image(512, 512)
         alp = _make_alpha(512, 512)

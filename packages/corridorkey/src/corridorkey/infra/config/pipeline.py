@@ -203,10 +203,8 @@ class CorridorKeyConfig(BaseModel):
         return PreprocessConfig(
             img_size=img_size,
             device=device or self.device,
-            image_upsample_mode=self.preprocess.image_upsample_mode,
             half_precision=self.preprocess.half_precision,
             source_passthrough=self.preprocess.source_passthrough,
-            sharpen_strength=self.preprocess.sharpen_strength,
         )
 
     def to_postprocess_config(self) -> PostprocessConfig:

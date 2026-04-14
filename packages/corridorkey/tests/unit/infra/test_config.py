@@ -152,7 +152,6 @@ class TestBridgeMethods:
         pc = cfg.to_preprocess_config()
         assert pc.img_size == 2048
         assert pc.device == "cpu"
-        assert pc.image_upsample_mode == "bicubic"
         assert pc.half_precision is False
         assert pc.source_passthrough is True
 
