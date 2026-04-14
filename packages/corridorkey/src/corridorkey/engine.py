@@ -143,7 +143,7 @@ class Engine:
         from corridorkey.stages.scanner.orchestrator import scan
 
         try:
-            result = scan(paths)
+            result = scan(paths, reorganise=True)
         except Exception as e:
             logger.error("engine: scan failed — %s", e)
             stats.elapsed_seconds = time.monotonic() - start_time
