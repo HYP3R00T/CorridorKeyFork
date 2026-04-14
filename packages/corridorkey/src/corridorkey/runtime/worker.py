@@ -60,6 +60,9 @@ class PreprocessWorker:
 
     def run(self) -> None:
         """Entry point for the preprocess thread."""
+        import os
+        import sys
+
         total = self.manifest.frame_count
         if self.events:
             self.events.stage_start("preprocess", total)
@@ -67,11 +70,71 @@ class PreprocessWorker:
         image_files = list_frames(self.manifest.frames_dir)
         alpha_files = list_frames(self.manifest.alpha_frames_dir)  # type: ignore[arg-type]
 
+        # Estimate frame size for RAM throttling (updated after first read).
+        _frame_bytes_estimate: list[int] = [0]
+        _mem_headroom = 1 * 1024 * 1024 * 1024  # 1 GB
+
+        def _available_ram() -> int:
+            """Available system RAM in bytes. Returns a large value on failure."""
+            try:
+                if sys.platform == "linux":
+                    with open("/proc/meminfo") as f:
+                        for line in f:
+                            if line.startswith("MemAvailable:"):
+                                return int(line.split()[1]) * 1024
+                elif sys.platform == "win32":
+                    import ctypes
+
+                    class _MEMSTATUSEX(ctypes.Structure):
+                        _fields_ = [
+                            ("dwLength", ctypes.c_ulong),
+                            ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong),
+                            ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong),
+                            ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong),
+                            ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                        ]
+
+                    stat = _MEMSTATUSEX()
+                    stat.dwLength = ctypes.sizeof(stat)
+                    if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat)):
+                        return stat.ullAvailPhys
+            except Exception:
+                pass
+            # macOS / fallback
+            try:
+                return os.sysconf("SC_AVPHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")  # type: ignore[attr-defined]
+            except (AttributeError, ValueError):
+                return _mem_headroom * 8  # conservative: assume plenty of RAM
+
+        def _mem_ok() -> bool:
+            """True if there is enough RAM to decode another frame."""
+            est = _frame_bytes_estimate[0]
+            if est == 0:
+                return True  # no estimate yet — allow first reads
+            return _available_ram() - est > _mem_headroom
+
         try:
             for i in range(*self.manifest.frame_range):
                 if self.cancel_event and self.cancel_event.is_set():
                     logger.debug("preprocess_worker: cancelled at frame %d", i)
                     break
+
+                # RAM throttle: pause if available memory minus one frame's
+                # estimated size would drop below 1 GB. Resumes when the
+                # inference/postwrite pipeline drains and frees memory.
+                if not _mem_ok():
+                    logger.debug("preprocess_worker: RAM pressure, waiting before frame %d", i)
+                    while not _mem_ok():
+                        if self.cancel_event and self.cancel_event.is_set():
+                            break
+                        import time as _time
+
+                        _time.sleep(0.1)
+
                 try:
                     frame = preprocess_frame(
                         self.manifest,
@@ -80,6 +143,9 @@ class PreprocessWorker:
                         image_files=image_files,
                         alpha_files=alpha_files,
                     )
+                    # Update frame size estimate from the first successful read.
+                    if _frame_bytes_estimate[0] == 0:
+                        _frame_bytes_estimate[0] = frame.tensor.nbytes
                     # Use put_unless_cancelled so a full queue doesn't block
                     # indefinitely when the user cancels mid-run.
                     if self.cancel_event is not None:
