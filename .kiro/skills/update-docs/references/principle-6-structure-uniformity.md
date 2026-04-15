@@ -111,16 +111,16 @@ Every project's `docs/` folder should be organised into these domains. Use only 
 
 **Multi-package workspace:** When the project contains multiple packages, create one subfolder per package:
 
-```
+```sh
 docs/api/
   corridorkey/
-    index.md        ← overview of the corridorkey package API
-    scan.md         ← scan() and scanner stage
-    engine.md       ← Engine class
+    index.md        # overview of the corridorkey package API
+    scan.md         # scan() and scanner stage
+    engine.md       # Engine class
     ...
   corridorkey-cli/
-    index.md        ← overview of the CLI package API
-    commands.md     ← CLI commands reference
+    index.md        # overview of the CLI package API
+    commands.md     # CLI commands reference
     ...
 ```
 
