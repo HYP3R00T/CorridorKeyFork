@@ -19,7 +19,7 @@ Resize strategy:
   - FG upscaling: configurable — "lanczos4" (default), "bicubic", or "bilinear".
   - Alpha upscaling: configurable — "lanczos4" (default) or "bilinear".
 
-Note: ``F.interpolate`` does not support Lanczos. When the GPU path is used,
+Note: ``functional.interpolate`` does not support Lanczos. When the GPU path is used,
 "lanczos4" is mapped to "bicubic" (visually equivalent at inference resolutions).
 """
 
@@ -30,7 +30,7 @@ from typing import Literal
 import cv2
 import numpy as np
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as functional
 
 FgUpsampleMode = Literal["bilinear", "bicubic", "lanczos4"]
 AlphaUpsampleMode = Literal["bilinear", "lanczos4"]
@@ -153,10 +153,10 @@ def resize_to_source_gpu(
     if upscaling:
         alpha_mode = _ALPHA_TORCH_MODE[alpha_upsample_mode]
         fg_mode = _FG_TORCH_MODE[fg_upsample_mode]
-        alpha_out = F.interpolate(alpha, size=size, mode=alpha_mode, align_corners=False)
-        fg_out = F.interpolate(fg, size=size, mode=fg_mode, align_corners=False)
+        alpha_out = functional.interpolate(alpha, size=size, mode=alpha_mode, align_corners=False)
+        fg_out = functional.interpolate(fg, size=size, mode=fg_mode, align_corners=False)
     else:
-        alpha_out = F.interpolate(alpha, size=size, mode="area")
-        fg_out = F.interpolate(fg, size=size, mode="area")
+        alpha_out = functional.interpolate(alpha, size=size, mode="area")
+        fg_out = functional.interpolate(fg, size=size, mode="area")
 
     return alpha_out.clamp(0.0, 1.0), fg_out.clamp(0.0, 1.0)

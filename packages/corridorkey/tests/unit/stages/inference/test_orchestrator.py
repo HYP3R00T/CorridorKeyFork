@@ -10,11 +10,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
+import torch.nn as nn
 from corridorkey.stages.inference.config import InferenceConfig
 from corridorkey.stages.inference.contracts import InferenceResult
 from corridorkey.stages.inference.orchestrator import (
     _probe_vram_gb,
+    _run_refiner_tiled,
     _should_tile_refiner,
+    _TiledRefinerState,
     run_inference,
 )
 from corridorkey.stages.preprocessor.contracts import FrameMeta, PreprocessedFrame
@@ -340,9 +343,6 @@ class TestShouldTileRefinerMPS:
 # ---------------------------------------------------------------------------
 # Tiled refiner tests — _run_refiner_tiled
 # ---------------------------------------------------------------------------
-
-import torch.nn as nn
-from corridorkey.stages.inference.orchestrator import _run_refiner_tiled, _TiledRefinerState
 
 
 class _ZeroRefiner(nn.Module):

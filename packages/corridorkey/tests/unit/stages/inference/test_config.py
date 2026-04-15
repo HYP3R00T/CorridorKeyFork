@@ -134,3 +134,21 @@ class TestAdaptiveImgSize:
         from corridorkey.stages.inference.config import adaptive_img_size
 
         assert adaptive_img_size(8.0) == 1536
+
+    def test_boundary_exactly_6gb_returns_1536(self):
+        """At exactly 6.0 GB, the first tier threshold is not met — returns 1536."""
+        from corridorkey.stages.inference.config import adaptive_img_size
+
+        assert adaptive_img_size(6.0) == 1536
+
+    def test_boundary_exactly_12gb_returns_default(self):
+        """At exactly 12.0 GB, neither tier threshold is met — returns the default 2048."""
+        from corridorkey.stages.inference.config import _VRAM_IMG_SIZE_DEFAULT, adaptive_img_size
+
+        assert adaptive_img_size(12.0) == _VRAM_IMG_SIZE_DEFAULT
+
+    def test_zero_vram_returns_1024(self):
+        """0.0 GB (unknown VRAM) falls below the first threshold — returns 1024."""
+        from corridorkey.stages.inference.config import adaptive_img_size
+
+        assert adaptive_img_size(0.0) == 1024

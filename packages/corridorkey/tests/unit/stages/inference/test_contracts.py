@@ -74,6 +74,14 @@ class TestInferenceResultValidation:
         with pytest.raises(ValueError, match="fg must be"):
             InferenceResult(alpha=torch.zeros(1, 1, 32, 32), fg=torch.zeros(1, 4, 32, 32), meta=meta)
 
+    def test_bad_fg_ndim_raises(self):
+        """fg with wrong number of dimensions raises ValueError."""
+        import pytest
+
+        meta = FrameMeta(frame_index=0, original_h=32, original_w=32)
+        with pytest.raises(ValueError, match="fg must be"):
+            InferenceResult(alpha=torch.zeros(1, 1, 32, 32), fg=torch.zeros(1, 32, 32), meta=meta)
+
     def test_spatial_mismatch_raises(self):
         import pytest
 

@@ -131,53 +131,68 @@ class PreprocessWorker:
                     break
 
                 # RAM throttle: pause if available memory minus one frame's
-                # estimated size would drop below 1 GB. Resumes when the
-                # inference/postwrite pipeline drains and frees memory.
+                # estimated size would drop below 1 GB.
                 if not _mem_ok():
                     logger.debug("preprocess_worker: RAM pressure, waiting before frame %d", i)
-                    while not _mem_ok():
-                        if self.cancel_event and self.cancel_event.is_set():
-                            break
-                        import time as _time
+                    self._wait_for_ram(_mem_ok)
 
-                        _time.sleep(0.1)
-
-                try:
-                    frame = preprocess_frame(
-                        self.manifest,
-                        i,
-                        self.config,
-                        image_files=image_files,
-                        alpha_files=alpha_files,
-                    )
-                    # Update frame size estimate from the first successful read.
-                    if _frame_bytes_estimate[0] == 0:
-                        _frame_bytes_estimate[0] = frame.tensor.nbytes
-                    # Use put_unless_cancelled so a full queue doesn't block
-                    # indefinitely when the user cancels mid-run.
-                    if self.cancel_event is not None:
-                        enqueued = self.preprocess_queue.put_unless_cancelled(frame, self.cancel_event)
-                        if not enqueued:
-                            logger.debug("preprocess_worker: cancelled while waiting to enqueue frame %d", i)
-                            break
-                    else:
-                        self.preprocess_queue.put(frame)
-                    logger.debug("preprocess_worker: queued frame %d", i)
-                    if self.events:
-                        self.events.preprocess_queued(i)
-                        self.events.queue_depth(
-                            len(self.preprocess_queue),
-                            len(self.inference_queue) if self.inference_queue else 0,
-                        )
-                except FrameReadError as e:
-                    logger.error("preprocess_worker: skipping frame %d — %s", i, e)
-                    if self.events:
-                        self.events.frame_error("preprocess", i, e)
+                if not self._process_frame(i, image_files, alpha_files, _frame_bytes_estimate):
+                    break
         finally:
             self.preprocess_queue.put_stop()
             logger.debug("preprocess_worker: sent STOP")
             if self.events:
                 self.events.stage_done("preprocess")
+
+    def _wait_for_ram(self, mem_ok: object) -> None:
+        """Block until RAM is available or cancellation is requested."""
+        import time as _time
+
+        while not mem_ok():  # type: ignore[operator]
+            if self.cancel_event and self.cancel_event.is_set():
+                return
+            _time.sleep(0.1)
+
+    def _process_frame(
+        self,
+        i: int,
+        image_files: list,
+        alpha_files: list,
+        frame_bytes_estimate: list[int],
+    ) -> bool:
+        """Preprocess frame ``i`` and enqueue it. Returns False if cancelled."""
+        try:
+            frame = preprocess_frame(
+                self.manifest,
+                i,
+                self.config,
+                image_files=image_files,
+                alpha_files=alpha_files,
+            )
+            # Update frame size estimate from the first successful read.
+            if frame_bytes_estimate[0] == 0:
+                frame_bytes_estimate[0] = frame.tensor.nbytes
+            # Use put_unless_cancelled so a full queue doesn't block
+            # indefinitely when the user cancels mid-run.
+            if self.cancel_event is not None:
+                enqueued = self.preprocess_queue.put_unless_cancelled(frame, self.cancel_event)
+                if not enqueued:
+                    logger.debug("preprocess_worker: cancelled while waiting to enqueue frame %d", i)
+                    return False
+            else:
+                self.preprocess_queue.put(frame)
+            logger.debug("preprocess_worker: queued frame %d", i)
+            if self.events:
+                self.events.preprocess_queued(i)
+                self.events.queue_depth(
+                    len(self.preprocess_queue),
+                    len(self.inference_queue) if self.inference_queue else 0,
+                )
+        except FrameReadError as e:
+            logger.error("preprocess_worker: skipping frame %d — %s", i, e)
+            if self.events:
+                self.events.frame_error("preprocess", i, e)
+        return True
 
     def start(self) -> threading.Thread:
         t = threading.Thread(target=self.run, name="preprocess-worker", daemon=True)

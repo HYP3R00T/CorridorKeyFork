@@ -69,6 +69,20 @@ def ensure_model(
     directory.mkdir(parents=True, exist_ok=True)
     tmp = directory / (MODEL_FILENAME + ".tmp")
 
+    _download_with_retry(tmp, on_progress)
+    _verify_checksum(tmp)
+
+    os.replace(tmp, dest)
+    logger.info("model_hub: model saved to %s", dest)
+    return dest
+
+
+def _download_with_retry(tmp: Path, on_progress: Callable[[int, int], None] | None) -> None:
+    """Download MODEL_URL to ``tmp``, retrying up to _DOWNLOAD_RETRIES times.
+
+    Raises:
+        ModelError: If all attempts fail.
+    """
     last_error: Exception | None = None
     for attempt in range(1, _DOWNLOAD_RETRIES + 1):
         if attempt > 1:
@@ -102,22 +116,7 @@ def ensure_model(
                             break
                         f.write(data)
                         downloaded += len(data)
-                        if on_progress:
-                            on_progress(downloaded, total)
-                        else:
-                            # Log at most once per 5% to avoid flooding the log
-                            if total > 0:
-                                pct = int(downloaded / total * 100)
-                                if pct >= last_log_pct + 5:
-                                    last_log_pct = pct
-                                    mb = downloaded / (1024 * 1024)
-                                    total_mb = total / (1024 * 1024)
-                                    logger.info(
-                                        "model_hub: downloading %d%% (%.1f / %.1f MB)",
-                                        pct,
-                                        mb,
-                                        total_mb,
-                                    )
+                        last_log_pct = _report_progress(downloaded, total, last_log_pct, on_progress)
             last_error = None
             break  # success
         except Exception as e:
@@ -129,22 +128,46 @@ def ensure_model(
 
     logger.info("model_hub: download complete")
 
-    if MODEL_CHECKSUM:
-        logger.info("model_hub: verifying checksum")
-        actual = _sha256(tmp)
-        if actual != MODEL_CHECKSUM.lower():
-            tmp.unlink(missing_ok=True)
-            raise ModelError(
-                f"Checksum mismatch for {MODEL_FILENAME}.\n"
-                f"  Expected: {MODEL_CHECKSUM}\n"
-                f"  Got:      {actual}\n"
-                "The downloaded file has been removed. Try again."
-            )
-        logger.info("model_hub: checksum OK")
 
-    os.replace(tmp, dest)
-    logger.info("model_hub: model saved to %s", dest)
-    return dest
+def _report_progress(
+    downloaded: int,
+    total: int,
+    last_log_pct: int,
+    on_progress: Callable[[int, int], None] | None,
+) -> int:
+    """Fire progress callback or log at most once per 5%. Returns updated last_log_pct."""
+    if on_progress:
+        on_progress(downloaded, total)
+        return last_log_pct
+    if total > 0:
+        pct = int(downloaded / total * 100)
+        if pct >= last_log_pct + 5:
+            mb = downloaded / (1024 * 1024)
+            total_mb = total / (1024 * 1024)
+            logger.info("model_hub: downloading %d%% (%.1f / %.1f MB)", pct, mb, total_mb)
+            return pct
+    return last_log_pct
+
+
+def _verify_checksum(tmp: Path) -> None:
+    """Verify the SHA-256 of ``tmp`` against MODEL_CHECKSUM.
+
+    Raises:
+        ModelError: If the checksum does not match. Removes ``tmp`` before raising.
+    """
+    if not MODEL_CHECKSUM:
+        return
+    logger.info("model_hub: verifying checksum")
+    actual = _sha256(tmp)
+    if actual != MODEL_CHECKSUM.lower():
+        tmp.unlink(missing_ok=True)
+        raise ModelError(
+            f"Checksum mismatch for {MODEL_FILENAME}.\n"
+            f"  Expected: {MODEL_CHECKSUM}\n"
+            f"  Got:      {actual}\n"
+            "The downloaded file has been removed. Try again."
+        )
+    logger.info("model_hub: checksum OK")
 
 
 def _sha256(path: Path) -> str:

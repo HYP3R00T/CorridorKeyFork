@@ -31,8 +31,8 @@ import functools
 import cv2
 import numpy as np
 import torch
-import torch.nn.functional as F
-import torchvision.transforms.v2.functional as TF
+import torch.nn.functional as functional
+import torchvision.transforms.v2.functional as transforms_functional
 
 # ---------------------------------------------------------------------------
 # CPU path (OpenCV)
@@ -167,7 +167,7 @@ def _connected_components_gpu(
     kernel = (2 * min_component_width) + 1
     pad = min_component_width
     for _ in range(max_iterations):
-        comp = F.max_pool2d(comp, kernel_size=kernel, stride=1, padding=pad) * mask_f
+        comp = functional.max_pool2d(comp, kernel_size=kernel, stride=1, padding=pad) * mask_f
 
     return comp
 
@@ -239,12 +239,12 @@ def despeckle_alpha_gpu(
     if dilation > 0:
         repeats = dilation // 2
         for _ in range(repeats):
-            keep = F.max_pool2d(keep, 5, stride=1, padding=2)
+            keep = functional.max_pool2d(keep, 5, stride=1, padding=2)
 
     # Gaussian blur for soft edges
     if blur_size > 0:
         k = int(blur_size * 2 + 1)
-        keep = TF.gaussian_blur(keep, [k, k])
+        keep = transforms_functional.gaussian_blur(keep, [k, k])
 
     return alpha * keep
 

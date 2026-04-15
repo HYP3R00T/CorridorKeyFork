@@ -234,41 +234,72 @@ def _load_models(
     else:
         resolved_refiner_mode = config.inference.refiner_mode
 
-    # Pre-loaded model passed directly — skip cache.
     if config.model is not None:
-        if len(devices) > 1:
-            raise ValueError(
-                "config.model cannot be shared across multiple devices. "
-                "Remove config.model and let the pipeline load one copy per device."
-            )
-        model_device = next(config.model.parameters()).device
-        expected = torch.device(devices[0])
+        return _load_preloaded_model(devices, config, resolved_refiner_mode)
 
-        def _resolve(d: torch.device) -> torch.device:
-            if d.type == "cuda" and d.index is None:
-                return torch.device("cuda", torch.cuda.current_device())
-            return d
-
-        if _resolve(model_device) != _resolve(expected):
-            raise ValueError(
-                f"config.model is on {model_device} but the configured device is "
-                f"{expected}. Move the model to the correct device before passing it."
-            )
-        return [config.model], resolved_refiner_mode or config.inference.refiner_mode
-
-    # Single device — use the process-level model cache.
     if len(devices) == 1:
-        import dataclasses as _dc
+        return _load_single_device(devices[0], config, resolved_refiner_mode)
 
-        single_config = _dc.replace(config.inference, device=devices[0])
-        try:
-            model, effective_mode = get_default_cache().get(single_config, resolved_refiner_mode)
-            return [model], effective_mode
-        except Exception as e:
-            raise ModelError(f"Failed to load model on {devices[0]}: {e}") from e
+    return _load_multi_device(devices, config, resolved_refiner_mode, timeout)
 
-    # Multi-device — load one model per device in parallel (no cache).
+
+def _load_preloaded_model(
+    devices: list[str],
+    config: PipelineConfig,
+    resolved_refiner_mode: str | None,
+) -> tuple[list[nn.Module], str]:
+    """Validate and return a pre-loaded model passed via config.model."""
+    assert config.model is not None
+    assert config.inference is not None
+
+    if len(devices) > 1:
+        raise ValueError(
+            "config.model cannot be shared across multiple devices. "
+            "Remove config.model and let the pipeline load one copy per device."
+        )
+    model_device = next(config.model.parameters()).device
+    expected = torch.device(devices[0])
+
+    def _resolve(d: torch.device) -> torch.device:
+        if d.type == "cuda" and d.index is None:
+            return torch.device("cuda", torch.cuda.current_device())
+        return d
+
+    if _resolve(model_device) != _resolve(expected):
+        raise ValueError(
+            f"config.model is on {model_device} but the configured device is "
+            f"{expected}. Move the model to the correct device before passing it."
+        )
+    return [config.model], resolved_refiner_mode or config.inference.refiner_mode
+
+
+def _load_single_device(
+    device: str,
+    config: PipelineConfig,
+    resolved_refiner_mode: str | None,
+) -> tuple[list[nn.Module], str]:
+    """Load a model for a single device via the process-level cache."""
+    import dataclasses as _dc
+
+    assert config.inference is not None
+    single_config = _dc.replace(config.inference, device=device)
+    try:
+        model, effective_mode = get_default_cache().get(single_config, resolved_refiner_mode)
+        return [model], effective_mode
+    except Exception as e:
+        raise ModelError(f"Failed to load model on {device}: {e}") from e
+
+
+def _load_multi_device(
+    devices: list[str],
+    config: PipelineConfig,
+    resolved_refiner_mode: str | None,
+    timeout: float,
+) -> tuple[list[nn.Module], str]:
+    """Load one model per device in parallel (no cache for multi-device runs)."""
     from corridorkey.stages.inference.loader import load_model
+
+    assert config.inference is not None
 
     models: list[nn.Module | None] = [None] * len(devices)
     errors: list[Exception | None] = [None] * len(devices)
@@ -361,33 +392,7 @@ class _InferenceWorker:
                     break
 
                 assert isinstance(item, _FrameWork)
-                frame = item.frame
-                manifest = item.manifest
-
-                try:
-                    if self.events:
-                        self.events.inference_start(frame.meta.frame_index)
-                    result = run_inference(
-                        frame, self.model, self.config, resolved_refiner_mode=self.resolved_refiner_mode
-                    )
-                    transfer = DeferredTransfer.start(result.alpha, result.fg, result.meta, copy_stream)
-                    self.inference_queue.put(_InferenceWork(transfer=transfer, manifest=manifest))
-                    if self.events:
-                        self.events.inference_queued(frame.meta.frame_index)
-                        self.events.queue_depth(len(self.preprocess_queue), len(self.inference_queue))
-                except Exception as e:
-                    from corridorkey.errors import InferenceError, VRAMInsufficientError
-
-                    detail = str(e)
-                    if "out of memory" in detail.lower() or "cuda out of memory" in detail.lower():
-                        typed: Exception = VRAMInsufficientError(detail)
-                    else:
-                        typed = InferenceError(frame.meta.frame_index, detail)
-                    logger.error(
-                        "inference[%s]: skipping frame %d — %s", self.config.device, frame.meta.frame_index, typed
-                    )
-                    if self.events:
-                        self.events.frame_error(f"inference[{self.config.device}]", frame.meta.frame_index, typed)
+                self._process_inference_item(item, run_inference, copy_stream)
         finally:
             with self.remaining_lock:
                 self.remaining[0] -= 1
@@ -396,6 +401,37 @@ class _InferenceWorker:
                 self.inference_queue.put_stop()
             if self.events:
                 self.events.stage_done(f"inference[{self.config.device}]")
+
+    def _process_inference_item(
+        self,
+        item: _FrameWork,
+        run_inference: object,
+        copy_stream: torch.cuda.Stream | None,
+    ) -> None:
+        frame = item.frame
+        manifest = item.manifest
+        try:
+            if self.events:
+                self.events.inference_start(frame.meta.frame_index)
+            result = run_inference(  # type: ignore[operator]
+                frame, self.model, self.config, resolved_refiner_mode=self.resolved_refiner_mode
+            )
+            transfer = DeferredTransfer.start(result.alpha, result.fg, result.meta, copy_stream)
+            self.inference_queue.put(_InferenceWork(transfer=transfer, manifest=manifest))
+            if self.events:
+                self.events.inference_queued(frame.meta.frame_index)
+                self.events.queue_depth(len(self.preprocess_queue), len(self.inference_queue))
+        except Exception as e:
+            from corridorkey.errors import InferenceError, VRAMInsufficientError
+
+            detail = str(e)
+            if "out of memory" in detail.lower() or "cuda out of memory" in detail.lower():
+                typed: Exception = VRAMInsufficientError(detail)
+            else:
+                typed = InferenceError(frame.meta.frame_index, detail)
+            logger.error("inference[%s]: skipping frame %d — %s", self.config.device, frame.meta.frame_index, typed)
+            if self.events:
+                self.events.frame_error(f"inference[{self.config.device}]", frame.meta.frame_index, typed)
 
     def start(self, name: str = "inference-worker") -> threading.Thread:
         t = threading.Thread(target=self.run, name=name, daemon=True)
@@ -429,8 +465,6 @@ class _MultiClipPreprocessWorker:
     def run(self) -> None:
         import time
 
-        from corridorkey.errors import FrameReadError
-        from corridorkey.stages.loader.validator import list_frames
         from corridorkey.stages.preprocessor import preprocess_frame
 
         total = sum(m.frame_count for m in self.manifests)
@@ -449,58 +483,74 @@ class _MultiClipPreprocessWorker:
             for manifest in self.manifests:
                 if self.cancel_event and self.cancel_event.is_set():
                     break
-
-                image_files = list_frames(manifest.frames_dir)
-                alpha_files = list_frames(manifest.alpha_frames_dir)  # type: ignore[arg-type]
-
-                for i in range(*manifest.frame_range):
-                    if self.cancel_event and self.cancel_event.is_set():
-                        logger.debug("preprocess_worker: cancelled at frame %d of '%s'", i, manifest.clip_name)
-                        break
-
-                    if not _mem_ok():
-                        logger.debug("preprocess_worker: RAM pressure, waiting before frame %d", i)
-                        while not _mem_ok():
-                            if self.cancel_event and self.cancel_event.is_set():
-                                break
-                            time.sleep(0.1)
-
-                    try:
-                        frame = preprocess_frame(
-                            manifest,
-                            i,
-                            self.config,
-                            image_files=image_files,
-                            alpha_files=alpha_files,
-                        )
-                        if _frame_bytes_estimate[0] == 0:
-                            _frame_bytes_estimate[0] = frame.tensor.nbytes
-
-                        work = _FrameWork(frame=frame, manifest=manifest)
-                        if self.cancel_event is not None:
-                            enqueued = self.preprocess_queue.put_unless_cancelled(work, self.cancel_event)
-                            if not enqueued:
-                                logger.debug("preprocess_worker: cancelled while enqueuing frame %d", i)
-                                return
-                        else:
-                            self.preprocess_queue.put(work)
-
-                        logger.debug("preprocess_worker: queued frame %d of '%s'", i, manifest.clip_name)
-                        if self.events:
-                            self.events.preprocess_queued(i)
-                            self.events.queue_depth(
-                                len(self.preprocess_queue),
-                                len(self.inference_queue) if self.inference_queue else 0,
-                            )
-                    except FrameReadError as e:
-                        logger.error("preprocess_worker: skipping frame %d of '%s' — %s", i, manifest.clip_name, e)
-                        if self.events:
-                            self.events.frame_error("preprocess", i, e)
+                self._preprocess_clip(manifest, _frame_bytes_estimate, _mem_ok, preprocess_frame, time)
         finally:
             self.preprocess_queue.put_stop()
             logger.debug("preprocess_worker: sent STOP")
             if self.events:
                 self.events.stage_done("preprocess")
+
+    def _preprocess_clip(
+        self,
+        manifest: object,
+        frame_bytes_estimate: list[int],
+        mem_ok: object,
+        preprocess_frame: object,
+        time: object,
+    ) -> None:
+        from corridorkey.errors import FrameReadError
+        from corridorkey.stages.loader.validator import list_frames
+
+        image_files = list_frames(manifest.frames_dir)  # type: ignore[union-attr]
+        alpha_files = list_frames(manifest.alpha_frames_dir)  # type: ignore[union-attr,arg-type]
+
+        for i in range(*manifest.frame_range):  # type: ignore[union-attr]
+            if self.cancel_event and self.cancel_event.is_set():
+                logger.debug("preprocess_worker: cancelled at frame %d of '%s'", i, manifest.clip_name)  # type: ignore[union-attr]
+                break
+
+            if not mem_ok():  # type: ignore[operator]
+                logger.debug("preprocess_worker: RAM pressure, waiting before frame %d", i)
+                while not mem_ok():  # type: ignore[operator]
+                    if self.cancel_event and self.cancel_event.is_set():
+                        break
+                    time.sleep(0.1)  # type: ignore[union-attr]
+
+            try:
+                frame = preprocess_frame(  # type: ignore[operator]
+                    manifest,
+                    i,
+                    self.config,
+                    image_files=image_files,
+                    alpha_files=alpha_files,
+                )
+                if frame_bytes_estimate[0] == 0:
+                    frame_bytes_estimate[0] = frame.tensor.nbytes
+                if not self._enqueue_frame(frame, manifest, i):
+                    return
+            except FrameReadError as e:
+                logger.error("preprocess_worker: skipping frame %d of '%s' — %s", i, manifest.clip_name, e)  # type: ignore[union-attr]
+                if self.events:
+                    self.events.frame_error("preprocess", i, e)
+
+    def _enqueue_frame(self, frame: object, manifest: object, i: int) -> bool:
+        """Enqueue a preprocessed frame. Returns False if cancelled."""
+        work = _FrameWork(frame=frame, manifest=manifest)  # type: ignore[arg-type]
+        if self.cancel_event is not None:
+            enqueued = self.preprocess_queue.put_unless_cancelled(work, self.cancel_event)
+            if not enqueued:
+                logger.debug("preprocess_worker: cancelled while enqueuing frame %d", i)
+                return False
+        else:
+            self.preprocess_queue.put(work)
+        logger.debug("preprocess_worker: queued frame %d of '%s'", i, manifest.clip_name)  # type: ignore[union-attr]
+        if self.events:
+            self.events.preprocess_queued(i)
+            self.events.queue_depth(
+                len(self.preprocess_queue),
+                len(self.inference_queue) if self.inference_queue else 0,
+            )
+        return True
 
     def start(self) -> threading.Thread:
         t = threading.Thread(target=self.run, name="preprocess-worker", daemon=True)
@@ -536,8 +586,6 @@ class _MultiClipPostWriteWorker:
     def run(self) -> None:
         from concurrent.futures import ThreadPoolExecutor
 
-        from corridorkey.errors import PostprocessError, WriteFailureError
-
         if self.events:
             self.events.stage_start("postwrite", self.total_frames)
 
@@ -561,6 +609,15 @@ class _MultiClipPostWriteWorker:
                 future = pool.submit(self._process_one, item)
                 futures.append((frame_index, future))
 
+        self._collect_futures(futures)
+
+        logger.debug("postwrite_worker: done")
+        if self.events:
+            self.events.stage_done("postwrite")
+
+    def _collect_futures(self, futures: list) -> None:
+        from corridorkey.errors import PostprocessError, WriteFailureError
+
         for frame_index, future in futures:
             try:
                 future.result()
@@ -581,10 +638,6 @@ class _MultiClipPostWriteWorker:
                 logger.error("postwrite_worker: postprocess failed frame %d — %s", frame_index, typed)
                 if self.events:
                     self.events.frame_error("postwrite", frame_index, typed)
-
-        logger.debug("postwrite_worker: done")
-        if self.events:
-            self.events.stage_done("postwrite")
 
     def _process_one(self, item: _InferenceWork) -> None:
         from corridorkey.stages.inference.contracts import InferenceResult
