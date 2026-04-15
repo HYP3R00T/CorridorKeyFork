@@ -1,5 +1,3 @@
-"""Postprocessor stage — configuration contract."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -44,11 +42,12 @@ class PostprocessConfig:
         hint_sharpen_dilation: Dilation radius in pixels applied to the binarised
             hint before masking. Gives breathing room so fine model edge detail
             is not clipped. Default 3.
-        debug_dump: Save raw inference output (before any postprocessing) to a
-            ``debug/`` subfolder alongside the normal outputs. Writes four PNGs
-            per frame: raw_alpha, raw_fg, post_hint_alpha, post_hint_fg.
-            Useful for diagnosing whether quality issues originate in the model
-            or in postprocessing. Default False.
+        debug_dump: Save intermediate postprocessing frames as PNGs to a
+            ``debug/`` subfolder alongside the normal outputs. Writes up to
+            seven PNGs per frame depending on which steps are active:
+            raw_alpha, raw_fg, despeckle_alpha, despill_fg, hint_alpha,
+            hint_fg, passthrough_fg. Useful for diagnosing whether quality
+            issues originate in the model or in postprocessing. Default False.
     """
 
     fg_upsample_mode: FgUpsampleMode = "lanczos4"

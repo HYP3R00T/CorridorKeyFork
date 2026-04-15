@@ -1,19 +1,3 @@
-"""Postprocessor stage — green spill removal.
-
-Luminance-preserving green spill suppression. Excess green is redistributed
-equally to red and blue channels to neutralise the spill without darkening
-the subject.
-
-Two implementations are provided:
-  - ``remove_spill``       — CPU numpy path (always available).
-  - ``remove_spill_gpu``   — GPU torch path (CUDA only, in-place ops, no sync).
-  - ``remove_spill_auto``  — picks GPU when a CUDA device is given, else CPU.
-
-The orchestrator calls ``remove_spill`` directly (CPU numpy contract).
-``remove_spill_auto`` is available for callers that already have a device
-context and want to avoid the GPU→CPU round-trip.
-"""
-
 from __future__ import annotations
 
 import numpy as np
@@ -22,6 +6,9 @@ import torch
 
 def remove_spill(fg: np.ndarray, strength: float) -> np.ndarray:
     """Remove green spill from a foreground image (CPU numpy path).
+
+    Luminance-preserving suppression: excess green is redistributed equally
+    to red and blue channels to neutralise the spill without darkening the subject.
 
     Args:
         fg: [H, W, 3] float32 sRGB array, range 0-1.
@@ -79,7 +66,7 @@ def remove_spill_gpu(fg: torch.Tensor, strength: float) -> torch.Tensor:
     b.add_(spill_half)  # B += spill/2
 
     if strength < 1.0:
-        out.lerp_(fg, 1.0 - strength)  # blend: out = out + (fg - out) * (1 - s)
+        out.lerp_(fg, 1.0 - strength)  # blend toward original: out = out + (fg - out) * (1 - s)
 
     return out
 

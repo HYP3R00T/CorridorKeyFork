@@ -1,39 +1,11 @@
-"""Postprocessor stage — tensor-to-numpy conversion and resize back to source resolution.
-
-Takes the raw model output tensors (on device, at model resolution) and
-returns float32 numpy arrays at the original source resolution.
-
-Since the preprocessor squishes the frame to a square (no padding), the
-postprocessor simply resizes directly back to source resolution — no crop step.
-
-Two resize paths are provided:
-  - ``resize_to_source``        — CPU path (always available). Converts tensors
-                                  to numpy immediately, then resizes with OpenCV.
-  - ``resize_to_source_gpu``    — GPU path (CUDA). Keeps tensors on device using
-                                  ``F.interpolate``, returns BCHW tensors.
-                                  Caller is responsible for the final .cpu().numpy()
-                                  conversion after any subsequent GPU ops.
-
-Resize strategy:
-  - Downscaling: always area/bilinear (anti-aliased, no ringing).
-  - FG upscaling: configurable — "lanczos4" (default), "bicubic", or "bilinear".
-  - Alpha upscaling: configurable — "lanczos4" (default) or "bilinear".
-
-Note: ``functional.interpolate`` does not support Lanczos. When the GPU path is used,
-"lanczos4" is mapped to "bicubic" (visually equivalent at inference resolutions).
-"""
-
 from __future__ import annotations
-
-from typing import Literal
 
 import cv2
 import numpy as np
 import torch
 import torch.nn.functional as functional
 
-FgUpsampleMode = Literal["bilinear", "bicubic", "lanczos4"]
-AlphaUpsampleMode = Literal["bilinear", "lanczos4"]
+from corridorkey.stages.postprocessor.config import AlphaUpsampleMode, FgUpsampleMode
 
 _FG_INTERP_MAP: dict[str, int] = {
     "bilinear": cv2.INTER_LINEAR,
@@ -45,7 +17,7 @@ _ALPHA_INTERP_MAP: dict[str, int] = {
     "lanczos4": cv2.INTER_LANCZOS4,
 }
 
-# F.interpolate mode mapping — Lanczos is not supported, bicubic is the
+# functional.interpolate mode mapping — Lanczos is not supported, bicubic is the
 # closest equivalent at inference resolutions.
 _FG_TORCH_MODE: dict[str, str] = {
     "bilinear": "bilinear",
@@ -118,14 +90,14 @@ def resize_to_source_gpu(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Resize alpha and fg tensors back to source resolution, keeping data on GPU.
 
-    GPU path — uses ``F.interpolate`` so tensors stay on device throughout.
+    GPU path — uses ``functional.interpolate`` so tensors stay on device throughout.
     Returns BCHW float32 tensors; the caller converts to numpy after any
     subsequent GPU ops (despeckle, despill).
 
-    Lanczos is not supported by ``F.interpolate`` — "lanczos4" is mapped to
+    Lanczos is not supported by ``functional.interpolate`` — "lanczos4" is mapped to
     "bicubic", which is visually equivalent at inference resolutions.
 
-    Downscaling uses ``F.interpolate`` with ``mode="area"`` (equivalent to
+    Downscaling uses ``functional.interpolate`` with ``mode="area"`` (equivalent to
     INTER_AREA). Upscaling uses the configured mode.
 
     Args:

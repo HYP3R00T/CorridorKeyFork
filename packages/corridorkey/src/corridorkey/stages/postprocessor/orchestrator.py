@@ -1,37 +1,3 @@
-"""Postprocessor stage — orchestrator.
-
-Runs steps 1–6 in order. Owns no transformation logic itself — each step
-is delegated to its own module.
-
-    Step 1   — resize tensors back to source resolution  → resize.py
-    Step 1.5 — hint-guided sharpening (alpha + FG mask)  → hint_sharpen.py
-    Step 2   — source passthrough (interior FG replace)  → composite.py
-    Step 3   — alpha matte cleanup (despeckle)           → despeckle.py
-    Step 4   — green spill removal                       → despill.py
-    Step 5   — build processed RGBA + checkerboard comp  → composite.py
-    Step 6   — return ProcessedFrame                 (here)
-
-Public entry point: postprocess_frame(result, config, stem="")
-
-GPU pipeline (CUDA devices)
----------------------------
-When inference tensors are on a CUDA device, steps 1–4 run entirely on GPU
-with a single GPU→CPU transfer at the end:
-
-    GPU tensor
-      → resize_to_source_gpu  (F.interpolate, stays on device)
-      → despeckle_alpha_gpu   (max_pool2d flood-fill, no CPU sync)
-      → remove_spill_gpu      (in-place ops, no CPU sync)
-      → .cpu().numpy()        (one transfer for both alpha and fg)
-
-Steps 1.5 (hint sharpen) and 2 (source passthrough) use OpenCV and run on
-CPU after the single transfer. Steps 5–6 (composite, premultiply) are CPU.
-
-CPU pipeline (CPU / MPS devices)
----------------------------------
-All steps use the existing numpy/OpenCV paths unchanged.
-"""
-
 from __future__ import annotations
 
 import logging
@@ -39,7 +5,6 @@ from pathlib import Path
 
 import cv2
 import numpy as np
-import torch
 
 from corridorkey.stages.inference.contracts import InferenceResult
 from corridorkey.stages.postprocessor.composite import apply_source_passthrough, make_preview, make_processed
@@ -48,7 +13,7 @@ from corridorkey.stages.postprocessor.contracts import ProcessedFrame
 from corridorkey.stages.postprocessor.despeckle import despeckle_alpha, despeckle_alpha_gpu
 from corridorkey.stages.postprocessor.despill import remove_spill, remove_spill_gpu
 from corridorkey.stages.postprocessor.hint_sharpen import sharpen_with_hint
-from corridorkey.stages.postprocessor.resize import resize_to_source, resize_to_source_gpu
+from corridorkey.stages.postprocessor.resize import resize_to_source, resize_to_source_gpu, tensor_to_numpy_hwc
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +43,9 @@ def postprocess_frame(
     meta = result.meta
     output_stem = stem or f"frame_{meta.frame_index:06d}"
     use_gpu = result.alpha.device.type == "cuda"
+
+    if config.debug_dump and output_dir is None:
+        logger.warning("postprocess_frame: debug_dump=True but output_dir is None — debug frames will not be written")
 
     if use_gpu:
         alpha_np, fg_np = _postprocess_gpu_pipeline(result, config, output_stem, output_dir)
@@ -137,13 +105,9 @@ def _postprocess_gpu_pipeline(
     output_stem: str,
     output_dir: Path | None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Steps 1–4 on GPU: resize → despeckle → despill → single CPU transfer.
-
-    Returns (alpha_np [H, W, 1], fg_np [H, W, 3]) float32 numpy arrays.
-    """
     meta = result.meta
 
-    # Step 1 — resize on GPU (F.interpolate, no CPU sync)
+    # Step 1 — resize on GPU (functional.interpolate, no CPU sync)
     alpha_t, fg_t = resize_to_source_gpu(
         result.alpha,
         result.fg,
@@ -155,8 +119,8 @@ def _postprocess_gpu_pipeline(
 
     # Debug dump — raw inference output before postprocessing (requires CPU)
     if config.debug_dump and output_dir is not None:
-        alpha_raw = _bchw_to_hwc_numpy(alpha_t)
-        fg_raw = _bchw_to_hwc_numpy(fg_t)
+        alpha_raw = tensor_to_numpy_hwc(alpha_t)
+        fg_raw = tensor_to_numpy_hwc(fg_t)
         _debug_write(output_dir, output_stem, "00_raw_alpha", alpha_raw, is_alpha=True)
         _debug_write(output_dir, output_stem, "00_raw_fg", fg_raw)
 
@@ -169,16 +133,16 @@ def _postprocess_gpu_pipeline(
             config.despeckle_blur,
         )
         if config.debug_dump and output_dir is not None:
-            _debug_write(output_dir, output_stem, "03_despeckle_alpha", _bchw_to_hwc_numpy(alpha_t), is_alpha=True)
+            _debug_write(output_dir, output_stem, "03_despeckle_alpha", tensor_to_numpy_hwc(alpha_t), is_alpha=True)
 
     # Step 4 — despill on GPU (no CPU sync)
     fg_t = remove_spill_gpu(fg_t, config.despill_strength)
     if config.debug_dump and output_dir is not None:
-        _debug_write(output_dir, output_stem, "04_despill_fg", _bchw_to_hwc_numpy(fg_t))
+        _debug_write(output_dir, output_stem, "04_despill_fg", tensor_to_numpy_hwc(fg_t))
 
     # Single GPU→CPU transfer for both tensors
-    alpha_np = _bchw_to_hwc_numpy(alpha_t)
-    fg_np = _bchw_to_hwc_numpy(fg_t)
+    alpha_np = tensor_to_numpy_hwc(alpha_t)
+    fg_np = tensor_to_numpy_hwc(fg_t)
 
     return alpha_np, fg_np
 
@@ -189,10 +153,6 @@ def _postprocess_cpu_pipeline(
     output_stem: str,
     output_dir: Path | None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Steps 1–4 on CPU: resize → despeckle → despill using numpy/OpenCV.
-
-    Returns (alpha_np [H, W, 1], fg_np [H, W, 3]) float32 numpy arrays.
-    """
     meta = result.meta
 
     # Step 1 — resize and convert to numpy
@@ -228,13 +188,7 @@ def _postprocess_cpu_pipeline(
     return alpha_np, fg_np
 
 
-def _bchw_to_hwc_numpy(t: torch.Tensor) -> np.ndarray:
-    """Convert a [1, C, H, W] GPU tensor to a [H, W, C] float32 numpy array."""
-    return t.squeeze(0).permute(1, 2, 0).cpu().float().numpy().astype(np.float32)
-
-
 def _debug_write(output_dir: Path, stem: str, tag: str, arr: np.ndarray, *, is_alpha: bool = False) -> None:
-    """Write a single debug frame as PNG. Silently skips on any error."""
     try:
         debug_dir = output_dir / "debug"
         debug_dir.mkdir(parents=True, exist_ok=True)

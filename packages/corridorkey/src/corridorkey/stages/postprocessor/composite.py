@@ -1,16 +1,3 @@
-"""Postprocessor stage — compositing helpers.
-
-make_processed          — premultiplied linear RGBA (primary compositor output)
-apply_source_passthrough — replace model FG in opaque interior with source pixels
-make_preview            — checkerboard composite for visual QC
-
-All compositing is done in linear light (physically correct). sRGB inputs are
-converted to linear before blending and back to sRGB for display/writing.
-
-LUT-accelerated sRGB transfer functions are sourced from infra.colorspace so
-the same table is shared with the preprocessor.
-"""
-
 from __future__ import annotations
 
 import functools
@@ -22,18 +9,21 @@ from corridorkey.infra.colorspace import linear_to_srgb_lut, lut_apply, srgb_to_
 
 
 def srgb_to_linear(x: np.ndarray) -> np.ndarray:
+    """Convert a float32 sRGB array to linear light via the IEC 61966-2-1 LUT."""
     return lut_apply(np.clip(x, 0.0, 1.0), srgb_to_linear_lut)
 
 
 def linear_to_srgb(x: np.ndarray) -> np.ndarray:
+    """Convert a float32 linear-light array to sRGB via the IEC 61966-2-1 LUT."""
     return lut_apply(np.clip(x, 0.0, 1.0), linear_to_srgb_lut)
 
 
 def make_processed(fg: np.ndarray, alpha: np.ndarray) -> np.ndarray:
     """Build a premultiplied linear RGBA array — the primary compositor output.
 
-    Transparent regions are correctly zeroed out (fg * alpha = 0 where alpha = 0),
-    so no black-blob artefacts appear when the file is opened in a compositor.
+    Converts fg from sRGB to linear light before premultiplying, so transparent
+    regions are correctly zeroed out (fg_linear * alpha = 0 where alpha = 0).
+    No black-blob artefacts appear when the file is opened in a compositor.
 
     Args:
         fg: [H, W, 3] float32 sRGB straight, range 0-1.
@@ -67,7 +57,7 @@ def apply_source_passthrough(
 
     Args:
         fg: [H, W, 3] float32 sRGB model FG, range 0-1.
-        alpha: [H, W, 1] float32 alpha, range 0-1.
+        alpha: [H, W, 1] or [H, W] float32 alpha, range 0-1.
         source: [H, W, 3] float32 sRGB original source image, range 0-1.
         edge_erode_px: Erosion kernel radius in pixels.
         edge_blur_px: Gaussian blur sigma for the blend seam.
@@ -78,20 +68,15 @@ def apply_source_passthrough(
     alpha_2d = alpha[:, :, 0] if alpha.ndim == 3 else alpha
 
     # Build interior mask: only pixels that are confidently fully opaque.
-    # Using a hard threshold first (matching reference behaviour) ensures we
-    # never pass through source pixels in semi-transparent edge regions.
     interior = (alpha_2d > 0.95).astype(np.float32)
 
-    # Erode inward to create a safety buffer around edges so we never use
-    # original pixels where green spill might still exist.
     if edge_erode_px > 0:
         k = edge_erode_px * 2 + 1
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
         interior = cv2.erode(interior, kernel)
 
-    # Soft blend seam.
     if edge_blur_px > 0:
-        blur_k = edge_blur_px * 2 + 1  # always odd by construction
+        blur_k = edge_blur_px * 2 + 1
         interior = cv2.GaussianBlur(interior, (blur_k, blur_k), 0)
 
     interior = np.clip(interior, 0.0, 1.0)[:, :, np.newaxis]  # [H, W, 1]
@@ -112,7 +97,7 @@ def make_preview(fg: np.ndarray, alpha: np.ndarray, checker_size: int) -> np.nda
     """
     h, w = fg.shape[:2]
 
-    bg_srgb = _get_checkerboard(w, h, checker_size)
+    bg_srgb = _checkerboard(w, h, checker_size)
     bg_linear = srgb_to_linear(bg_srgb)
     fg_linear = srgb_to_linear(fg)
 
@@ -122,21 +107,9 @@ def make_preview(fg: np.ndarray, alpha: np.ndarray, checker_size: int) -> np.nda
 
 
 @functools.lru_cache(maxsize=8)
-def _get_checkerboard(width: int, height: int, checker_size: int) -> np.ndarray:
-    """Return a cached [H, W, 3] float32 sRGB checkerboard array."""
-    return _make_checkerboard(width, height, checker_size)
-
-
-def _make_checkerboard(
-    width: int,
-    height: int,
-    checker_size: int,
-    color1: float = 0.15,
-    color2: float = 0.55,
-) -> np.ndarray:
-    """Return a [H, W, 3] float32 sRGB checkerboard array."""
+def _checkerboard(width: int, height: int, checker_size: int) -> np.ndarray:
     x_tiles = np.arange(width) // checker_size
     y_tiles = np.arange(height) // checker_size
     x_grid, y_grid = np.meshgrid(x_tiles, y_tiles)
-    pattern = np.where((x_grid + y_grid) % 2 == 0, color1, color2).astype(np.float32)
+    pattern = np.where((x_grid + y_grid) % 2 == 0, 0.15, 0.55).astype(np.float32)
     return np.stack([pattern, pattern, pattern], axis=-1)

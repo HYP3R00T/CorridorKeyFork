@@ -1,29 +1,3 @@
-"""Postprocessor stage — alpha matte cleanup (despeckle).
-
-Removes small disconnected foreground regions from a predicted alpha matte
-using connected-component analysis.
-
-Two implementations are provided:
-  - ``despeckle_alpha``      — CPU path using OpenCV (always available).
-  - ``despeckle_alpha_gpu``  — GPU path using iterative max_pool2d flood-fill
-                               (CUDA only, no CPU sync).
-  - ``despeckle_alpha_auto`` — picks GPU when a CUDA device is given, else CPU.
-
-The safe_zone mask is used only to zero out removed components. Kept regions
-retain their original alpha values unchanged — the dilation+blur only softens
-the boundary of the removal mask, not the kept alpha itself.
-
-GPU implementation notes
-------------------------
-Connected-component labelling uses iterative max_pool2d flood-fill (adapted
-from https://gist.github.com/efirdc/5d8bd66859e574c683a504a4690ae8bc).
-
-The Teschner spatial-hash initialisation (``_build_cc_scramble_init``) MUST be
-computed outside any ``torch.compile`` region: the prime multiplication
-``73856093 * W`` overflows int32 at 4K when inductor constant-folds it.
-We compute it eagerly in int64 and cache the result per (H, W, device).
-"""
-
 from __future__ import annotations
 
 import functools
@@ -33,10 +7,6 @@ import numpy as np
 import torch
 import torch.nn.functional as functional
 import torchvision.transforms.v2.functional as transforms_functional
-
-# ---------------------------------------------------------------------------
-# CPU path (OpenCV)
-# ---------------------------------------------------------------------------
 
 
 def despeckle_alpha(
@@ -53,6 +23,11 @@ def despeckle_alpha(
       - Removed components → zeroed out
       - Kept regions → original alpha values preserved (no softening)
       - Transition band → smoothly faded out
+
+    Known limitation: the post-removal dilation expands the keep-mask back into
+    speckle regions. Speckles smaller than the dilation radius are refilled and
+    effectively not removed. Only speckles in the band
+    [min_area, dilation_refill_size] are reliably eliminated.
 
     Args:
         alpha: [H, W, 1] float32 array, range 0-1.
@@ -100,27 +75,11 @@ def despeckle_alpha(
     return result
 
 
-# ---------------------------------------------------------------------------
-# GPU path (torch, no CPU sync)
-# ---------------------------------------------------------------------------
-
-
 @functools.lru_cache(maxsize=16)
 def _build_cc_scramble_init(h: int, w: int, device_str: str) -> torch.Tensor:
-    """Build and cache the Teschner spatial-hash init tensor for connected_components.
-
-    Must be called OUTSIDE any torch.compile region: the prime multiplication
-    ``73856093 * W`` overflows int32 at 4K when inductor constant-folds it.
-    Computing in int64 eagerly and passing the result as a tensor sidesteps it.
-
-    Args:
-        h: Image height in pixels.
-        w: Image width in pixels.
-        device_str: String representation of the target device (e.g. "cuda:0").
-
-    Returns:
-        [1, 1, H, W] float32 tensor on the specified device.
-    """
+    # Must be called OUTSIDE any torch.compile region: the prime multiplication
+    # ``73856093 * W`` overflows int32 at 4K when inductor constant-folds it.
+    # Computing in int64 eagerly and passing the result as a tensor sidesteps it.
     idx = torch.arange(h * w, dtype=torch.int64)
     scrambled = ((idx * 73856093 + 19349663) % (h * w) + 1).to(torch.float32)
     return scrambled.view(1, 1, h, w).to(device_str)
@@ -132,23 +91,6 @@ def _connected_components_gpu(
     max_iterations: int = 100,
     init: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """GPU flood-fill connected-component labelling via iterative max_pool2d.
-
-    Sync-free: fixed iteration count, no ``torch.equal`` early-exit,
-    deterministic spatial-hash init from ``_build_cc_scramble_init``.
-
-    Args:
-        mask: bool tensor [B, 1, H, W].
-        min_component_width: Kernel radius. Components narrower than this
-            are merged with neighbours.
-        max_iterations: Number of propagation iterations (always runs to
-            completion — no early exit to stay sync-free).
-        init: Optional precomputed label tensor. Must be passed when calling
-            inside torch.compile to avoid inductor int32 overflow at 4K.
-
-    Returns:
-        Float label tensor [B, 1, H, W].
-    """
     bs, _, h, w = mask.shape
     device = mask.device
 
@@ -185,6 +127,11 @@ def despeckle_alpha_gpu(
     component size counting (avoids torch.bincount / torch.nonzero which
     have data-dependent output shapes and cause graph breaks in compiled
     regions).
+
+    Known limitation: the post-removal dilation expands the keep-mask back into
+    speckle regions. Speckles smaller than the dilation radius are refilled and
+    effectively not removed. Only speckles in the band
+    [min_area, dilation_refill_size] are reliably eliminated.
 
     Args:
         alpha: [B, 1, H, W] float32 tensor on CUDA, range 0-1.
@@ -230,28 +177,16 @@ def despeckle_alpha_gpu(
     sizes_per_pixel = sizes.index_select(0, flat).view_as(components)
     keep = (sizes_per_pixel >= min_area).to(alpha.dtype)
 
-    # Dilate to restore edges of large regions.
-    # Each max_pool2d pass with kernel 5 gives ~2px radius, so repeats = dilation // 2.
-    # Note: this dilation has a latent quirk inherited from the reference implementation —
-    # because ``keep`` is 1 at both background and large FG components, dilation expands
-    # into speckle regions, refilling speckles smaller than the dilation radius. Only
-    # speckles in the band [min_area, dilation_refill_size] are actually removed.
     if dilation > 0:
         repeats = dilation // 2
         for _ in range(repeats):
             keep = functional.max_pool2d(keep, 5, stride=1, padding=2)
 
-    # Gaussian blur for soft edges
     if blur_size > 0:
         k = int(blur_size * 2 + 1)
         keep = transforms_functional.gaussian_blur(keep, [k, k])
 
     return alpha * keep
-
-
-# ---------------------------------------------------------------------------
-# Auto-dispatch entry point
-# ---------------------------------------------------------------------------
 
 
 def despeckle_alpha_auto(

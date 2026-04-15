@@ -1,11 +1,11 @@
 """Postprocessor stage — public surface.
 
 Entry point:
-    postprocess_frame(result, config, stem="") -> ProcessedFrame
+    postprocess_frame(result, config, stem="", output_dir=None) -> ProcessedFrame
 
 Contracts:
-    PostprocessConfig   — despill, despeckle, checkerboard options
-    ProcessedFrame      — alpha [H,W,1], fg [H,W,3], comp [H,W,3], numpy float32
+    PostprocessConfig   — resize, despill, despeckle, source_passthrough, hint_sharpen options
+    ProcessedFrame      — alpha [H,W,1], fg [H,W,3], processed [H,W,4], comp [H,W,3], numpy float32
 """
 
 from corridorkey.stages.postprocessor.config import PostprocessConfig

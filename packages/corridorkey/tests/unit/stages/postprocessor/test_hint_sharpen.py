@@ -16,12 +16,14 @@ def _make_arrays(h: int = 32, w: int = 32):
 
 class TestSharpenWithHint:
     def test_returns_tuple_of_two_arrays(self):
+        """Return value is a tuple of exactly two arrays."""
         alpha, fg, hint = _make_arrays()
         result = sharpen_with_hint(alpha, fg, hint)
         assert isinstance(result, tuple)
         assert len(result) == 2
 
     def test_output_shapes_match_input(self):
+        """Output shapes match the input alpha and fg shapes."""
         alpha, fg, hint = _make_arrays(48, 64)
         alpha_out, fg_out = sharpen_with_hint(alpha, fg, hint)
         assert alpha_out.shape == (48, 64, 1)
@@ -50,6 +52,7 @@ class TestSharpenWithHint:
         np.testing.assert_allclose(alpha_out, alpha)
 
     def test_dilation_zero_no_error(self):
+        """dilation_px=0 skips the dilation step without error."""
         alpha, fg, hint = _make_arrays()
         alpha_out, fg_out = sharpen_with_hint(alpha, fg, hint, dilation_px=0)
         assert alpha_out.shape == alpha.shape
@@ -78,7 +81,37 @@ class TestSharpenWithHint:
         assert fg_out.shape == (h, w, 3)
 
     def test_output_dtype_float32(self):
+        """Output arrays are float32."""
         alpha, fg, hint = _make_arrays()
         alpha_out, fg_out = sharpen_with_hint(alpha, fg, hint)
         assert alpha_out.dtype == np.float32
         assert fg_out.dtype == np.float32
+
+    def test_hint_same_size_as_source_skips_resize(self):
+        """When hint dimensions already match source, no resize is performed."""
+        h, w = 32, 32
+        alpha = np.ones((h, w, 1), dtype=np.float32) * 0.8
+        fg = np.ones((h, w, 3), dtype=np.float32) * 0.5
+        hint = np.ones((h, w, 1), dtype=np.float32)
+        alpha_out, fg_out = sharpen_with_hint(alpha, fg, hint, dilation_px=0)
+        assert alpha_out.shape == (h, w, 1)
+        assert fg_out.shape == (h, w, 3)
+
+    def test_hint_threshold_exactly_half_is_kept(self):
+        """Hint value exactly 0.5 is treated as foreground (>= 0.5 threshold)."""
+        h, w = 16, 16
+        alpha = np.ones((h, w, 1), dtype=np.float32)
+        fg = np.ones((h, w, 3), dtype=np.float32)
+        hint = np.full((h, w, 1), 0.5, dtype=np.float32)
+        alpha_out, _ = sharpen_with_hint(alpha, fg, hint, dilation_px=0)
+        assert alpha_out.min() > 0.0
+
+    def test_hint_below_threshold_is_zeroed(self):
+        """Hint value below 0.5 is treated as background — output is zeroed."""
+        h, w = 16, 16
+        alpha = np.ones((h, w, 1), dtype=np.float32)
+        fg = np.ones((h, w, 3), dtype=np.float32)
+        hint = np.full((h, w, 1), 0.49, dtype=np.float32)
+        alpha_out, fg_out = sharpen_with_hint(alpha, fg, hint, dilation_px=0)
+        assert alpha_out.max() == pytest.approx(0.0)
+        assert fg_out.max() == pytest.approx(0.0)
