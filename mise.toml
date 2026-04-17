@@ -1,6 +1,7 @@
 [tools]
 python = "3.13"
 uv = "latest"
+node = "lts"
 git-cliff = "latest"
 markdownlint-cli2 = "latest"
 
